@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-material-preprocessor"
+version = "1.4.0"
+description = "Local AI document and creative media preprocessing tool for Windows"
+requires-python = ">=3.11"
+dependencies = [
+  "PySide6>=6.8,<7",
+  "markitdown[docx,pptx,xlsx,xls,pdf]>=0.1.6,<0.2",
+  "imageio-ffmpeg>=0.6,<0.7",
+  "rapidocr>=3.9,<4",
+  "onnxruntime>=1.20,<2",
+  "pypdfium2>=5.10,<6",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9,<10",
+  "pytest-qt>=4.5,<5",
+]
+build = [
+  "pyinstaller>=6.20,<7",
+  "static-ffmpeg>=3,<4",
+]
+
+[project.scripts]
+ai-material-preprocessor = "ai_material_preprocessor.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

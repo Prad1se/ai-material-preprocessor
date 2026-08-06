@@ -1,0 +1,30 @@
+{
+  "output_folder_name": "AI素材处理结果",
+  "history_directory": "",
+  "tools": {
+    "markitdown": "",
+    "ffmpeg": "",
+    "ffprobe": "",
+    "exiftool": "",
+    "libreoffice": "",
+    "winword": "",
+    "powerpoint": ""
+  },
+  "video": {
+    "compression_crf": 23,
+    "compression_preset": "medium",
+    "audio_format": "mp3",
+    "audio_bitrate": "192k",
+    "rename_template": "{date}_{time}_{location}_{index}",
+    "scene_threshold": 0.3,
+    "max_keyframes": 24,
+    "contact_sheet_columns": 4
+  },
+  "document": {
+    "mode": "enhanced",
+    "split_enabled": true,
+    "target_tokens": 4000,
+    "max_tokens": 6000,
+    "ocr_enabled": false
+  }
+}

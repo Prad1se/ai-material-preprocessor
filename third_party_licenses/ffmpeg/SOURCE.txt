@@ -1,0 +1,11 @@
+FFmpeg / ffprobe binary distribution information
+
+Binary build: ffmpeg 8.1.2 essentials_build-www.gyan.dev
+License: GNU General Public License version 3
+Build source: https://www.gyan.dev/ffmpeg/builds/
+Corresponding FFmpeg source commit: https://github.com/FFmpeg/FFmpeg/commit/38b88335f9
+
+The project calls ffmpeg.exe and ffprobe.exe as separate command-line programs.
+They are not part of the MIT-licensed application source code and remain under
+their own GPLv3 terms. The corresponding source archive is distributed as a
+separate asset alongside the Windows application in the GitHub Release.
