@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import os
+import sys
 import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -54,6 +55,23 @@ from .services.task_manifest import (
     resolve_history_root,
     write_task_manifest,
 )
+
+
+MOUSE_STATE_ASSETS = {
+    "idle": "mouse-grin.png",
+    "thinking": "mouse-thinking.png",
+    "working": "mouse-thinking.png",
+    "success": "mouse-strong.png",
+    "error": "mouse-thinking.png",
+}
+
+
+def mouse_asset_path(filename: str) -> Path:
+    """Resolve a mascot asset in source and PyInstaller onedir builds."""
+    packaged = Path(getattr(sys, "_MEIPASS", Path.cwd())) / "assets" / "mouse" / filename
+    if packaged.is_file():
+        return packaged
+    return Path(__file__).resolve().parents[2] / "assets" / "mouse" / filename
 
 
 class DropList(QListWidget):
@@ -225,16 +243,40 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(46, 34, 46, 40)
         root.setSpacing(20)
 
-        eyebrow = QLabel("LOCAL  ·  PRIVATE  ·  NON-DESTRUCTIVE")
+        hero = QFrame()
+        hero.setObjectName("hero")
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.setContentsMargins(30, 24, 26, 22)
+        hero_layout.setSpacing(20)
+        hero_copy = QVBoxLayout()
+        hero_copy.setSpacing(8)
+        eyebrow = QLabel("LOCAL  ·  PRIVATE  ·  鼠鼠不碰原文件")
         eyebrow.setObjectName("eyebrow")
-        title = QLabel("让素材，为下一步做好准备。")
+        title = QLabel("鼠鼠帮你把素材，\n准备成下一步需要的样子。")
         title.setObjectName("title")
-        subtitle = QLabel("文档转为 AI 易读资料，音视频转为可继续创作的素材。所有处理都在本地完成，原文件始终保留。")
+        subtitle = QLabel("交给 AI、普通转换、准备创作都在这里完成。处理全程留在本机，原文件始终保留。")
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
-        root.addWidget(eyebrow)
-        root.addWidget(title)
-        root.addWidget(subtitle)
+        hero_copy.addWidget(eyebrow)
+        hero_copy.addWidget(title)
+        hero_copy.addWidget(subtitle)
+        hero_copy.addStretch()
+        self.mouse_mascot = QLabel()
+        self.mouse_mascot.setObjectName("mouseMascot")
+        self.mouse_mascot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.mouse_mascot.setFixedSize(230, 210)
+        hero_layout.addLayout(hero_copy, 1)
+        hero_layout.addWidget(self.mouse_mascot)
+        root.addWidget(hero)
+
+        workflow = QHBoxLayout()
+        workflow.setSpacing(10)
+        for index, label in enumerate(("1  选择素材", "2  识别能力", "3  鼠鼠处理", "4  保存结果")):
+            step = QLabel(label)
+            step.setObjectName("workflowActive" if index == 0 else "workflowStep")
+            step.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            workflow.addWidget(step)
+        root.addLayout(workflow)
 
         content_row = QHBoxLayout()
         content_row.setSpacing(18)
@@ -245,7 +287,7 @@ class MainWindow(QMainWindow):
         files_layout.setContentsMargins(24, 22, 24, 24)
         files_layout.setSpacing(14)
         file_header = QHBoxLayout()
-        file_title = QLabel("添加素材")
+        file_title = QLabel("把文件交给鼠鼠")
         file_title.setObjectName("sectionTitle")
         add_button = QPushButton("选择文件…")
         add_button.setObjectName("secondary")
@@ -257,7 +299,7 @@ class MainWindow(QMainWindow):
         file_header.addStretch()
         file_header.addWidget(add_button)
         file_header.addWidget(clear_button)
-        file_description = QLabel("将 Word、PPT、Excel、PDF、网页或视频拖到下方")
+        file_description = QLabel("拖入 Word、PPT、Excel、PDF、网页或视频；鼠鼠会自动判断可用操作")
         file_description.setObjectName("sectionDescription")
         self.file_list = DropList()
         self.file_list.setObjectName("dropZone")
@@ -276,7 +318,7 @@ class MainWindow(QMainWindow):
         options_layout = QVBoxLayout(options_frame)
         options_layout.setContentsMargins(24, 22, 24, 24)
         options_layout.setSpacing(12)
-        options_title = QLabel("处理方式")
+        options_title = QLabel("鼠鼠要做什么")
         options_title.setObjectName("sectionTitle")
         options_description = QLabel("只显示当前素材真正可用的操作")
         options_description.setObjectName("sectionDescription")
@@ -419,79 +461,99 @@ class MainWindow(QMainWindow):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(central)
         self.setCentralWidget(scroll)
+        self._set_mouse_state("idle")
         self._operation_changed()
+
+    def _set_mouse_state(self, state: str) -> None:
+        state = state if state in MOUSE_STATE_ASSETS else "idle"
+        pixmap = QPixmap(str(mouse_asset_path(MOUSE_STATE_ASSETS[state])))
+        if not pixmap.isNull():
+            self.mouse_mascot.setPixmap(
+                pixmap.scaled(
+                    self.mouse_mascot.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        self.mouse_mascot.setProperty("state", state)
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
             """
-            QMainWindow, QScrollArea { background: #f5f5f7; }
-            QWidget { color: #1d1d1f;
-                font-family: "Microsoft YaHei UI", "Segoe UI Variable Display", "Segoe UI"; }
-            QWidget#page { background: #f5f5f7; color: #1d1d1f; }
-            QLabel#eyebrow { color: #6e6e73; font-size: 11px; font-weight: 700; letter-spacing: 1px; }
-            QLabel#title { font-size: 36px; font-weight: 700; color: #1d1d1f; }
-            QLabel#subtitle { font-size: 16px; color: #6e6e73; }
-            QLabel#sectionTitle { font-size: 19px; font-weight: 650; color: #1d1d1f; }
-            QLabel#sectionDescription { font-size: 13px; color: #86868b; }
-            QLabel#fieldLabel { font-size: 12px; font-weight: 600; color: #6e6e73; }
-            QLabel#status { color: #6e6e73; padding: 3px 2px; }
-            QLabel#outputHint { color: #424245; background: #f5f5f7; border-radius: 10px; padding: 10px 12px; }
+            QMainWindow, QScrollArea { background: #f5efe9; }
+            QWidget { color: #171717; font-family: "Microsoft YaHei UI"; }
+            QWidget#page { background: #f5efe9; color: #171717; }
+            QFrame#hero { background: #fff8f3; border: 2px solid #171717; border-radius: 26px; }
+            QLabel#mouseMascot { background: transparent; border: 0; }
+            QLabel#eyebrow { color: #df5268; font-size: 11px; font-weight: 800; letter-spacing: 1px; border: 0; }
+            QLabel#title { font-size: 31px; font-weight: 800; color: #111111; border: 0; }
+            QLabel#subtitle { font-size: 15px; color: #5e5552; border: 0; }
+            QLabel#workflowStep, QLabel#workflowActive {
+                border: 2px solid #171717; border-radius: 16px; padding: 9px 12px;
+                font-size: 12px; font-weight: 700; background: #fffdfb;
+            }
+            QLabel#workflowActive { background: #ffd9df; }
+            QLabel#sectionTitle { font-size: 19px; font-weight: 750; color: #171717; border: 0; }
+            QLabel#sectionDescription { font-size: 13px; color: #746966; border: 0; }
+            QLabel#fieldLabel { font-size: 12px; font-weight: 700; color: #5e5552; border: 0; }
+            QLabel#status { color: #5e5552; padding: 3px 2px; }
+            QLabel#outputHint { color: #3f3735; background: #fff5f2; border: 1px solid #e7cac5; border-radius: 10px; padding: 10px 12px; }
             QFrame#panel {
-                background: #ffffff; border: 1px solid #e5e5ea;
-                border-radius: 22px;
+                background: #fffdfb; border: 2px solid #171717;
+                border-radius: 20px;
             }
             QFrame#historyBar {
-                background: rgba(255, 255, 255, 0.78); border: 1px solid #e5e5ea;
+                background: #fffdfb; border: 2px solid #171717;
                 border-radius: 14px;
             }
-            QLabel#historyLabel { color: #86868b; font-size: 12px; }
+            QLabel#historyLabel { color: #746966; font-size: 12px; border: 0; }
             QListWidget, QLineEdit, QComboBox, QSpinBox {
-                color: #1d1d1f; background: #ffffff; border: 1px solid #d2d2d7;
+                color: #171717; background: #ffffff; border: 2px solid #171717;
                 border-radius: 10px; padding: 9px 11px; min-height: 23px;
-                selection-background-color: #0071e3;
-                selection-color: #ffffff;
+                selection-background-color: #ef6f82;
+                selection-color: #171717;
             }
-            QListWidget#dropZone { background: #fafafa; border: 1px dashed #b8b8bd;
+            QListWidget#dropZone { background: #fff4f5; border: 2px dashed #171717;
                 border-radius: 16px; padding: 12px; }
-            QListWidget#dropZone:focus { border: 1px solid #0071e3; }
-            QListWidget::item { color: #1d1d1f; background: transparent;
+            QListWidget#dropZone:focus { border: 2px solid #df5268; }
+            QListWidget::item { color: #171717; background: transparent;
                 border-radius: 8px; padding: 9px 10px; margin: 2px 0; }
-            QListWidget::item:hover { background: #f0f0f2; }
-            QListWidget::item:selected { color: #ffffff; background: #0071e3; }
+            QListWidget::item:hover { background: #ffe7eb; }
+            QListWidget::item:selected { color: #171717; background: #ffd2da; }
             QComboBox QAbstractItemView {
-                color: #1d1d1f; background: #ffffff; border: 1px solid #d2d2d7;
+                color: #171717; background: #ffffff; border: 2px solid #171717;
                 border-radius: 10px; padding: 6px; outline: 0;
-                selection-color: #ffffff; selection-background-color: #0071e3;
+                selection-color: #171717; selection-background-color: #ffd2da;
             }
-            QComboBox QAbstractItemView::item { color: #1d1d1f;
+            QComboBox QAbstractItemView::item { color: #171717;
                 background: #ffffff; min-height: 30px; padding: 5px 9px; }
             QComboBox QAbstractItemView::item:hover,
-            QComboBox QAbstractItemView::item:selected { color: #ffffff; background: #0071e3; }
+            QComboBox QAbstractItemView::item:selected { color: #171717; background: #ffd2da; }
             QComboBox::drop-down { border: 0; width: 34px; }
             QTableWidget { color: #1d1d1f; background: #ffffff;
                 alternate-background-color: #f5f5f7; gridline-color: #e5e5ea; }
             QHeaderView::section { color: #424245; background: #f5f5f7;
                 border: 0; border-bottom: 1px solid #d2d2d7; padding: 8px; }
             QPushButton {
-                background: #e8e8ed; color: #1d1d1f; border: 0; border-radius: 10px;
+                background: #ffffff; color: #171717; border: 2px solid #171717; border-radius: 10px;
                 padding: 10px 16px; font-weight: 600; min-height: 20px;
             }
-            QPushButton:hover { background: #dedee3; }
-            QPushButton#primary { background: #0071e3; color: white; border-radius: 12px; padding: 13px 20px; }
-            QPushButton#primary:hover { background: #0077ed; }
-            QPushButton#secondary { background: #f0f0f2; }
-            QPushButton#linkButton { color: #0071e3; background: transparent; padding: 6px 8px; }
-            QPushButton#linkButton:hover { color: #0077ed; background: #eef6ff; }
+            QPushButton:hover { background: #ffe4e8; }
+            QPushButton#primary { background: #ef6f82; color: #171717; border-radius: 12px; padding: 13px 20px; font-weight: 800; }
+            QPushButton#primary:hover { background: #f38293; }
+            QPushButton#secondary { background: #fffdfb; }
+            QPushButton#linkButton { color: #c63f55; background: transparent; border: 0; padding: 6px 8px; }
+            QPushButton#linkButton:hover { color: #a52c40; background: #ffe9ec; }
             QPushButton#dangerLinkButton { color: #d70015; background: transparent; padding: 6px 8px; }
             QPushButton#dangerLinkButton:hover { color: #b60012; background: #fff0f1; }
-            QPushButton:disabled { color: #aeaeb2; background: #e8e8ed; }
+            QPushButton:disabled { color: #a29a97; background: #e9e2de; border-color: #bdb4b0; }
             QCheckBox { color: #424245; spacing: 8px; padding: 3px 0; }
             QCheckBox::indicator { width: 17px; height: 17px; }
             QProgressBar {
-                border: 0; background: #e5e5ea; border-radius: 4px;
+                border: 2px solid #171717; background: #f0e8e4; border-radius: 5px;
                 text-align: center; min-height: 8px; max-height: 8px; color: transparent;
             }
-            QProgressBar::chunk { background: #0071e3; border-radius: 4px; }
+            QProgressBar::chunk { background: #ef6f82; border-radius: 3px; }
             QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
             QScrollBar::handle:vertical { background: #c7c7cc; border-radius: 5px; min-height: 34px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
@@ -512,12 +574,14 @@ class MainWindow(QMainWindow):
                 known.add(str(path).lower())
         if self.paths:
             self._refresh_operations()
+            self._set_mouse_state("thinking")
 
     def _clear_files(self) -> None:
         self.paths.clear()
         self.file_list.clear()
         self._refresh_operations()
         self.status.setText("等待文件")
+        self._set_mouse_state("idle")
 
     def _choose_output(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "选择输出目录")
@@ -698,6 +762,7 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(False)
         self.open_button.setEnabled(False)
         self.progress.setValue(0)
+        self._set_mouse_state("working")
         self.worker = Worker(jobs, self.tools, self.config)
         self.worker.progress.connect(self._on_progress)
         self.worker.completed.connect(self._on_completed)
@@ -708,6 +773,7 @@ class MainWindow(QMainWindow):
     def _on_progress(self, value: int, message: str) -> None:
         self.progress.setValue(value)
         self.status.setText(message)
+        self._set_mouse_state("working")
 
     @staticmethod
     def _quality_report_text(reports: list[dict], outputs: list[str]) -> str:
@@ -735,6 +801,7 @@ class MainWindow(QMainWindow):
         self, outputs: list[str], errors: list[str], quality_reports: list[dict]
     ) -> None:
         self.last_outputs = outputs
+        self._set_mouse_state("success" if outputs else "error")
         self.open_button.setEnabled(bool(outputs))
         if quality_reports:
             message = self._quality_report_text(quality_reports, outputs)
@@ -770,6 +837,7 @@ class MainWindow(QMainWindow):
 
     def _on_failure(self, message: str) -> None:
         self.status.setText("处理失败；原文件未改动。")
+        self._set_mouse_state("error")
         QMessageBox.critical(self, "处理失败", message)
 
     def _open_output(self) -> None:

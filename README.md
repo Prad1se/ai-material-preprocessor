@@ -287,4 +287,6 @@ docs\adr\                 # 关键技术决策
 
 本项目自行编写的源代码采用 [MIT License](LICENSE)。MarkItDown、PySide6、RapidOCR、ONNX Runtime、pypdfium2、FFmpeg 等第三方组件继续遵循各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `third_party_licenses/`。
 
+界面使用的鼠鼠图片由项目维护者直接提供并确认可修改、再分发及商业使用，素材来源和处理版本说明见 [`assets/mouse/README.md`](assets/mouse/README.md)。本项目未复制 FlyingMouse Format 的源代码、赞助信息或品牌标识。
+
 Windows 便携包附带的 FFmpeg 8.1.2 Gyan Essentials Build 使用 GPLv3；对应源码压缩包会作为同一 GitHub Release 的独立附件发布。
