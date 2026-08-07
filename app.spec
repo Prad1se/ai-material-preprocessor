@@ -1,7 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [("scripts/office_to_pdf.ps1", "scripts")]
+datas = [
+    ("scripts/office_to_pdf.ps1", "scripts"),
+    ("assets/mouse/mouse-grin.png", "assets/mouse"),
+    ("assets/mouse/mouse-strong.png", "assets/mouse"),
+    ("assets/mouse/mouse-thinking.png", "assets/mouse"),
+]
 binaries = []
 hiddenimports = []
 
