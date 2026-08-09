@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — 2.0.0 RC development
+
+### M0 architecture baseline
+
+- Add explicit task lifecycle and safe user-facing error types.
+- Add an argument-array process adapter with timeout and cancellation support.
+- Move operation dispatch out of the Qt worker into document/video application services.
+- Split Markdown cleaning, quality checking, structural splitting, and package orchestration.
+- Add public synthetic regression fixtures and raise the suite from 80 to 98 passing tests.
+- Add Ruff formatting/linting, mypy checking, and matching GitHub Actions quality gates.
+
 ## 1.4.0 — 2026-08-04
 
 - 移除首页“本机能力”状态栏；缺失工具只在相关操作需要时提示。
