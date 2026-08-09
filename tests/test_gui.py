@@ -3,15 +3,21 @@ from pathlib import Path
 from PySide6.QtGui import QColor, QImage, QPalette
 from PySide6.QtWidgets import QApplication, QFrame
 
-from ai_material_preprocessor.gui import MainWindow, MOUSE_STATE_ASSETS, mouse_asset_path
+from ai_material_preprocessor.gui import MOUSE_STATE_ASSETS, MainWindow, mouse_asset_path
 from ai_material_preprocessor.models import Operation, ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
 
 
 def toolset(**available: bool) -> dict[str, ToolStatus]:
     names = (
-        "markitdown", "ffmpeg", "ffprobe", "exiftool",
-        "libreoffice", "winword", "powerpoint", "rapidocr",
+        "markitdown",
+        "ffmpeg",
+        "ffprobe",
+        "exiftool",
+        "libreoffice",
+        "winword",
+        "powerpoint",
+        "rapidocr",
     )
     return {
         name: ToolStatus(name, f"C:/tools/{name}.exe" if available.get(name, False) else None)
@@ -20,7 +26,9 @@ def toolset(**available: bool) -> dict[str, ToolStatus]:
 
 
 def combo_operations(window: MainWindow) -> list[Operation]:
-    return [Operation(window.operation.itemData(index)) for index in range(window.operation.count())]
+    return [
+        Operation(window.operation.itemData(index)) for index in range(window.operation.count())
+    ]
 
 
 def test_mouse_assets_are_packaged_transparent_images() -> None:

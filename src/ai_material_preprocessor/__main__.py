@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from .gui import MainWindow
 from .diagnostics import run_self_test
+from .gui import MainWindow
 
 
 def main() -> int:

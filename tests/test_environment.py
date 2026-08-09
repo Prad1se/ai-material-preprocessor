@@ -25,9 +25,7 @@ def test_bundled_binary_precedes_path(tmp_path: Path) -> None:
     bundled = tmp_path / "ffmpeg.exe"
     bundled.touch()
 
-    result = resolve_tool(
-        "ffmpeg", "", [bundled], path_lookup=lambda _: "C:/Windows/ffmpeg.exe"
-    )
+    result = resolve_tool("ffmpeg", "", [bundled], path_lookup=lambda _: "C:/Windows/ffmpeg.exe")
 
     assert result.path == str(bundled)
     assert result.source == "随程序提供"

@@ -3,11 +3,11 @@ from __future__ import annotations
 import shutil
 import sys
 import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ..models import ToolStatus
-
 
 OFFICE_DEFAULTS = {
     "winword": [
@@ -24,7 +24,7 @@ OFFICE_DEFAULTS = {
     ],
 }
 
-TOOL_LOCATIONS = {
+TOOL_LOCATIONS: dict[str, list[tuple[str, ...]]] = {
     "ffmpeg": [("ffmpeg", "bin", "ffmpeg.exe")],
     "ffprobe": [("ffmpeg", "bin", "ffprobe.exe")],
     "exiftool": [
@@ -35,9 +35,7 @@ TOOL_LOCATIONS = {
 }
 
 
-def candidate_paths(
-    name: str, project_root: Path, runtime_root: Path | None
-) -> list[Path]:
+def candidate_paths(name: str, project_root: Path, runtime_root: Path | None) -> list[Path]:
     roots = [root for root in (runtime_root, project_root) if root is not None]
     return [
         root / "tools" / Path(*relative)
@@ -93,14 +91,12 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
     from .config import PROJECT_ROOT
 
     overrides = config.get("tools", {})
-    runtime_root = Path(getattr(sys, "_MEIPASS")) if hasattr(sys, "_MEIPASS") else None
+    runtime_root = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else None
     result: dict[str, ToolStatus] = {}
 
     try:
         with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message="Couldn't find ffmpeg or avconv.*"
-            )
+            warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv.*")
             import markitdown  # noqa: F401
 
         result["markitdown"] = ToolStatus(
@@ -112,12 +108,10 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
         )
 
     try:
-        import rapidocr  # noqa: F401
         import onnxruntime  # noqa: F401
+        import rapidocr  # noqa: F401
 
-        result["rapidocr"] = ToolStatus(
-            name="rapidocr", path="Python API", source="内置本地 OCR"
-        )
+        result["rapidocr"] = ToolStatus(name="rapidocr", path="Python API", source="内置本地 OCR")
     except ImportError:
         result["rapidocr"] = ToolStatus(name="rapidocr", path=None)
 
@@ -138,9 +132,7 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
     for name in ("libreoffice", "winword", "powerpoint"):
         bundled = candidate_paths(name, PROJECT_ROOT, runtime_root)
         bundled.extend(Path(path) for path in OFFICE_DEFAULTS[name])
-        status = resolve_tool(
-            name, overrides.get(name, ""), bundled, shutil.which
-        )
+        status = resolve_tool(name, overrides.get(name, ""), bundled, shutil.which)
         if status.path and any(
             Path(status.path) == Path(default) for default in OFFICE_DEFAULTS[name]
         ):

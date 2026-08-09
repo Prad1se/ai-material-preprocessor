@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 
 class OCRUnavailableError(RuntimeError):
@@ -85,7 +85,8 @@ class RapidOCREngine:
         try:
             with zipfile.ZipFile(source) as archive:
                 members = sorted(
-                    name for name in archive.namelist()
+                    name
+                    for name in archive.namelist()
                     if name.lower().startswith(prefix)
                     and Path(name).suffix.lower() in self.IMAGE_SUFFIXES
                 )

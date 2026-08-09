@@ -9,8 +9,8 @@ from .converters.markdown import to_markdown
 from .converters.video import keyframes_contact_sheet
 from .models import ToolStatus
 from .services.config import load_config
+from .services.document_enhancement import EnhancementOptions, QualityReport
 from .services.environment import detect_tools
-from .services.document_enhancement import EnhancementOptions
 
 
 def run_self_test(
@@ -33,7 +33,7 @@ def run_self_test(
         encoding="utf-8",
     )
     try:
-        quality_reports = []
+        quality_reports: list[QualityReport] = []
         markdown_output = to_markdown(
             source,
             output_directory,
@@ -67,12 +67,26 @@ def run_self_test(
             version = run_command([ffmpeg, "-version"]).stdout.splitlines()[0]
             checks["ffmpeg"] = {"passed": True, "version": version}
             video_source = output_directory / "diagnostics-video.mp4"
-            run_command([
-                ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=12",
-                "-t", "0.5", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                str(video_source),
-            ])
+            run_command(
+                [
+                    ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc2=size=320x240:rate=12",
+                    "-t",
+                    "0.5",
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    str(video_source),
+                ]
+            )
             sheet = keyframes_contact_sheet(
                 video_source, output_directory, ffmpeg, max_frames=4, columns=2
             )
@@ -102,9 +116,7 @@ def run_self_test(
         "application": "AI Material Preprocessor",
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "overall": (
-            "passed"
-            if all(check["passed"] is not False for check in checks.values())
-            else "failed"
+            "passed" if all(check["passed"] is not False for check in checks.values()) else "failed"
         ),
         "tools": {
             name: {

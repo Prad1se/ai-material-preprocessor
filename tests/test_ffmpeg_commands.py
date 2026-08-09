@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from ai_material_preprocessor.converters.video import (
-    build_keyframe_command,
     build_compress_command,
     build_extract_audio_command,
+    build_keyframe_command,
     build_standardize_command,
     parse_progress_line,
     probe_duration,
@@ -24,13 +24,19 @@ def test_audio_command_supports_lossless_wav() -> None:
     command = build_extract_audio_command(
         "ffmpeg.exe", Path("input.mp4"), Path("audio.wav"), "wav", "192k"
     )
-    assert ["-c:a", "pcm_s16le"] == command[command.index("-c:a"):command.index("-c:a") + 2]
+    assert command[command.index("-c:a") : command.index("-c:a") + 2] == ["-c:a", "pcm_s16le"]
 
 
 def test_standardize_command_preserves_metadata_and_uses_compatible_pixel_format() -> None:
     command = build_standardize_command("ffmpeg.exe", Path("input.mov"), Path("output.mp4"))
-    assert ["-map_metadata", "0"] == command[command.index("-map_metadata"):command.index("-map_metadata") + 2]
-    assert ["-pix_fmt", "yuv420p"] == command[command.index("-pix_fmt"):command.index("-pix_fmt") + 2]
+    assert command[command.index("-map_metadata") : command.index("-map_metadata") + 2] == [
+        "-map_metadata",
+        "0",
+    ]
+    assert command[command.index("-pix_fmt") : command.index("-pix_fmt") + 2] == [
+        "-pix_fmt",
+        "yuv420p",
+    ]
 
 
 def test_progress_parser_accepts_out_time_microseconds() -> None:

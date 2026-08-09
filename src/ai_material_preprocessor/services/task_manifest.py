@@ -9,16 +9,20 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import __version__
-from ..models import Operation
+from ..models import Operation, TaskStatus
 
 
 @dataclass(frozen=True)
 class TaskRecord:
     source: Path
     operation: Operation
-    status: str
+    status: TaskStatus
     output: Path | None = None
     error: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, TaskStatus):
+            object.__setattr__(self, "status", TaskStatus(self.status))
 
 
 @dataclass(frozen=True)
@@ -30,16 +34,17 @@ class HistoryUsage:
 def default_history_root() -> Path:
     """Return one stable, user-local location for all processing history."""
     local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        base = Path(local_app_data)
-    else:
-        base = Path.home() / "AppData" / "Local"
+    base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
     return base / "AI Material Preprocessor" / "History"
 
 
 def resolve_history_root(config: dict | None = None) -> Path:
     configured = str((config or {}).get("history_directory", "")).strip()
-    return Path(os.path.expandvars(configured)).expanduser().resolve() if configured else default_history_root()
+    return (
+        Path(os.path.expandvars(configured)).expanduser().resolve()
+        if configured
+        else default_history_root()
+    )
 
 
 def history_usage(history_root: Path) -> HistoryUsage:
@@ -95,8 +100,8 @@ def write_task_manifest(
         task_folder = base.with_name(f"{base.name}-{counter}")
         counter += 1
     task_folder.mkdir(parents=True)
-    success = sum(record.status == "success" for record in records)
-    failed = sum(record.status == "failed" for record in records)
+    success = sum(record.status is TaskStatus.SUCCESS for record in records)
+    failed = sum(record.status is TaskStatus.FAILED for record in records)
     payload = {
         "manifest_type": "processing_task",
         "schema_version": 1,
@@ -119,7 +124,5 @@ def write_task_manifest(
         ],
     }
     manifest = task_folder / "manifest.json"
-    manifest.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest

@@ -4,8 +4,13 @@ from ai_material_preprocessor.models import Operation, ToolStatus
 
 def tools(**available: bool) -> dict[str, ToolStatus]:
     names = (
-        "markitdown", "ffmpeg", "ffprobe", "exiftool",
-        "libreoffice", "winword", "powerpoint",
+        "markitdown",
+        "ffmpeg",
+        "ffprobe",
+        "exiftool",
+        "libreoffice",
+        "winword",
+        "powerpoint",
     )
     return {
         name: ToolStatus(name, f"C:/tools/{name}.exe" if available.get(name, False) else None)

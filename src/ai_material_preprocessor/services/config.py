@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 PROJECT_ROOT = (
     Path(sys.executable).resolve().parent
     if getattr(sys, "frozen", False)
