@@ -56,17 +56,5 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 ignore_missing_imports = true
+no_site_packages = true
 exclude = "^(build|dist|release|work)/"
-
-[[tool.mypy.overrides]]
-module = [
-  "markitdown",
-  "markitdown.*",
-  "onnxruntime",
-  "onnxruntime.*",
-  "pypdfium2",
-  "pypdfium2.*",
-  "rapidocr",
-  "rapidocr.*",
-]
-follow_imports = "skip"
