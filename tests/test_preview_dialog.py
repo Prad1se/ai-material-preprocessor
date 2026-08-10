@@ -29,7 +29,15 @@ def test_document_report_dialog_exposes_markdown_outline_chunks_and_ocr(qtbot) -
             {"index": 2, "title": "第二章", "estimated_tokens": 2200},
         ],
         "ocr_pages": [{"label": "第 2 页", "confidence": 0.61, "low_confidence": True}],
-        "risks": [{"code": "low_ocr_confidence", "level": "warning", "message": "OCR 需核对"}],
+        "risks": [
+            {
+                "code": "low_ocr_confidence",
+                "level": "warning",
+                "message": "OCR 需核对",
+                "line": 8,
+                "source_label": "幻灯片 2",
+            }
+        ],
         "parameters": {"模式": "AI 增强", "目标长度": "4000 tokens"},
     }
 
@@ -41,6 +49,7 @@ def test_document_report_dialog_exposes_markdown_outline_chunks_and_ocr(qtbot) -
     assert dialog.chunk_table.rowCount() == 2
     assert dialog.ocr_table.rowCount() == 1
     assert "OCR 需核对" in dialog.risk_list.item(0).text()
+    assert "幻灯片 2 · 第 8 行" in dialog.risk_list.item(0).text()
 
 
 def test_video_preview_dialog_shows_media_fields_estimate_and_risks(qtbot, tmp_path: Path) -> None:

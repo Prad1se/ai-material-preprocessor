@@ -41,6 +41,20 @@
 - Upgrade processing-history manifests to schema version 2 while retaining schema-1 reads.
 - Raise the suite to 142 passing tests plus one opt-in Office environment test.
 
+### M3 document provenance and compact AI packages
+
+- Preserve page, slide, worksheet, and OCR source spans with line ranges and confidence metadata.
+- Attach source labels to structural Markdown chunks while keeping headings with their content and
+  avoiding cuts inside tables, fenced code, and block formulas.
+- Add line- and source-aware warnings for missing images, malformed tables, empty source sections,
+  heading jumps, unclosed code fences, and possible formula loss.
+- Keep original heading-jump findings visible after the cleaner repairs the Markdown structure.
+- Replace the verbose package manifest with format version 2 containing source SHA-256, tool
+  versions, ordered chunks, assets, provenance, OCR confidence, and compact warning summaries.
+- Remove private absolute source paths, full quality reports, target lengths, and verbose logs from
+  AI package manifests.
+- Raise the suite to 151 passing tests plus one opt-in Office environment test.
+
 ## 1.4.0 — 2026-08-04
 
 - 移除首页“本机能力”状态栏；缺失工具只在相关操作需要时提示。

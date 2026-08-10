@@ -23,6 +23,16 @@ class DocumentConversionService:
         status = self.tools.get(name)
         return status.path if status else None
 
+    def _document_tool_versions(self, *, include_ocr: bool) -> dict[str, str]:
+        names = [("markitdown", "MarkItDown")]
+        if include_ocr:
+            names.append(("rapidocr", "RapidOCR"))
+        return {
+            display_name: status.version
+            for key, display_name in names
+            if (status := self.tools.get(key)) is not None and status.version
+        }
+
     def convert(
         self,
         job: Job,
@@ -45,6 +55,7 @@ class DocumentConversionService:
                 enhance=enhanced,
                 enhancement_options=options,
                 cancellation=cancellation,
+                tool_versions=self._document_tool_versions(include_ocr=options.ocr_enabled),
             )
             markdown = result.read_text(encoding="utf-8")
             preview = build_document_preview(

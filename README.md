@@ -9,7 +9,7 @@ Windows 本地桌面工具，用于把常见文档准备成 AI 易读的 Markdow
 当前版本：**1.4.0**
 
 `main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 可靠任务中心
-已经合并，M2 正在 `agent/preview-quality` 完善处理预览与应用内质量体验。
+和 M2 预览质量体验已经合并，M3 正在完善文档来源追溯与精简资料包清单。
 
 ## 直接使用
 
@@ -58,7 +58,10 @@ AI 增强模式会执行：
 - 质量弹窗可查看清洗后 Markdown、标题结构、拆分顺序与预计长度、OCR 置信度及风险定位。
 - 仅在内容确实需要拆成两段以上时，按标题与目标长度生成 `chunks`。
 - 生成 `README.md` 作为资料包入口，说明 AI 应优先读取正文还是分段。
-- 在包内 `manifest.json` 记录来源、格式、文件大小、质量结论、资源和每段估算长度。
+- 在精简版 `manifest.json` 中记录源文件哈希、主要工具版本、页/幻灯片/工作表来源、
+  资源、分段顺序和重要警告摘要；不写入本机绝对路径、完整质量报告或大段日志。
+- 每个风险可定位到 Markdown 行号及对应页面、幻灯片、工作表或 OCR 页面。
+- 分段尽量保持标题与正文、表格、代码块和块公式完整，并记录每段涉及的来源标签。
 
 默认目标是每段约 4000 个估算 token、硬上限 6000。这里使用跨语言确定性估算，不冒充某个特定模型的精确 tokenizer；目标长度可在界面调整。
 
@@ -313,6 +316,7 @@ src\ai_material_preprocessor\
 │   ├── markdown_cleaning.py     # Markdown 清洗和资源路径
 │   ├── markdown_quality.py      # 质量检查
 │   ├── markdown_splitting.py    # 结构感知拆分
+│   ├── document_provenance.py   # 页面、幻灯片、工作表和 OCR 来源映射
 │   ├── preview.py               # 文档与视频只读预览、风险和体积估算
 │   └── ocr.py             # RapidOCR、Office 图片提取与 PDF 页面渲染
 ├── ui\                    # Qt Worker、任务中心、预览、历史窗口和可测试主题
@@ -325,7 +329,7 @@ docs\adr\                 # 关键技术决策
 ```
 
 成熟工具选型依据见 `docs\adr\0001-tooling-strategy.md`，2.0 架构边界见
-`docs\adr\0002-architecture-and-quality-gates.md`，任务与预览决策见后续 ADR，许可说明见
+`docs\adr\0002-architecture-and-quality-gates.md`，任务、预览与文档追溯决策见后续 ADR，许可说明见
 `THIRD_PARTY_NOTICES.md`。
 
 ## 许可证

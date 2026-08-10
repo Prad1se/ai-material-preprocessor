@@ -19,7 +19,7 @@ from ..preview_models import (
 )
 from .document_enhancement import EnhancementOptions
 from .markdown_cleaning import HEADING_PATTERN, clean_markdown
-from .markdown_quality import check_quality
+from .markdown_quality import check_quality, preserve_original_issues
 from .markdown_splitting import split_markdown
 from .metadata import MediaMetadata
 from .naming import preview_video_rename
@@ -61,7 +61,19 @@ def build_document_preview(
 ) -> DocumentPreview:
     """Build a read-only preview from converted Markdown and optional OCR observations."""
     cleaned = clean_markdown(raw_markdown, source_suffix=source.suffix)
-    quality = check_quality(cleaned, base_dir=base_dir, max_tokens=options.max_tokens)
+    quality = check_quality(
+        cleaned,
+        base_dir=base_dir,
+        max_tokens=options.max_tokens,
+        source_suffix=source.suffix,
+    )
+    original_quality = check_quality(
+        raw_markdown,
+        base_dir=base_dir,
+        max_tokens=options.max_tokens,
+        source_suffix=source.suffix,
+    )
+    quality = preserve_original_issues(quality, original_quality, codes={"heading_jump"})
     headings: list[HeadingPreview] = []
     for line_number, line in enumerate(cleaned.splitlines(), start=1):
         match = HEADING_PATTERN.match(line)
@@ -72,6 +84,7 @@ def build_document_preview(
             cleaned,
             target_tokens=options.target_tokens,
             max_tokens=options.max_tokens,
+            source_suffix=source.suffix,
         )
         if options.split_enabled
         else ()
@@ -81,7 +94,13 @@ def build_document_preview(
         for label, _text, confidence in ocr_pages
     )
     risks = [
-        PreviewRisk(issue.code, _risk_level(issue.severity), issue.message)
+        PreviewRisk(
+            issue.code,
+            _risk_level(issue.severity),
+            issue.message,
+            issue.line,
+            issue.source_label,
+        )
         for issue in quality.issues
     ]
     if re.search(r"(?m)^\s*\|.+\|\s*$", cleaned):
@@ -150,7 +169,13 @@ def document_preview_to_dict(preview: DocumentPreview) -> dict[str, object]:
         "chunks": [asdict(item) for item in preview.chunks],
         "ocr_pages": [asdict(item) for item in preview.ocr_pages],
         "risks": [
-            {"code": item.code, "level": item.level.value, "message": item.message}
+            {
+                "code": item.code,
+                "level": item.level.value,
+                "message": item.message,
+                "line": item.line,
+                "source_label": item.source_label,
+            }
             for item in preview.risks
         ],
         "parameters": dict(preview.parameters),
