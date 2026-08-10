@@ -9,20 +9,22 @@ from ai_material_preprocessor.services.metadata import (
 
 
 def test_exiftool_metadata_prefers_original_capture_time_and_named_location() -> None:
-    payload = [{
-        "DateTimeOriginal": "2026:07:31 15:30:21+08:00",
-        "CreateDate": "2026:07:30 12:00:00",
-        "GPSLatitude": 30.2512,
-        "GPSLongitude": 120.1693,
-        "City": "杭州",
-        "Location": "西湖",
-        "Duration": 12.5,
-        "ImageWidth": 3840,
-        "ImageHeight": 2160,
-        "CompressorName": "HEVC",
-        "Make": "Apple",
-        "Model": "iPhone 15 Pro",
-    }]
+    payload = [
+        {
+            "DateTimeOriginal": "2026:07:31 15:30:21+08:00",
+            "CreateDate": "2026:07:30 12:00:00",
+            "GPSLatitude": 30.2512,
+            "GPSLongitude": 120.1693,
+            "City": "杭州",
+            "Location": "西湖",
+            "Duration": 12.5,
+            "ImageWidth": 3840,
+            "ImageHeight": 2160,
+            "CompressorName": "HEVC",
+            "Make": "Apple",
+            "Model": "iPhone 15 Pro",
+        }
+    ]
 
     result = metadata_from_exiftool(payload, Path("clip.mp4"))
 
@@ -39,10 +41,12 @@ def test_exiftool_metadata_prefers_original_capture_time_and_named_location() ->
 
 def test_ffprobe_parses_quicktime_iso6709_location() -> None:
     payload = {
-        "format": {"tags": {
-            "creation_time": "2026-07-31T07:30:21.000000Z",
-            "com.apple.quicktime.location.ISO6709": "+30.2512+120.1693/",
-        }},
+        "format": {
+            "tags": {
+                "creation_time": "2026-07-31T07:30:21.000000Z",
+                "com.apple.quicktime.location.ISO6709": "+30.2512+120.1693/",
+            }
+        },
         "duration": "8.25",
         "streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
     }

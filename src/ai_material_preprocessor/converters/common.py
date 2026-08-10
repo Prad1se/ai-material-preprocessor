@@ -1,25 +1,52 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
+from ..errors import ErrorCode, UserFacingError
+from ..infrastructure.processes import (
+    CancellationToken,
+    CommandRequest,
+    CommandResult,
+    ProcessRunner,
+)
 
-class ConversionError(RuntimeError):
-    pass
+
+class ConversionError(UserFacingError):
+    def __init__(
+        self,
+        user_message: str,
+        *,
+        code: ErrorCode = ErrorCode.CONVERSION_FAILED,
+        technical_detail: str = "",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(code, user_message, technical_detail, retryable)
 
 
-def run_command(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-    result = subprocess.run(
-        command,
+def run_command(
+    command: list[str],
+    cwd: Path | None = None,
+    *,
+    tool_name: str = "",
+    timeout_seconds: float | None = 300.0,
+    cancellation: CancellationToken | None = None,
+    runner: ProcessRunner | None = None,
+) -> CommandResult:
+    if not command:
+        raise ConversionError("外部工具命令为空，无法开始处理。")
+    request = CommandRequest(
+        executable=str(command[0]),
+        arguments=tuple(str(value) for value in command[1:]),
+        tool_name=tool_name or Path(command[0]).stem or "外部工具",
         cwd=cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        creationflags=flags,
+        timeout_seconds=timeout_seconds,
     )
-    if result.returncode:
-        detail = (result.stderr or result.stdout or "未知错误").strip()
-        raise ConversionError(detail)
-    return result
+    try:
+        return (runner or ProcessRunner()).run(request, cancellation=cancellation)
+    except UserFacingError as exc:
+        raise ConversionError(
+            exc.user_message,
+            code=exc.code,
+            technical_detail=exc.technical_detail,
+            retryable=exc.retryable,
+        ) from exc

@@ -9,7 +9,6 @@ from typing import Any
 
 from ..converters.common import run_command
 
-
 ISO6709 = re.compile(r"(?P<lat>[+-]\d+(?:\.\d+)?)(?P<lon>[+-]\d+(?:\.\d+)?)")
 
 
@@ -90,10 +89,15 @@ def metadata_from_exiftool(payload: list[dict[str, Any]], source: Path) -> Media
             place_parts.append(value)
     location = "-".join(place_parts) or _coordinate_label(latitude, longitude)
     return MediaMetadata(
-        captured, latitude, longitude, location, "ExifTool",
+        captured,
+        latitude,
+        longitude,
+        location,
+        "ExifTool",
         duration_seconds=_number(values.get("Duration")),
         width=int(_number(values.get("ImageWidth") or values.get("SourceImageWidth")) or 0) or None,
-        height=int(_number(values.get("ImageHeight") or values.get("SourceImageHeight")) or 0) or None,
+        height=int(_number(values.get("ImageHeight") or values.get("SourceImageHeight")) or 0)
+        or None,
         codec=str(values.get("CompressorName") or values.get("VideoCodec") or "").strip(),
         make=str(values.get("Make") or values.get("DeviceManufacturer") or "").strip(),
         model=str(values.get("Model") or values.get("DeviceModelName") or "").strip(),
@@ -113,23 +117,23 @@ def _flatten_ffprobe_tags(payload: dict[str, Any]) -> dict[str, str]:
 def metadata_from_ffprobe(payload: dict[str, Any], source: Path) -> MediaMetadata:
     tags = _flatten_ffprobe_tags(payload)
     captured = _parse_datetime(tags.get("creation_time") or tags.get("date"), source)
-    raw_location = (
-        tags.get("com.apple.quicktime.location.iso6709")
-        or tags.get("location")
-        or ""
-    )
+    raw_location = tags.get("com.apple.quicktime.location.iso6709") or tags.get("location") or ""
     match = ISO6709.search(raw_location)
     latitude = float(match.group("lat")) if match else None
     longitude = float(match.group("lon")) if match else None
     named_location = tags.get("com.apple.quicktime.location.name", "").strip()
     location = named_location or _coordinate_label(latitude, longitude)
-    video = next(
+    video: dict[str, Any] = next(
         (stream for stream in payload.get("streams", []) if stream.get("codec_type") == "video"),
         {},
     )
     format_values = payload.get("format", {})
     return MediaMetadata(
-        captured, latitude, longitude, location, "ffprobe",
+        captured,
+        latitude,
+        longitude,
+        location,
+        "ffprobe",
         duration_seconds=_number(format_values.get("duration") or payload.get("duration")),
         width=int(_number(video.get("width")) or 0) or None,
         height=int(_number(video.get("height")) or 0) or None,
@@ -149,35 +153,71 @@ def read_media_metadata(
 ) -> MediaMetadata:
     if exiftool:
         try:
-            result = runner([
-                exiftool, "-json", "-n", "-api", "QuickTimeUTC=1",
-                "-DateTimeOriginal", "-MediaCreateDate", "-CreateDate",
-                "-TrackCreateDate", "-GPSLatitude", "-GPSLongitude",
-                "-Country", "-State", "-City", "-Location", "-Duration",
-                "-ImageWidth", "-ImageHeight", "-CompressorName", "-VideoCodec",
-                "-Make", "-Model", "-DeviceManufacturer", "-DeviceModelName", str(source),
-            ])
+            result = runner(
+                [
+                    exiftool,
+                    "-json",
+                    "-n",
+                    "-api",
+                    "QuickTimeUTC=1",
+                    "-DateTimeOriginal",
+                    "-MediaCreateDate",
+                    "-CreateDate",
+                    "-TrackCreateDate",
+                    "-GPSLatitude",
+                    "-GPSLongitude",
+                    "-Country",
+                    "-State",
+                    "-City",
+                    "-Location",
+                    "-Duration",
+                    "-ImageWidth",
+                    "-ImageHeight",
+                    "-CompressorName",
+                    "-VideoCodec",
+                    "-Make",
+                    "-Model",
+                    "-DeviceManufacturer",
+                    "-DeviceModelName",
+                    str(source),
+                ]
+            )
             return metadata_from_exiftool(json.loads(result.stdout or "[]"), source)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
             pass
 
     if ffprobe:
         try:
-            result = runner([
-                ffprobe, "-v", "error", "-print_format", "json",
-                "-show_entries",
-                "format=duration:format_tags:stream=codec_type,codec_name,width,height:stream_tags",
-                str(source),
-            ])
+            result = runner(
+                [
+                    ffprobe,
+                    "-v",
+                    "error",
+                    "-print_format",
+                    "json",
+                    "-show_entries",
+                    "format=duration:format_tags:stream=codec_type,codec_name,width,height:stream_tags",
+                    str(source),
+                ]
+            )
             return metadata_from_ffprobe(json.loads(result.stdout or "{}"), source)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
             pass
 
     if ffmpeg:
         try:
-            result = runner([
-                ffmpeg, "-v", "error", "-i", str(source), "-f", "ffmetadata", "-",
-            ])
+            result = runner(
+                [
+                    ffmpeg,
+                    "-v",
+                    "error",
+                    "-i",
+                    str(source),
+                    "-f",
+                    "ffmetadata",
+                    "-",
+                ]
+            )
             tags: dict[str, str] = {}
             for raw_line in (result.stdout or "").splitlines():
                 line = raw_line.strip()

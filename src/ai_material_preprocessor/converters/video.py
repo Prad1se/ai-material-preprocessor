@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import shutil
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -13,14 +14,19 @@ from ..services.metadata import read_media_metadata
 from ..services.naming import preview_video_rename
 from .common import ConversionError, run_command
 
-
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 
 
 def _progress_prefix(executable: str) -> list[str]:
     return [
-        executable, "-hide_banner", "-nostdin", "-progress", "pipe:1",
-        "-stats_period", "0.25", "-n",
+        executable,
+        "-hide_banner",
+        "-nostdin",
+        "-progress",
+        "pipe:1",
+        "-stats_period",
+        "0.25",
+        "-n",
     ]
 
 
@@ -28,10 +34,24 @@ def build_compress_command(
     executable: str, source: Path, output: Path, crf: int, preset: str
 ) -> list[str]:
     return [
-        *_progress_prefix(executable), "-i", str(source),
-        "-map_metadata", "0", "-c:v", "libx264", "-crf", str(crf),
-        "-preset", preset, "-c:a", "aac", "-b:a", "160k",
-        "-movflags", "+faststart", str(output),
+        *_progress_prefix(executable),
+        "-i",
+        str(source),
+        "-map_metadata",
+        "0",
+        "-c:v",
+        "libx264",
+        "-crf",
+        str(crf),
+        "-preset",
+        preset,
+        "-c:a",
+        "aac",
+        "-b:a",
+        "160k",
+        "-movflags",
+        "+faststart",
+        str(output),
     ]
 
 
@@ -43,17 +63,39 @@ def build_extract_audio_command(
     bitrate: str,
 ) -> list[str]:
     command = [*_progress_prefix(executable), "-i", str(source), "-vn"]
-    command += ["-c:a", "pcm_s16le"] if audio_format.lower() == "wav" else [
-        "-c:a", "libmp3lame", "-b:a", bitrate,
-    ]
+    command += (
+        ["-c:a", "pcm_s16le"]
+        if audio_format.lower() == "wav"
+        else [
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            bitrate,
+        ]
+    )
     return [*command, str(output)]
 
 
 def build_standardize_command(executable: str, source: Path, output: Path) -> list[str]:
     return [
-        *_progress_prefix(executable), "-i", str(source), "-map_metadata", "0",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20",
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(output),
+        *_progress_prefix(executable),
+        "-i",
+        str(source),
+        "-map_metadata",
+        "0",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-crf",
+        "20",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
+        str(output),
     ]
 
 
@@ -67,19 +109,41 @@ def build_keyframe_command(
 ) -> list[str]:
     threshold = max(0.05, min(0.95, float(scene_threshold)))
     return [
-        *_progress_prefix(executable), "-i", str(source),
-        "-vf", f"select=gt(scene\\,{threshold:.2f}),scale='min(1920,iw)':-2",
-        "-fps_mode", "vfr", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p",
-        "-q:v", "2", "-frames:v", str(max(1, max_frames)),
+        *_progress_prefix(executable),
+        "-i",
+        str(source),
+        "-vf",
+        f"select=gt(scene\\,{threshold:.2f}),scale='min(1920,iw)':-2",
+        "-fps_mode",
+        "vfr",
+        "-c:v",
+        "mjpeg",
+        "-pix_fmt",
+        "yuvj420p",
+        "-q:v",
+        "2",
+        "-frames:v",
+        str(max(1, max_frames)),
         str(output_pattern),
     ]
 
 
 def _build_first_frame_command(executable: str, source: Path, output: Path) -> list[str]:
     return [
-        *_progress_prefix(executable), "-i", str(source), "-vf", "scale='min(1920,iw)':-2",
-        "-frames:v", "1", "-c:v", "mjpeg", "-pix_fmt", "yuvj420p",
-        "-q:v", "2", str(output),
+        *_progress_prefix(executable),
+        "-i",
+        str(source),
+        "-vf",
+        "scale='min(1920,iw)':-2",
+        "-frames:v",
+        "1",
+        "-c:v",
+        "mjpeg",
+        "-pix_fmt",
+        "yuvj420p",
+        "-q:v",
+        "2",
+        str(output),
     ]
 
 
@@ -94,7 +158,9 @@ def create_contact_sheet(
     image_height = max(1, round(cell_width * ratio))
     caption_height = 32
     rows = math.ceil(len(frames) / columns)
-    sheet = Image.new("RGB", (columns * cell_width, rows * (image_height + caption_height)), "white")
+    sheet = Image.new(
+        "RGB", (columns * cell_width, rows * (image_height + caption_height)), "white"
+    )
     draw = ImageDraw.Draw(sheet)
     for index, frame in enumerate(frames, start=1):
         row, column = divmod(index - 1, columns)
@@ -105,7 +171,8 @@ def create_contact_sheet(
             sheet.paste(fitted, (x, y))
         draw.text(
             (column * cell_width + 10, row * (image_height + caption_height) + image_height + 8),
-            f"Frame {index:03d}", fill="#222222",
+            f"Frame {index:03d}",
+            fill="#222222",
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(output, "JPEG", quality=90, optimize=True)
@@ -125,10 +192,18 @@ def parse_progress_line(line: str, duration_seconds: float) -> int | None:
 
 
 def probe_duration(executable: str, source: Path, *, runner=run_command) -> float:
-    result = runner([
-        executable, "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", str(source),
-    ])
+    result = runner(
+        [
+            executable,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(source),
+        ]
+    )
     try:
         return max(0.0, float((result.stdout or "0").strip()))
     except ValueError:
@@ -209,12 +284,12 @@ def keyframes_contact_sheet(
     frames_dir.mkdir(parents=True)
     pattern = frames_dir / "frame_%03d.jpg"
     try:
-        try:
-            run_command(build_keyframe_command(
-                exe, source, pattern, scene_threshold=scene_threshold, max_frames=max_frames
-            ))
-        except ConversionError:
-            pass
+        with suppress(ConversionError):
+            run_command(
+                build_keyframe_command(
+                    exe, source, pattern, scene_threshold=scene_threshold, max_frames=max_frames
+                )
+            )
         frames = sorted(frames_dir.glob("frame_*.jpg"))
         if not frames:
             fallback = frames_dir / "frame_001.jpg"
@@ -253,9 +328,7 @@ def rename_copy(
     template: str = "{date}_{time}_{location}_{index}",
 ) -> Path:
     _ensure_video(source)
-    metadata = read_media_metadata(
-        source, exiftool, ffprobe, ffmpeg=ffmpeg
-    )
+    metadata = read_media_metadata(source, exiftool, ffprobe, ffmpeg=ffmpeg)
     output_root.mkdir(parents=True, exist_ok=True)
     destination = output_root
     preview = preview_video_rename(

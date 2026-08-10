@@ -1,0 +1,18 @@
+[
+  {
+    "SourceFile": "synthetic-video.mp4",
+    "DateTimeOriginal": "2026:01:02 03:04:05+08:00",
+    "GPSLatitude": 30.2512,
+    "GPSLongitude": 120.1693,
+    "Country": "中国",
+    "State": "浙江",
+    "City": "杭州",
+    "Location": "公开测试地点",
+    "Duration": 12.5,
+    "ImageWidth": 1920,
+    "ImageHeight": 1080,
+    "CompressorName": "H.264",
+    "Make": "Synthetic",
+    "Model": "Fixture Camera"
+  }
+]

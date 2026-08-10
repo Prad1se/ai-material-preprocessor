@@ -1,22 +1,36 @@
 from __future__ import annotations
 
-from pathlib import Path
-from collections.abc import Callable
 import warnings
+from collections.abc import Callable
+from pathlib import Path
 
-from ..services.files import unique_path
 from ..services.document_enhancement import (
     EnhancementOptions,
     QualityReport,
     enhance_document,
 )
+from ..services.files import unique_path
 from .common import ConversionError, run_command
 
-
 SUPPORTED_EXTENSIONS = {
-    ".docx", ".pptx", ".xlsx", ".pdf", ".html", ".htm", ".csv",
-    ".json", ".xml", ".epub", ".txt",
-    ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".pdf",
+    ".html",
+    ".htm",
+    ".csv",
+    ".json",
+    ".xml",
+    ".epub",
+    ".txt",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
 }
 
 
@@ -36,9 +50,7 @@ def to_markdown(
     if converter is None:
         try:
             with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message="Couldn't find ffmpeg or avconv.*"
-                )
+                warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv.*")
                 from markitdown import MarkItDown
 
             converter = MarkItDown(enable_plugins=False)

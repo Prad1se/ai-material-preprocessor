@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from ai_material_preprocessor.converters import office_pdf
 from ai_material_preprocessor.converters.common import ConversionError
 from ai_material_preprocessor.converters.office_pdf import select_pdf_backend
-from ai_material_preprocessor.converters import office_pdf
 
 
 @pytest.mark.parametrize(
@@ -30,9 +30,7 @@ def test_backend_selection_rejects_unsupported_input() -> None:
         select_pdf_backend(Path("file.xlsx"), None, "winword.exe", "powerpnt.exe")
 
 
-def test_pdf_is_written_directly_to_selected_output_directory(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_pdf_is_written_directly_to_selected_output_directory(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "lesson.docx"
     source.write_bytes(b"docx")
     output_root = tmp_path / "chosen-folder"

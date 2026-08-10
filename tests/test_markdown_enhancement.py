@@ -122,8 +122,7 @@ def test_quality_check_finds_broken_images_unclosed_fence_and_oversize(tmp_path:
 
 def test_split_markdown_respects_hard_limit_and_keeps_headings() -> None:
     text = "# 总标题\n\n" + "\n\n".join(
-        f"## 第 {index} 节\n\n" + (f"第{index}节内容。" * 20)
-        for index in range(1, 7)
+        f"## 第 {index} 节\n\n" + (f"第{index}节内容。" * 20) for index in range(1, 7)
     )
     chunks = split_markdown(text, target_tokens=80, max_tokens=120)
     assert len(chunks) > 1
@@ -132,7 +131,9 @@ def test_split_markdown_respects_hard_limit_and_keeps_headings() -> None:
     assert "第 1 节" in chunks[0].content
 
 
-def test_enhancement_keeps_quality_in_memory_and_writes_content_chunks_manifest(tmp_path: Path) -> None:
+def test_enhancement_keeps_quality_in_memory_and_writes_content_chunks_manifest(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "lesson.pptx"
     source.write_bytes(b"fake")
     output = tmp_path / "enhanced"
@@ -171,9 +172,7 @@ def test_short_document_does_not_create_redundant_chunks_folder(tmp_path: Path) 
         source=source,
         raw_markdown="# 简短文档\n\n只有一小段内容。\n",
         output_dir=output,
-        options=EnhancementOptions(
-            split_enabled=True, target_tokens=4000, max_tokens=6000
-        ),
+        options=EnhancementOptions(split_enabled=True, target_tokens=4000, max_tokens=6000),
     )
 
     manifest = json.loads(result.manifest.read_text(encoding="utf-8"))

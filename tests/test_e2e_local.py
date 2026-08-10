@@ -17,8 +17,8 @@ from ai_material_preprocessor.converters.video import (
     standardize,
 )
 from ai_material_preprocessor.services.config import load_config
-from ai_material_preprocessor.services.environment import detect_tools
 from ai_material_preprocessor.services.document_enhancement import EnhancementOptions
+from ai_material_preprocessor.services.environment import detect_tools
 from ai_material_preprocessor.services.ocr import RapidOCREngine
 
 
@@ -138,16 +138,37 @@ def test_real_ffmpeg_video_pipeline_preserves_source(tmp_path: Path, detected_to
     if not ffmpeg:
         pytest.skip("FFmpeg is not available")
     source = tmp_path / "source.mp4"
-    run_command([
-        ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25",
-        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
-        "-t", "1", "-shortest",
-        "-metadata", "creation_time=2026-07-31T07:30:21Z",
-        "-metadata", "location=+30.2512+120.1693/",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
-        str(source),
-    ])
+    run_command(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=25",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100",
+            "-t",
+            "1",
+            "-shortest",
+            "-metadata",
+            "creation_time=2026-07-31T07:30:21Z",
+            "-metadata",
+            "location=+30.2512+120.1693/",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            str(source),
+        ]
+    )
     original_hash = _sha256(source)
     output_root = tmp_path / "outputs"
 
@@ -166,9 +187,16 @@ def test_real_ffmpeg_video_pipeline_preserves_source(tmp_path: Path, detected_to
         ffmpeg=ffmpeg,
     )
 
-    assert all(path.is_file() and path.stat().st_size > 0 for path in (
-        compressed, audio, standardized, contact_sheet, renamed,
-    ))
+    assert all(
+        path.is_file() and path.stat().st_size > 0
+        for path in (
+            compressed,
+            audio,
+            standardized,
+            contact_sheet,
+            renamed,
+        )
+    )
     assert (contact_sheet.parent / "manifest.json").is_file()
     assert list((contact_sheet.parent / "frames").glob("frame_*.jpg"))
     assert "杭州西湖" in renamed.name

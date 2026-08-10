@@ -7,16 +7,24 @@ from ai_material_preprocessor.services.naming import build_video_name, preview_v
 
 def metadata(location: str = "杭州西湖") -> MediaMetadata:
     return MediaMetadata(
-        datetime(2026, 7, 31, 15, 30, 21), 30.2512, 120.1693, location, "test",
-        duration_seconds=65.4, width=1920, height=1080, codec="h264",
-        make="Apple", model="iPhone 15 Pro",
+        datetime(2026, 7, 31, 15, 30, 21),
+        30.2512,
+        120.1693,
+        location,
+        "test",
+        duration_seconds=65.4,
+        width=1920,
+        height=1080,
+        codec="h264",
+        make="Apple",
+        model="iPhone 15 Pro",
     )
 
 
 def test_template_builds_safe_predictable_name() -> None:
     result = build_video_name(
         source=Path("VID_0001.MOV"),
-        metadata=metadata('杭州:西湖'),
+        metadata=metadata("杭州:西湖"),
         template="{date}_{time}_{location}_{index}",
         index=3,
     )
@@ -24,9 +32,7 @@ def test_template_builds_safe_predictable_name() -> None:
 
 
 def test_empty_location_does_not_leave_double_separator() -> None:
-    result = build_video_name(
-        Path("VID_0001.mp4"), metadata(""), "{date}_{location}_{index}", 1
-    )
+    result = build_video_name(Path("VID_0001.mp4"), metadata(""), "{date}_{location}_{index}", 1)
     assert result == "2026-07-31_001.mp4"
 
 

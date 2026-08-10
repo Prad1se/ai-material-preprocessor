@@ -213,6 +213,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
 .\.venv\Scripts\python.exe -m pytest
 ```
 
+完整工程质量门（格式、静态检查、类型和全部测试）：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.ps1
+```
+
 测试包括：
 
 - 能力矩阵和工具查找优先级
@@ -269,19 +275,29 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package_releas
 ```text
 src\ai_material_preprocessor\
 ├── capabilities.py       # 文件与可执行操作矩阵
+├── errors.py             # 稳定错误代码、用户提示与技术诊断分离
+├── infrastructure\       # 可超时、可取消的外部进程适配器
 ├── converters\           # MarkItDown、Office、FFmpeg 适配器
-├── services\             # 配置、工具检测、元数据、命名和文件安全
-│   ├── document_enhancement.py  # 清洗、质检、拆分与结果组织
+├── services\             # 应用服务、任务分发、配置、元数据和文件安全
+│   ├── document_service.py      # 文档转换用例
+│   ├── video_service.py         # 视频处理用例
+│   ├── job_executor.py          # 与 GUI 无关的批次分发与失败隔离
+│   ├── document_enhancement.py  # AI 资料包编排
+│   ├── markdown_cleaning.py     # Markdown 清洗和资源路径
+│   ├── markdown_quality.py      # 质量检查
+│   ├── markdown_splitting.py    # 结构感知拆分
 │   └── ocr.py             # RapidOCR、Office 图片提取与 PDF 页面渲染
+├── ui\                    # Qt Worker 和可测试主题
 ├── diagnostics.py        # 发布包自检
-└── gui.py                # PySide6 桌面界面与后台任务
+└── gui.py                # PySide6 窗口与交互
 
 tests\                    # 单元、GUI 与本地端到端测试
 scripts\                  # Office 转换、工具准备、构建和发布验证
 docs\adr\                 # 关键技术决策
 ```
 
-成熟工具选型依据见 `docs\adr\0001-tooling-strategy.md`，许可说明见 `THIRD_PARTY_NOTICES.md`。
+成熟工具选型依据见 `docs\adr\0001-tooling-strategy.md`，2.0 架构边界见
+`docs\adr\0002-architecture-and-quality-gates.md`，许可说明见 `THIRD_PARTY_NOTICES.md`。
 
 ## 许可证
 

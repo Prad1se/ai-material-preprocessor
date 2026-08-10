@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ai_material_preprocessor.models import Operation
@@ -27,7 +27,7 @@ def test_task_manifest_records_success_failure_sizes_and_absolute_outputs(tmp_pa
     manifest = write_task_manifest(
         root,
         records,
-        created_at=datetime(2026, 8, 1, 2, 3, 4, tzinfo=timezone.utc),
+        created_at=datetime(2026, 8, 1, 2, 3, 4, tzinfo=UTC),
         task_id="task-test",
     )
 
@@ -59,7 +59,7 @@ def test_manifest_is_kept_under_central_history_not_export_folder(tmp_path: Path
     manifest = write_task_manifest(
         history_root,
         [TaskRecord(source, Operation.TO_PDF, "success", output=output)],
-        created_at=datetime(2026, 8, 1, 2, 3, 4, tzinfo=timezone.utc),
+        created_at=datetime(2026, 8, 1, 2, 3, 4, tzinfo=UTC),
         task_id="task-central",
     )
 

@@ -1,0 +1,18 @@
+{
+  "format": {
+    "duration": "12.5",
+    "tags": {
+      "creation_time": "2026-01-01T19:04:05Z",
+      "com.apple.quicktime.location.ISO6709": "+30.2512+120.1693/",
+      "com.apple.quicktime.location.name": "公开测试地点"
+    }
+  },
+  "streams": [
+    {
+      "codec_type": "video",
+      "codec_name": "h264",
+      "width": 1920,
+      "height": 1080
+    }
+  ]
+}

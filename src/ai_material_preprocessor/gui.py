@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import os
 import sys
-import traceback
+from contextlib import suppress
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,30 +32,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .converters.markdown import to_markdown
-from .converters.office_pdf import to_pdf
-from .converters.video import (
-    compress,
-    extract_audio,
-    keyframes_contact_sheet,
-    rename_copy,
-    standardize,
-)
 from .capabilities import available_operations
 from .models import Job, Operation, ToolStatus
 from .services.config import load_config, save_config
 from .services.environment import detect_tools
 from .services.metadata import read_media_metadata
 from .services.naming import preview_video_rename
-from .services.document_enhancement import EnhancementOptions
 from .services.task_manifest import (
-    TaskRecord,
     clear_history,
     history_usage,
     resolve_history_root,
-    write_task_manifest,
 )
-
+from .ui.theme import APP_STYLESHEET
+from .ui.workers import Worker
 
 MOUSE_STATE_ASSETS = {
     "idle": "mouse-grin.png",
@@ -87,7 +76,7 @@ class DropList(QListWidget):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
 
-    def dragMoveEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+    def dragMoveEvent(self, event) -> None:
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
 
@@ -100,120 +89,6 @@ class DropList(QListWidget):
         if paths:
             self.files_added.emit(paths)
             event.acceptProposedAction()
-
-
-class Worker(QThread):
-    progress = Signal(int, str)
-    completed = Signal(list, list, list)
-    failed = Signal(str)
-
-    def __init__(
-        self,
-        jobs: list[Job],
-        tools: dict[str, ToolStatus],
-        config: dict,
-    ) -> None:
-        super().__init__()
-        self.jobs = jobs
-        self.tools = tools
-        self.config = config
-
-    def _path(self, name: str) -> str | None:
-        return self.tools[name].path
-
-    def run(self) -> None:
-        outputs: list[str] = []
-        errors: list[str] = []
-        quality_reports: list[dict] = []
-        records: list[TaskRecord] = []
-        try:
-            for index, job in enumerate(self.jobs, start=1):
-                self.progress.emit(
-                    int((index - 1) / len(self.jobs) * 100),
-                    f"正在处理：{job.source.name}",
-                )
-                try:
-                    if job.operation == Operation.TO_MARKDOWN:
-                        document = self.config["document"]
-                        result = to_markdown(
-                            job.source,
-                            job.output_root,
-                            self._path("markitdown"),
-                            enhance=str(document["mode"]) == "enhanced",
-                            enhancement_options=EnhancementOptions(
-                                split_enabled=bool(document["split_enabled"]),
-                                target_tokens=int(document["target_tokens"]),
-                                max_tokens=int(document["max_tokens"]),
-                                ocr_enabled=bool(document["ocr_enabled"]),
-                            ),
-                            quality_callback=(
-                                lambda report, source=job.source: quality_reports.append(
-                                    {"source": source.name, **report.to_dict()}
-                                )
-                            ),
-                        )
-                    elif job.operation == Operation.TO_PDF:
-                        result = to_pdf(
-                            job.source,
-                            job.output_root,
-                            self._path("libreoffice"),
-                            self._path("winword"),
-                            self._path("powerpoint"),
-                        )
-                    elif job.operation == Operation.COMPRESS_VIDEO:
-                        video = self.config["video"]
-                        result = compress(
-                            job.source,
-                            job.output_root,
-                            self._path("ffmpeg"),
-                            int(video["compression_crf"]),
-                            str(video["compression_preset"]),
-                        )
-                    elif job.operation == Operation.EXTRACT_AUDIO:
-                        video = self.config["video"]
-                        result = extract_audio(
-                            job.source,
-                            job.output_root,
-                            self._path("ffmpeg"),
-                            str(video["audio_format"]),
-                            str(video["audio_bitrate"]),
-                        )
-                    elif job.operation == Operation.STANDARDIZE_MP4:
-                        result = standardize(job.source, job.output_root, self._path("ffmpeg"))
-                    elif job.operation == Operation.KEYFRAMES_CONTACT_SHEET:
-                        video = self.config["video"]
-                        result = keyframes_contact_sheet(
-                            job.source,
-                            job.output_root,
-                            self._path("ffmpeg"),
-                            scene_threshold=float(video["scene_threshold"]),
-                            max_frames=int(video["max_keyframes"]),
-                            columns=int(video["contact_sheet_columns"]),
-                        )
-                    else:
-                        result = rename_copy(
-                            job.source,
-                            job.output_root,
-                            self._path("ffprobe"),
-                            job.location,
-                            index,
-                            exiftool=self._path("exiftool"),
-                            ffmpeg=self._path("ffmpeg"),
-                            template=str(self.config["video"]["rename_template"]),
-                        )
-                    outputs.append(str(result))
-                    records.append(TaskRecord(job.source, job.operation, "success", output=result))
-                except Exception as exc:
-                    errors.append(f"{job.source.name}：{exc}")
-                    records.append(TaskRecord(job.source, job.operation, "failed", error=str(exc)))
-            try:
-                write_task_manifest(resolve_history_root(self.config), records)
-            except OSError as exc:
-                errors.append(f"历史记录：{exc}")
-            self.progress.emit(100, f"完成：已生成 {len(outputs)} 个文件")
-            self.completed.emit(outputs, errors, quality_reports)
-        except Exception as exc:
-            self.failed.emit(f"{exc}\n\n{traceback.format_exc(limit=1)}")
 
 
 class MainWindow(QMainWindow):
@@ -254,7 +129,9 @@ class MainWindow(QMainWindow):
         eyebrow.setObjectName("eyebrow")
         title = QLabel("鼠鼠帮你把素材，\n准备成下一步需要的样子。")
         title.setObjectName("title")
-        subtitle = QLabel("交给 AI、普通转换、准备创作都在这里完成。处理全程留在本机，原文件始终保留。")
+        subtitle = QLabel(
+            "交给 AI、普通转换、准备创作都在这里完成。处理全程留在本机，原文件始终保留。"
+        )
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
         hero_copy.addWidget(eyebrow)
@@ -305,9 +182,7 @@ class MainWindow(QMainWindow):
         self.file_list.setObjectName("dropZone")
         self.file_list.setMinimumHeight(280)
         self.file_list.files_added.connect(self._add_files)
-        self.file_list.setAccessibleDescription(
-            "拖入 Word、PPT、Excel、PDF、HTML 或视频文件"
-        )
+        self.file_list.setAccessibleDescription("拖入 Word、PPT、Excel、PDF、HTML 或视频文件")
         files_layout.addLayout(file_header)
         files_layout.addWidget(file_description)
         files_layout.addWidget(self.file_list)
@@ -364,7 +239,10 @@ class MainWindow(QMainWindow):
         self.scene_sensitivity.addItem("关键帧：只保留明显变化", 0.45)
         configured_threshold = float(self.config["video"]["scene_threshold"])
         self.scene_sensitivity.setCurrentIndex(
-            min(range(self.scene_sensitivity.count()), key=lambda i: abs(float(self.scene_sensitivity.itemData(i)) - configured_threshold))
+            min(
+                range(self.scene_sensitivity.count()),
+                key=lambda i: abs(float(self.scene_sensitivity.itemData(i)) - configured_threshold),
+            )
         )
         self.max_keyframes = QSpinBox()
         self.max_keyframes.setRange(4, 60)
@@ -373,9 +251,7 @@ class MainWindow(QMainWindow):
         self.location = QLineEdit()
         self.location.setPlaceholderText("地点（可选；优先于视频元数据，例如：杭州西湖）")
         self.rename_template = QLineEdit(str(self.config["video"]["rename_template"]))
-        self.rename_template.setPlaceholderText(
-            "命名模板：{date}_{time}_{location}_{index}"
-        )
+        self.rename_template.setPlaceholderText("命名模板：{date}_{time}_{location}_{index}")
         self.rename_template.setToolTip(
             "支持日期时间、地点、坐标、分辨率、时长、编码、相机和原文件名等字段。"
         )
@@ -458,7 +334,7 @@ class MainWindow(QMainWindow):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(central)
         self.setCentralWidget(scroll)
         self._set_mouse_state("idle")
@@ -478,87 +354,7 @@ class MainWindow(QMainWindow):
         self.mouse_mascot.setProperty("state", state)
 
     def _apply_style(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow, QScrollArea { background: #f5efe9; }
-            QWidget { color: #171717; font-family: "Microsoft YaHei UI"; }
-            QWidget#page { background: #f5efe9; color: #171717; }
-            QFrame#hero { background: #fff8f3; border: 2px solid #171717; border-radius: 26px; }
-            QLabel#mouseMascot { background: transparent; border: 0; }
-            QLabel#eyebrow { color: #df5268; font-size: 11px; font-weight: 800; letter-spacing: 1px; border: 0; }
-            QLabel#title { font-size: 31px; font-weight: 800; color: #111111; border: 0; }
-            QLabel#subtitle { font-size: 15px; color: #5e5552; border: 0; }
-            QLabel#workflowStep, QLabel#workflowActive {
-                border: 2px solid #171717; border-radius: 16px; padding: 9px 12px;
-                font-size: 12px; font-weight: 700; background: #fffdfb;
-            }
-            QLabel#workflowActive { background: #ffd9df; }
-            QLabel#sectionTitle { font-size: 19px; font-weight: 750; color: #171717; border: 0; }
-            QLabel#sectionDescription { font-size: 13px; color: #746966; border: 0; }
-            QLabel#fieldLabel { font-size: 12px; font-weight: 700; color: #5e5552; border: 0; }
-            QLabel#status { color: #5e5552; padding: 3px 2px; }
-            QLabel#outputHint { color: #3f3735; background: #fff5f2; border: 1px solid #e7cac5; border-radius: 10px; padding: 10px 12px; }
-            QFrame#panel {
-                background: #fffdfb; border: 2px solid #171717;
-                border-radius: 20px;
-            }
-            QFrame#historyBar {
-                background: #fffdfb; border: 2px solid #171717;
-                border-radius: 14px;
-            }
-            QLabel#historyLabel { color: #746966; font-size: 12px; border: 0; }
-            QListWidget, QLineEdit, QComboBox, QSpinBox {
-                color: #171717; background: #ffffff; border: 2px solid #171717;
-                border-radius: 10px; padding: 9px 11px; min-height: 23px;
-                selection-background-color: #ef6f82;
-                selection-color: #171717;
-            }
-            QListWidget#dropZone { background: #fff4f5; border: 2px dashed #171717;
-                border-radius: 16px; padding: 12px; }
-            QListWidget#dropZone:focus { border: 2px solid #df5268; }
-            QListWidget::item { color: #171717; background: transparent;
-                border-radius: 8px; padding: 9px 10px; margin: 2px 0; }
-            QListWidget::item:hover { background: #ffe7eb; }
-            QListWidget::item:selected { color: #171717; background: #ffd2da; }
-            QComboBox QAbstractItemView {
-                color: #171717; background: #ffffff; border: 2px solid #171717;
-                border-radius: 10px; padding: 6px; outline: 0;
-                selection-color: #171717; selection-background-color: #ffd2da;
-            }
-            QComboBox QAbstractItemView::item { color: #171717;
-                background: #ffffff; min-height: 30px; padding: 5px 9px; }
-            QComboBox QAbstractItemView::item:hover,
-            QComboBox QAbstractItemView::item:selected { color: #171717; background: #ffd2da; }
-            QComboBox::drop-down { border: 0; width: 34px; }
-            QTableWidget { color: #1d1d1f; background: #ffffff;
-                alternate-background-color: #f5f5f7; gridline-color: #e5e5ea; }
-            QHeaderView::section { color: #424245; background: #f5f5f7;
-                border: 0; border-bottom: 1px solid #d2d2d7; padding: 8px; }
-            QPushButton {
-                background: #ffffff; color: #171717; border: 2px solid #171717; border-radius: 10px;
-                padding: 10px 16px; font-weight: 600; min-height: 20px;
-            }
-            QPushButton:hover { background: #ffe4e8; }
-            QPushButton#primary { background: #ef6f82; color: #171717; border-radius: 12px; padding: 13px 20px; font-weight: 800; }
-            QPushButton#primary:hover { background: #f38293; }
-            QPushButton#secondary { background: #fffdfb; }
-            QPushButton#linkButton { color: #c63f55; background: transparent; border: 0; padding: 6px 8px; }
-            QPushButton#linkButton:hover { color: #a52c40; background: #ffe9ec; }
-            QPushButton#dangerLinkButton { color: #d70015; background: transparent; padding: 6px 8px; }
-            QPushButton#dangerLinkButton:hover { color: #b60012; background: #fff0f1; }
-            QPushButton:disabled { color: #a29a97; background: #e9e2de; border-color: #bdb4b0; }
-            QCheckBox { color: #424245; spacing: 8px; padding: 3px 0; }
-            QCheckBox::indicator { width: 17px; height: 17px; }
-            QProgressBar {
-                border: 2px solid #171717; background: #f0e8e4; border-radius: 5px;
-                text-align: center; min-height: 8px; max-height: 8px; color: transparent;
-            }
-            QProgressBar::chunk { background: #ef6f82; border-radius: 3px; }
-            QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
-            QScrollBar::handle:vertical { background: #c7c7cc; border-radius: 5px; min-height: 34px; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-            """
-        )
+        self.setStyleSheet(APP_STYLESHEET)
 
     def _choose_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, "选择素材文件")
@@ -629,16 +425,22 @@ class MainWindow(QMainWindow):
         elif operation == Operation.TO_PDF:
             self.output_hint.setText("输出：单个 PDF 文件，直接保存在所选目录。")
         elif operation == Operation.KEYFRAMES_CONTACT_SHEET:
-            self.output_hint.setText("输出：一个关键帧包文件夹，包含联系表、关键帧与 manifest.json。")
+            self.output_hint.setText(
+                "输出：一个关键帧包文件夹，包含联系表、关键帧与 manifest.json。"
+            )
         else:
             self.output_hint.setText("输出：单个处理结果文件，直接保存在所选目录。")
         hint = ""
-        if operation in {
-            Operation.COMPRESS_VIDEO,
-            Operation.EXTRACT_AUDIO,
-            Operation.STANDARDIZE_MP4,
-            Operation.KEYFRAMES_CONTACT_SHEET,
-        } and not self.tools.get("ffmpeg", ToolStatus("ffmpeg", None)).available:
+        if (
+            operation
+            in {
+                Operation.COMPRESS_VIDEO,
+                Operation.EXTRACT_AUDIO,
+                Operation.STANDARDIZE_MP4,
+                Operation.KEYFRAMES_CONTACT_SHEET,
+            }
+            and not self.tools.get("ffmpeg", ToolStatus("ffmpeg", None)).available
+        ):
             hint = "（需要安装 FFmpeg）"
         elif operation == Operation.RENAME_VIDEO and not any(
             self.tools.get(name, ToolStatus(name, None)).available
@@ -680,7 +482,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         table = QTableWidget(len(self.paths), 4)
         table.setHorizontalHeaderLabels(["原文件", "拍摄时间", "地点", "输出文件"])
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         table.horizontalHeader().setStretchLastSection(True)
         for index, source in enumerate(self.paths, start=1):
             metadata = read_media_metadata(
@@ -694,8 +496,7 @@ class MainWindow(QMainWindow):
                 source,
                 destination,
                 metadata,
-                self.rename_template.text().strip()
-                or "{date}_{time}_{location}_{index}",
+                self.rename_template.text().strip() or "{date}_{time}_{location}_{index}",
                 index,
                 self.location.text(),
             )
@@ -710,7 +511,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(table)
         note = QLabel("预览仅读取元数据；正式处理会复制到独立目录，原文件不改名。")
         layout.addWidget(note)
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
         dialog.exec()
@@ -731,8 +532,7 @@ class MainWindow(QMainWindow):
         self.config["video"]["compression_crf"] = int(self.quality.currentData())
         self.config["video"]["audio_format"] = str(self.audio_format.currentData())
         self.config["video"]["rename_template"] = (
-            self.rename_template.text().strip()
-            or "{date}_{time}_{location}_{index}"
+            self.rename_template.text().strip() or "{date}_{time}_{location}_{index}"
         )
         self.config["video"]["scene_threshold"] = float(self.scene_sensitivity.currentData())
         self.config["video"]["max_keyframes"] = int(self.max_keyframes.value())
@@ -746,10 +546,8 @@ class MainWindow(QMainWindow):
         self.config["document"]["ocr_enabled"] = (
             self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
         )
-        try:
+        with suppress(OSError):
             save_config(self.config)
-        except OSError:
-            pass
         jobs = [
             Job(
                 source=path,
@@ -788,8 +586,7 @@ class MainWindow(QMainWindow):
             issues = report.get("issues") or []
             if issues:
                 sections.append(
-                    "需要注意：\n"
-                    + "\n".join(f"• {issue['message']}" for issue in issues[:6])
+                    "需要注意：\n" + "\n".join(f"• {issue['message']}" for issue in issues[:6])
                 )
             else:
                 sections.append("未发现明显问题。")
@@ -845,13 +642,13 @@ class MainWindow(QMainWindow):
             return
         folder = str(Path(self.last_outputs[0]).parent)
         if os.name == "nt":
-            os.startfile(folder)  # type: ignore[attr-defined]
+            os.startfile(folder)
 
     def _open_history(self) -> None:
         history = resolve_history_root(self.config)
         history.mkdir(parents=True, exist_ok=True)
         if os.name == "nt":
-            os.startfile(str(history))  # type: ignore[attr-defined]
+            os.startfile(str(history))
 
     @staticmethod
     def _format_bytes(value: int) -> str:

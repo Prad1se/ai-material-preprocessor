@@ -16,8 +16,13 @@ def test_self_test_writes_machine_readable_report(tmp_path: Path) -> None:
     tools = {
         name: ToolStatus(name, None)
         for name in (
-            "markitdown", "ffmpeg", "ffprobe", "exiftool",
-            "libreoffice", "winword", "powerpoint",
+            "markitdown",
+            "ffmpeg",
+            "ffprobe",
+            "exiftool",
+            "libreoffice",
+            "winword",
+            "powerpoint",
         )
     }
     tools["markitdown"] = ToolStatus("markitdown", "Python API", "内置")

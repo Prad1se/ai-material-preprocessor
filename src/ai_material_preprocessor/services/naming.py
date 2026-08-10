@@ -40,11 +40,13 @@ def build_video_name(
         "datetime": f"{captured:%Y-%m-%d_%H%M%S}",
         "latitude": (
             f"{abs(metadata.latitude):.4f}{'N' if metadata.latitude >= 0 else 'S'}"
-            if metadata.latitude is not None else ""
+            if metadata.latitude is not None
+            else ""
         ),
         "longitude": (
             f"{abs(metadata.longitude):.4f}{'E' if metadata.longitude >= 0 else 'W'}"
-            if metadata.longitude is not None else ""
+            if metadata.longitude is not None
+            else ""
         ),
         "resolution": metadata.resolution,
         "width": str(metadata.width or ""),
@@ -72,8 +74,6 @@ def preview_video_rename(
     index: int,
     manual_location: str = "",
 ) -> RenamePreview:
-    intended = destination / build_video_name(
-        source, metadata, template, index, manual_location
-    )
+    intended = destination / build_video_name(source, metadata, template, index, manual_location)
     output = unique_path(intended)
     return RenamePreview(source, output, metadata, output != intended)
