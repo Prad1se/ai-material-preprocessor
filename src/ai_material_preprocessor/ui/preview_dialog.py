@@ -144,8 +144,18 @@ class DocumentReportDialog(QDialog):
         risks = report.get("risks") or report.get("issues") or []
         if risks:
             for risk in risks:
+                location = " · ".join(
+                    part
+                    for part in (
+                        str(risk.get("source_label") or ""),
+                        f"第 {risk['line']} 行" if risk.get("line") else "",
+                    )
+                    if part
+                )
+                location = f"{location} · " if location else ""
                 risk_list.addItem(
-                    f"[{str(risk.get('level') or risk.get('severity', 'info')).upper()}] {risk['message']}"
+                    f"[{str(risk.get('level') or risk.get('severity', 'info')).upper()}] "
+                    f"{location}{risk['message']}"
                 )
         else:
             risk_list.addItem("未发现明显风险。")

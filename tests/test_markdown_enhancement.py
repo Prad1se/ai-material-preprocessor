@@ -153,13 +153,13 @@ def test_enhancement_keeps_quality_in_memory_and_writes_content_chunks_manifest(
     assert result.readme.is_file()
     assert result.chunks
     manifest = json.loads(result.manifest.read_text(encoding="utf-8"))
-    assert manifest["source"] == "lesson.pptx"
+    assert manifest["source"]["name"] == "lesson.pptx"
+    assert len(manifest["source"]["sha256"]) == 64
     assert manifest["package_type"] == "ai_document_package"
-    assert manifest["quality"]["score"] >= 0
-    assert manifest["files"]["content"] == "content.md"
-    assert "quality_markdown" not in manifest["files"]
-    assert "quality_json" not in manifest["files"]
-    assert manifest["chunk_count"] == len(result.chunks)
+    assert manifest["main_markdown"] == "content.md"
+    assert len(manifest["chunks"]) == len(result.chunks)
+    assert "quality" not in manifest
+    assert "files" not in manifest
     assert "从这里开始" in result.readme.read_text(encoding="utf-8")
 
 
@@ -178,7 +178,7 @@ def test_short_document_does_not_create_redundant_chunks_folder(tmp_path: Path) 
     manifest = json.loads(result.manifest.read_text(encoding="utf-8"))
     assert result.chunks == ()
     assert not (output / "chunks").exists()
-    assert manifest["chunk_count"] == 0
+    assert manifest["chunks"] == []
     assert "读取 `content.md`" in result.readme.read_text(encoding="utf-8")
 
 

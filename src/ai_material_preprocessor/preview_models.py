@@ -28,6 +28,8 @@ class PreviewRisk:
     code: str
     level: PreviewRiskLevel
     message: str
+    line: int | None = None
+    source_label: str = ""
 
 
 @dataclass(frozen=True)

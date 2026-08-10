@@ -48,6 +48,7 @@ def to_markdown(
     ocr_engine=None,
     quality_callback: Callable[[QualityReport], None] | None = None,
     cancellation: CancellationToken | None = None,
+    tool_versions: dict[str, str] | None = None,
 ) -> Path:
     cli_output: Path | None = None
 
@@ -112,6 +113,7 @@ def to_markdown(
                 output_dir=enhanced_dir,
                 options=enhancement_options or EnhancementOptions(),
                 ocr_engine=ocr_engine,
+                tool_versions=tool_versions,
             )
             ensure_not_cancelled()
         except Exception:

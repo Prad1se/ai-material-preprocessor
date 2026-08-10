@@ -8,6 +8,8 @@ class QualityIssue:
     code: str
     severity: str
     message: str
+    line: int | None = None
+    source_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -34,3 +36,4 @@ class MarkdownChunk:
     title: str
     content: str
     estimated_tokens: int
+    source_labels: tuple[str, ...] = ()
