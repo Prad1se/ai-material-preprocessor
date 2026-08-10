@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,6 +64,7 @@ class ProcessRunner:
         request: CommandRequest,
         *,
         cancellation: CancellationToken | None = None,
+        on_stdout_line: Callable[[str], None] | None = None,
     ) -> CommandResult:
         if cancellation and cancellation.is_cancelled:
             raise UserFacingError(
@@ -94,33 +96,87 @@ class ProcessRunner:
 
         stdout = ""
         stderr = ""
-        while True:
-            if cancellation and cancellation.is_cancelled:
-                self._stop_process(process)
-                raise UserFacingError(
-                    ErrorCode.CANCELLED,
-                    "任务已取消，原文件没有改动。",
-                    retryable=True,
-                )
-            elapsed = time.monotonic() - started
-            if request.timeout_seconds is not None and elapsed >= request.timeout_seconds:
-                self._stop_process(process)
-                raise UserFacingError(
-                    ErrorCode.EXTERNAL_TOOL_TIMEOUT,
-                    f"{request.tool_name}处理超时，已安全停止；可以调整设置后重试。",
-                    technical_detail=(
-                        f"timeout after {request.timeout_seconds:.3f}s: {request.command!r}"
-                    ),
-                    retryable=True,
-                )
-            wait_for = self.poll_interval_seconds
-            if request.timeout_seconds is not None:
-                wait_for = min(wait_for, max(0.001, request.timeout_seconds - elapsed))
-            try:
-                stdout, stderr = process.communicate(timeout=wait_for)
-                break
-            except subprocess.TimeoutExpired:
-                continue
+
+        def cancellation_error() -> UserFacingError:
+            return UserFacingError(
+                ErrorCode.CANCELLED,
+                "任务已取消，原文件没有改动。",
+                retryable=True,
+            )
+
+        def timeout_error() -> UserFacingError:
+            return UserFacingError(
+                ErrorCode.EXTERNAL_TOOL_TIMEOUT,
+                f"{request.tool_name}处理超时，已安全停止；可以调整设置后重试。",
+                technical_detail=(
+                    f"timeout after {request.timeout_seconds:.3f}s: {request.command!r}"
+                ),
+                retryable=True,
+            )
+
+        if on_stdout_line is None:
+            while True:
+                if cancellation and cancellation.is_cancelled:
+                    self._stop_process(process)
+                    raise cancellation_error()
+                elapsed = time.monotonic() - started
+                if request.timeout_seconds is not None and elapsed >= request.timeout_seconds:
+                    self._stop_process(process)
+                    raise timeout_error()
+                wait_for = self.poll_interval_seconds
+                if request.timeout_seconds is not None:
+                    wait_for = min(
+                        wait_for,
+                        max(0.001, request.timeout_seconds - elapsed),
+                    )
+                try:
+                    stdout, stderr = process.communicate(timeout=wait_for)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        else:
+            stdout_lines: list[str] = []
+            stderr_lines: list[str] = []
+
+            def drain_stdout() -> None:
+                if process.stdout is None:
+                    return
+                for line in process.stdout:
+                    stdout_lines.append(line)
+                    try:
+                        on_stdout_line(line.rstrip("\r\n"))
+                    except Exception:
+                        continue
+
+            def drain_stderr() -> None:
+                if process.stderr is None:
+                    return
+                stderr_lines.extend(process.stderr)
+
+            readers = [
+                threading.Thread(target=drain_stdout, daemon=True),
+                threading.Thread(target=drain_stderr, daemon=True),
+            ]
+            for reader in readers:
+                reader.start()
+            pending_error: UserFacingError | None = None
+            while process.poll() is None:
+                if cancellation and cancellation.is_cancelled:
+                    self._stop_process(process)
+                    pending_error = cancellation_error()
+                    break
+                elapsed = time.monotonic() - started
+                if request.timeout_seconds is not None and elapsed >= request.timeout_seconds:
+                    self._stop_process(process)
+                    pending_error = timeout_error()
+                    break
+                time.sleep(self.poll_interval_seconds)
+            for reader in readers:
+                reader.join(timeout=1)
+            stdout = "".join(stdout_lines)
+            stderr = "".join(stderr_lines)
+            if pending_error is not None:
+                raise pending_error
 
         elapsed = time.monotonic() - started
         result = CommandResult(request.command, process.returncode, stdout, stderr, elapsed)

@@ -43,7 +43,23 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_tokens": 6000,
         "ocr_enabled": False,
     },
+    "task_center": {
+        "state_directory": "",
+        "disk_space_safety_mb": 512,
+    },
+    "history": {
+        "retention_days": 90,
+        "max_size_mb": 512,
+    },
 }
+
+
+def coerce_int(value: object, default: int, *, minimum: int | None = None) -> int:
+    try:
+        converted = int(value) if isinstance(value, (int, str)) else default
+    except ValueError:
+        converted = default
+    return max(minimum, converted) if minimum is not None else converted
 
 
 def resource_path(*parts: str) -> Path:

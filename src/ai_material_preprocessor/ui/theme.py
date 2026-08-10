@@ -1,5 +1,5 @@
 APP_STYLESHEET = r"""
-QMainWindow, QScrollArea { background: #f5efe9; }
+QMainWindow, QDialog, QScrollArea { background: #f5efe9; }
 QWidget { color: #171717; font-family: "Microsoft YaHei UI"; }
 QWidget#page { background: #f5efe9; color: #171717; }
 QFrame#hero { background: #fff8f3; border: 2px solid #171717; border-radius: 26px; }

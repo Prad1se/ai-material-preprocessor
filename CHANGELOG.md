@@ -11,6 +11,22 @@
 - Add public synthetic regression fixtures and raise the suite from 80 to 98 passing tests.
 - Add Ruff formatting/linting, mypy checking, and matching GitHub Actions quality gates.
 
+### M1 reliable task center
+
+- Add an atomic, versioned task queue with waiting, running, success, failure, cancelled,
+  and interrupted states; running tasks from an abnormal exit are recoverable as interrupted.
+- Add independent task progress, overall progress, safe waiting/running cancellation, failure
+  isolation, and retry for failed, cancelled, interrupted, or recovered waiting tasks.
+- Stream FFmpeg's machine-readable progress output without losing captured diagnostics.
+- Add conservative disk-space preflight with a configurable safety margin before any converter
+  starts.
+- Add searchable history with status/operation filters, selected deletion, separate cache deletion,
+  full clearing, automatic retention, and a directory size limit.
+- Record source/result paths, attempts, timestamps, relevant parameters, and detected tool versions
+  without storing private document contents.
+- Split the task-center table and history dialog out of the main PySide6 window.
+- Raise the suite to 132 passing tests plus one opt-in Office environment test.
+
 ## 1.4.0 — 2026-08-04
 
 - 移除首页“本机能力”状态栏；缺失工具只在相关操作需要时提示。

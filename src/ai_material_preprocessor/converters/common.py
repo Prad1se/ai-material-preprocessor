@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ..errors import ErrorCode, UserFacingError
@@ -31,6 +32,7 @@ def run_command(
     timeout_seconds: float | None = 300.0,
     cancellation: CancellationToken | None = None,
     runner: ProcessRunner | None = None,
+    stdout_line_callback: Callable[[str], None] | None = None,
 ) -> CommandResult:
     if not command:
         raise ConversionError("外部工具命令为空，无法开始处理。")
@@ -42,7 +44,11 @@ def run_command(
         timeout_seconds=timeout_seconds,
     )
     try:
-        return (runner or ProcessRunner()).run(request, cancellation=cancellation)
+        return (runner or ProcessRunner()).run(
+            request,
+            cancellation=cancellation,
+            on_stdout_line=stdout_line_callback,
+        )
     except UserFacingError as exc:
         raise ConversionError(
             exc.user_message,

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ..converters.video import (
     compress,
     extract_audio,
     keyframes_contact_sheet,
+    probe_duration,
     rename_copy,
     standardize,
 )
+from ..infrastructure.processes import CancellationToken
 from ..models import Job, Operation, ToolStatus
 
 
@@ -21,8 +24,26 @@ class VideoProcessingService:
         status = self.tools.get(name)
         return status.path if status else None
 
-    def convert(self, job: Job, index: int) -> Path:
+    def convert(
+        self,
+        job: Job,
+        index: int,
+        *,
+        cancellation: CancellationToken | None = None,
+        on_progress: Callable[[int, str], None] | None = None,
+    ) -> Path:
         video = self.config["video"]
+        duration = 0.0
+        if self._path("ffprobe"):
+            try:
+                duration = probe_duration(
+                    str(self._path("ffprobe")),
+                    job.source,
+                    cancellation=cancellation,
+                )
+            except Exception:
+                if cancellation and cancellation.is_cancelled:
+                    raise
         if job.operation is Operation.COMPRESS_VIDEO:
             return compress(
                 job.source,
@@ -30,6 +51,9 @@ class VideoProcessingService:
                 self._path("ffmpeg"),
                 int(video["compression_crf"]),
                 str(video["compression_preset"]),
+                cancellation=cancellation,
+                duration_seconds=duration,
+                progress_callback=on_progress,
             )
         if job.operation is Operation.EXTRACT_AUDIO:
             return extract_audio(
@@ -38,9 +62,19 @@ class VideoProcessingService:
                 self._path("ffmpeg"),
                 str(video["audio_format"]),
                 str(video["audio_bitrate"]),
+                cancellation=cancellation,
+                duration_seconds=duration,
+                progress_callback=on_progress,
             )
         if job.operation is Operation.STANDARDIZE_MP4:
-            return standardize(job.source, job.output_root, self._path("ffmpeg"))
+            return standardize(
+                job.source,
+                job.output_root,
+                self._path("ffmpeg"),
+                cancellation=cancellation,
+                duration_seconds=duration,
+                progress_callback=on_progress,
+            )
         if job.operation is Operation.KEYFRAMES_CONTACT_SHEET:
             return keyframes_contact_sheet(
                 job.source,
@@ -49,6 +83,9 @@ class VideoProcessingService:
                 scene_threshold=float(video["scene_threshold"]),
                 max_frames=int(video["max_keyframes"]),
                 columns=int(video["contact_sheet_columns"]),
+                cancellation=cancellation,
+                duration_seconds=duration,
+                progress_callback=on_progress,
             )
         if job.operation is Operation.RENAME_VIDEO:
             return rename_copy(
@@ -60,5 +97,6 @@ class VideoProcessingService:
                 exiftool=self._path("exiftool"),
                 ffmpeg=self._path("ffmpeg"),
                 template=str(video["rename_template"]),
+                cancellation=cancellation,
             )
         raise ValueError(f"Video service cannot execute {job.operation.name}")

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -67,6 +69,30 @@ def test_process_runner_honors_pre_cancelled_token() -> None:
     assert captured.value.retryable is True
 
 
+def test_process_runner_stops_an_already_running_process_on_cancellation() -> None:
+    token = CancellationToken()
+    request = CommandRequest(
+        executable=sys.executable,
+        arguments=("-c", "import time; time.sleep(30)"),
+        tool_name="测试工具",
+        timeout_seconds=60,
+    )
+    timer = threading.Timer(0.05, token.cancel)
+    started = time.monotonic()
+    timer.start()
+    try:
+        with pytest.raises(UserFacingError) as captured:
+            ProcessRunner(poll_interval_seconds=0.01).run(
+                request,
+                cancellation=token,
+            )
+    finally:
+        timer.cancel()
+
+    assert captured.value.code is ErrorCode.CANCELLED
+    assert time.monotonic() - started < 2
+
+
 def test_process_runner_failure_reports_tool_without_exposing_command_in_message() -> None:
     request = CommandRequest(
         executable=sys.executable,
@@ -81,6 +107,29 @@ def test_process_runner_failure_reports_tool_without_exposing_command_in_message
     assert captured.value.user_message == "测试工具处理失败，请查看任务详情。"
     assert "private detail" in captured.value.technical_detail
     assert "private detail" not in str(captured.value)
+
+
+def test_process_runner_streams_stdout_lines_without_losing_captured_output() -> None:
+    request = CommandRequest(
+        executable=sys.executable,
+        arguments=(
+            "-u",
+            "-c",
+            "import time; print('out_time_us=1000000'); time.sleep(.03); print('progress=end')",
+        ),
+        tool_name="测试工具",
+        timeout_seconds=5,
+    )
+    lines: list[str] = []
+
+    result = ProcessRunner(poll_interval_seconds=0.005).run(
+        request,
+        on_stdout_line=lines.append,
+    )
+
+    assert lines == ["out_time_us=1000000", "progress=end"]
+    assert "out_time_us=1000000" in result.stdout
+    assert "progress=end" in result.stdout
 
 
 def test_legacy_converter_boundary_uses_typed_process_errors() -> None:

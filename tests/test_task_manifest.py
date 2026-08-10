@@ -20,7 +20,17 @@ def test_task_manifest_records_success_failure_sizes_and_absolute_outputs(tmp_pa
     source = tmp_path / "lesson.docx"
     source.write_bytes(b"source")
     records = [
-        TaskRecord(source, Operation.TO_MARKDOWN, "success", output=output),
+        TaskRecord(
+            source,
+            Operation.TO_MARKDOWN,
+            "success",
+            output=output,
+            attempts=2,
+            started_at=datetime(2026, 8, 1, 2, 3, tzinfo=UTC),
+            finished_at=datetime(2026, 8, 1, 2, 3, 4, tzinfo=UTC),
+            parameters={"mode": "enhanced", "target_tokens": 4000},
+            tool_versions={"markitdown": "0.1.6"},
+        ),
         TaskRecord(tmp_path / "broken.pdf", Operation.TO_MARKDOWN, "failed", error="bad pdf"),
     ]
 
@@ -38,6 +48,14 @@ def test_task_manifest_records_success_failure_sizes_and_absolute_outputs(tmp_pa
     assert payload["items"][0]["output"] == str(output.resolve())
     assert payload["items"][0]["source_size"] == 6
     assert payload["items"][0]["output_size"] == 7
+    assert payload["items"][0]["attempts"] == 2
+    assert payload["items"][0]["started_at"] == "2026-08-01T02:03:00+00:00"
+    assert payload["items"][0]["finished_at"] == "2026-08-01T02:03:04+00:00"
+    assert payload["items"][0]["parameters"] == {
+        "mode": "enhanced",
+        "target_tokens": 4000,
+    }
+    assert payload["items"][0]["tool_versions"] == {"markitdown": "0.1.6"}
     assert payload["items"][1]["error"] == "bad pdf"
 
 

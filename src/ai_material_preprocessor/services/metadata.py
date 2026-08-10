@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..converters.common import run_command
+from ..infrastructure.processes import CancellationToken
 
 ISO6709 = re.compile(r"(?P<lat>[+-]\d+(?:\.\d+)?)(?P<lon>[+-]\d+(?:\.\d+)?)")
 
@@ -150,6 +151,7 @@ def read_media_metadata(
     *,
     ffmpeg: str | None = None,
     runner=run_command,
+    cancellation: CancellationToken | None = None,
 ) -> MediaMetadata:
     if exiftool:
         try:
@@ -180,7 +182,9 @@ def read_media_metadata(
                     "-DeviceManufacturer",
                     "-DeviceModelName",
                     str(source),
-                ]
+                ],
+                tool_name="ExifTool",
+                cancellation=cancellation,
             )
             return metadata_from_exiftool(json.loads(result.stdout or "[]"), source)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
@@ -198,7 +202,9 @@ def read_media_metadata(
                     "-show_entries",
                     "format=duration:format_tags:stream=codec_type,codec_name,width,height:stream_tags",
                     str(source),
-                ]
+                ],
+                tool_name="ffprobe",
+                cancellation=cancellation,
             )
             return metadata_from_ffprobe(json.loads(result.stdout or "{}"), source)
         except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
@@ -216,7 +222,9 @@ def read_media_metadata(
                     "-f",
                     "ffmetadata",
                     "-",
-                ]
+                ],
+                tool_name="FFmpeg",
+                cancellation=cancellation,
             )
             tags: dict[str, str] = {}
             for raw_line in (result.stdout or "").splitlines():

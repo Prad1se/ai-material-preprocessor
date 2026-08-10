@@ -1,11 +1,20 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from PySide6.QtGui import QColor, QImage, QPalette
-from PySide6.QtWidgets import QApplication, QFrame
+from PySide6.QtWidgets import QApplication, QFrame, QTableWidget
 
-from ai_material_preprocessor.gui import MOUSE_STATE_ASSETS, MainWindow, mouse_asset_path
-from ai_material_preprocessor.models import Operation, ToolStatus
+from ai_material_preprocessor.gui import (
+    MOUSE_STATE_ASSETS,
+    HistoryDialog,
+    MainWindow,
+    mouse_asset_path,
+)
+from ai_material_preprocessor.models import Job, Operation, QueuedTask, TaskStatus, ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
+from ai_material_preprocessor.services.history_repository import HistoryRepository
+from ai_material_preprocessor.services.task_manifest import TaskRecord, write_task_manifest
+from ai_material_preprocessor.services.task_repository import PersistentTaskQueue
 
 
 def toolset(**available: bool) -> dict[str, ToolStatus]:
@@ -206,6 +215,92 @@ def test_window_exposes_central_history_location(qtbot, tmp_path: Path, monkeypa
     assert window.history_button.text() == "查看历史记录"
     assert window.clear_history_button.text() == "清除历史"
     assert window.findChild(QFrame, "capabilityBar") is None
+
+
+def test_window_exposes_visible_task_center_controls(qtbot) -> None:
+    window = MainWindow(config=DEFAULT_CONFIG, tools=toolset())
+    qtbot.addWidget(window)
+
+    assert isinstance(window.task_table, QTableWidget)
+    assert [
+        window.task_table.horizontalHeaderItem(index).text()
+        for index in range(window.task_table.columnCount())
+    ] == ["文件", "操作", "状态", "进度", "详情"]
+    assert window.cancel_task_button.text() == "取消所选任务"
+    assert window.retry_task_button.text() == "重试失败任务"
+    assert not window.cancel_task_button.isEnabled()
+    assert not window.retry_task_button.isEnabled()
+    assert not window.task_table.verticalHeader().isVisible()
+
+
+def test_window_restores_interrupted_tasks_for_explicit_retry(qtbot, tmp_path: Path) -> None:
+    state = PersistentTaskQueue(tmp_path / "state.json")
+    now = datetime(2026, 8, 10, tzinfo=UTC)
+    source = tmp_path / "课程 资料.docx"
+    source.write_bytes(b"docx")
+    state.save(
+        [
+            QueuedTask(
+                "recover-me",
+                Job(source, Operation.TO_MARKDOWN, tmp_path / "out"),
+                status=TaskStatus.RUNNING,
+                progress=42,
+                attempts=1,
+                created_at=now,
+                updated_at=now,
+            )
+        ]
+    )
+
+    window = MainWindow(
+        config=DEFAULT_CONFIG,
+        tools=toolset(markitdown=True),
+        task_repository=state,
+    )
+    qtbot.addWidget(window)
+
+    assert window.task_table.rowCount() == 1
+    assert window.task_table.item(0, 2).text() == "已中断"
+    window.task_table.selectRow(0)
+    assert window.retry_task_button.isEnabled()
+    assert state.load()[0].status is TaskStatus.INTERRUPTED
+
+
+def test_history_dialog_searches_and_filters_records(qtbot, tmp_path: Path) -> None:
+    history = tmp_path / "History"
+    source = tmp_path / "课程资料.docx"
+    source.write_bytes(b"docx")
+    write_task_manifest(
+        history,
+        [TaskRecord(source, Operation.TO_MARKDOWN, TaskStatus.SUCCESS)],
+        created_at=datetime(2026, 8, 10, tzinfo=UTC),
+        task_id="document-task",
+    )
+    video = tmp_path / "broken.mp4"
+    video.write_bytes(b"video")
+    write_task_manifest(
+        history,
+        [TaskRecord(video, Operation.COMPRESS_VIDEO, TaskStatus.FAILED, error="failed")],
+        created_at=datetime(2026, 8, 10, 1, tzinfo=UTC),
+        task_id="video-task",
+    )
+    dialog = HistoryDialog(HistoryRepository(history))
+    qtbot.addWidget(dialog)
+
+    assert dialog.table.rowCount() == 2
+    dialog.search_input.setText("课程")
+    assert dialog.table.rowCount() == 1
+    assert dialog.table.item(0, 1).text() == "课程资料.docx"
+    dialog.search_input.clear()
+    failed_index = dialog.status_filter.findData(TaskStatus.FAILED.value)
+    dialog.status_filter.setCurrentIndex(failed_index)
+    assert dialog.table.rowCount() == 1
+    assert dialog.table.item(0, 3).text() == "失败"
+    assert dialog.delete_records_button.text() == "删除所选记录"
+    assert dialog.delete_caches_button.text() == "删除所选缓存"
+    assert dialog.close_button.text() == "关闭"
+    assert not dialog.table.verticalHeader().isVisible()
+    assert "QComboBox QAbstractItemView" in dialog.styleSheet()
 
 
 def test_file_rows_and_combo_items_stay_readable_with_dark_system_palette(
