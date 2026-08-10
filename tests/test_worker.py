@@ -93,6 +93,12 @@ def test_worker_adapts_task_center_updates_to_qt_signals(qtbot, tmp_path: Path) 
     assert progress[-1][0] == 100
     assert len(written) == 1
     assert written[0][1][0].status is TaskStatus.SUCCESS
+    assert written[0][1][0].quality_summary == {
+        "score": 100,
+        "chunk_count": 0,
+        "ocr_pages": [],
+        "issues": [],
+    }
     assert worker.task_repository.load() == []
 
 

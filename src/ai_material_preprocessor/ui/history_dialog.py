@@ -7,11 +7,13 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -31,6 +33,59 @@ STATUS_LABELS = {
     TaskStatus.CANCELLED: "已取消",
     TaskStatus.INTERRUPTED: "已中断",
 }
+
+
+class HistoryDetailsDialog(QDialog):
+    def __init__(self, payload: dict, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("任务详情与质量摘要")
+        self.resize(760, 600)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("详情来自应用数据目录中的处理记录，不包含文档正文。"))
+        self.details = QPlainTextEdit(self._details_text(payload))
+        self.details.setReadOnly(True)
+        layout.addWidget(self.details)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    @staticmethod
+    def _details_text(payload: dict) -> str:
+        sections = [
+            f"任务编号：{payload.get('task_id', '—')}",
+            f"执行时间：{payload.get('created_at', '—')}",
+        ]
+        for index, item in enumerate(payload.get("items") or [], start=1):
+            sections.extend(
+                [
+                    "",
+                    f"项目 {index}",
+                    f"源文件：{item.get('source') or '—'}",
+                    f"操作：{item.get('operation_label') or item.get('operation') or '—'}",
+                    f"状态：{item.get('status') or '—'}",
+                    f"输出：{item.get('output') or '—'}",
+                ]
+            )
+            parameters = item.get("parameters") or {}
+            if parameters:
+                sections.append(
+                    "参数：" + "；".join(f"{key}={value}" for key, value in parameters.items())
+                )
+            tools = item.get("tool_versions") or {}
+            if tools:
+                sections.append(
+                    "工具：" + "；".join(f"{key} {value}" for key, value in tools.items())
+                )
+            quality = item.get("quality_summary") or {}
+            if quality:
+                sections.append(
+                    f"质量：{quality.get('score', '—')}/100；"
+                    f"约 {quality.get('estimated_tokens', '—')} tokens；"
+                    f"拆分 {quality.get('chunk_count', 0)} 段"
+                )
+                for issue in quality.get("issues") or []:
+                    sections.append(f"  • {issue.get('message') or issue.get('code')}")
+        return "\n".join(sections)
 
 
 class HistoryDialog(QDialog):
@@ -78,6 +133,7 @@ class HistoryDialog(QDialog):
 
         actions = QHBoxLayout()
         self.open_folder_button = QPushButton("打开记录目录")
+        self.details_button = QPushButton("查看详情")
         self.delete_records_button = QPushButton("删除所选记录")
         self.delete_records_button.setObjectName("dangerLinkButton")
         self.delete_caches_button = QPushButton("删除所选缓存")
@@ -85,6 +141,7 @@ class HistoryDialog(QDialog):
         self.clear_all_button = QPushButton("清空全部历史")
         self.clear_all_button.setObjectName("dangerLinkButton")
         actions.addWidget(self.open_folder_button)
+        actions.addWidget(self.details_button)
         actions.addStretch()
         actions.addWidget(self.delete_caches_button)
         actions.addWidget(self.delete_records_button)
@@ -103,6 +160,8 @@ class HistoryDialog(QDialog):
         self.operation_filter.currentIndexChanged.connect(self.refresh)
         self.table.itemSelectionChanged.connect(self._update_actions)
         self.open_folder_button.clicked.connect(self._open_folder)
+        self.details_button.clicked.connect(self._show_details)
+        self.table.itemDoubleClicked.connect(lambda _item: self._show_details())
         self.delete_records_button.clicked.connect(self._delete_selected_records)
         self.delete_caches_button.clicked.connect(self._delete_selected_caches)
         self.clear_all_button.clicked.connect(self._clear_all)
@@ -157,6 +216,7 @@ class HistoryDialog(QDialog):
     def _update_actions(self) -> None:
         rows = self._selected_rows()
         self.delete_records_button.setEnabled(bool(rows))
+        self.details_button.setEnabled(len(rows) == 1)
         self.delete_caches_button.setEnabled(
             any(bool(self.table.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)) for row in rows)
         )
@@ -166,6 +226,16 @@ class HistoryDialog(QDialog):
         self.repository.root.mkdir(parents=True, exist_ok=True)
         if os.name == "nt":
             os.startfile(str(self.repository.root))
+
+    def _show_details(self) -> None:
+        task_ids = self._selected_task_ids()
+        if len(task_ids) != 1:
+            return
+        payload = self.repository.details(task_ids[0])
+        if payload is None:
+            QMessageBox.warning(self, "无法读取详情", "处理记录不存在或已经损坏。")
+            return
+        HistoryDetailsDialog(payload, self).exec()
 
     def _delete_selected_records(self) -> None:
         task_ids = self._selected_task_ids()

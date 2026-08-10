@@ -35,6 +35,35 @@ class Preflight(Protocol):
 HistoryWriter = Callable[[Path, list[TaskRecord]], object]
 
 
+def _quality_summary(reports: tuple[dict, ...]) -> dict[str, object]:
+    if not reports:
+        return {}
+    report = reports[0]
+    summary: dict[str, object] = {
+        key: report[key]
+        for key in ("score", "estimated_tokens", "heading_count", "image_count")
+        if key in report
+    }
+    summary["chunk_count"] = len(report.get("chunks") or [])
+    summary["ocr_pages"] = [
+        {
+            "label": item.get("label"),
+            "confidence": item.get("confidence"),
+            "low_confidence": bool(item.get("low_confidence")),
+        }
+        for item in report.get("ocr_pages") or []
+    ]
+    summary["issues"] = [
+        {
+            "code": item.get("code"),
+            "level": item.get("level") or item.get("severity"),
+            "message": item.get("message"),
+        }
+        for item in (report.get("risks") or report.get("issues") or [])
+    ]
+    return summary
+
+
 class Worker(QThread):
     """Run the persistent task center and translate updates into Qt signals."""
 
@@ -208,6 +237,7 @@ class Worker(QThread):
                     finished_at=task.finished_at,
                     parameters=self._parameters_for(task),
                     tool_versions=self._tool_versions_for(task),
+                    quality_summary=_quality_summary(self.center.quality_reports_for(task.task_id)),
                 )
                 for task in tasks
                 if task.status.is_terminal

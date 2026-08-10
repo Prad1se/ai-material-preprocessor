@@ -27,6 +27,20 @@
 - Split the task-center table and history dialog out of the main PySide6 window.
 - Raise the suite to 132 passing tests plus one opt-in Office environment test.
 
+### M2 preview and quality experience
+
+- Add typed, read-only document and video preview models outside the main Qt window.
+- Show document source information and parameters before processing, then show cleaned Markdown,
+  heading structure, chunk lengths, OCR confidence, and content risks in an application-only report.
+- Add video metadata previews for capture time, duration, resolution, frame rate, codec, location,
+  output name, and a conservative output-size range.
+- Add dry-run batch naming with planned collision warnings and no output-directory mutation.
+- Warn before lossy video/audio re-encoding and codec changes.
+- Display generated contact sheets directly in the application after successful keyframe processing.
+- Keep compact quality summaries in central history details without storing Markdown body text.
+- Upgrade processing-history manifests to schema version 2 while retaining schema-1 reads.
+- Raise the suite to 142 passing tests plus one opt-in Office environment test.
+
 ## 1.4.0 — 2026-08-04
 
 - 移除首页“本机能力”状态栏；缺失工具只在相关操作需要时提示。

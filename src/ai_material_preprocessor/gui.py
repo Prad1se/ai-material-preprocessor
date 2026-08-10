@@ -11,12 +11,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -26,8 +23,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -38,7 +33,11 @@ from .services.config import load_config, save_config
 from .services.environment import detect_tools
 from .services.history_repository import HistoryRepository, default_cache_root
 from .services.metadata import read_media_metadata
-from .services.naming import preview_video_rename
+from .services.preview import (
+    build_batch_rename_preview,
+    build_video_preview,
+    completed_contact_sheet,
+)
 from .services.task_manifest import (
     clear_history,
     history_usage,
@@ -46,6 +45,12 @@ from .services.task_manifest import (
 )
 from .services.task_repository import PersistentTaskQueue
 from .ui.history_dialog import HistoryDialog
+from .ui.preview_dialog import (
+    ContactSheetPreviewDialog,
+    DocumentReportDialog,
+    SourcePlanDialog,
+    VideoPreviewDialog,
+)
 from .ui.task_center_panel import TaskCenterPanel
 from .ui.theme import APP_STYLESHEET
 from .ui.workers import Worker
@@ -290,9 +295,9 @@ class MainWindow(QMainWindow):
         self.rename_template.setToolTip(
             "支持日期时间、地点、坐标、分辨率、时长、编码、相机和原文件名等字段。"
         )
-        self.preview_button = QPushButton("预览新文件名")
+        self.preview_button = QPushButton("预览处理方案")
         self.preview_button.setObjectName("secondary")
-        self.preview_button.clicked.connect(self._show_rename_preview)
+        self.preview_button.clicked.connect(self._show_processing_preview)
         output_row = QHBoxLayout()
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("默认：原文件旁的“AI素材处理结果”")
@@ -459,7 +464,7 @@ class MainWindow(QMainWindow):
         self.max_keyframes.setVisible(storyboard)
         self.location.setVisible(renaming)
         self.rename_template.setVisible(renaming)
-        self.preview_button.setVisible(renaming)
+        self.preview_button.setVisible(True)
         if markdown and enhanced:
             self.output_hint.setText(
                 "输出：一个精简 AI 资料包，包含清洗正文、按需拆分内容和 manifest.json；完成后弹窗显示质量检查。"
@@ -517,48 +522,107 @@ class MainWindow(QMainWindow):
             self.status.setText(f"已添加 {len(self.paths)} 个文件；请选择处理方式。")
         self._operation_changed()
 
-    def _show_rename_preview(self) -> None:
+    def _tool_path(self, name: str) -> str | None:
+        status = self.tools.get(name)
+        return status.path if status else None
+
+    def _preview_parameters(self, operation: Operation) -> dict[str, object]:
+        if operation is Operation.TO_MARKDOWN:
+            enhanced = self.document_mode.currentData() == "enhanced"
+            return {
+                "模式": "AI 增强" if enhanced else "原始转换",
+                "自动拆分": "是" if enhanced and self.split_document.isChecked() else "否",
+                "目标长度": f"{self.target_tokens.value()} tokens",
+                "OCR": "开启"
+                if enhanced and self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                else "关闭",
+            }
+        if operation is Operation.TO_PDF:
+            return {"输出": "单个 PDF", "原文件": "保留"}
+        if operation is Operation.COMPRESS_VIDEO:
+            return {
+                "compression_crf": int(self.quality.currentData()),
+                "compression_preset": str(self.config["video"]["compression_preset"]),
+            }
+        if operation is Operation.EXTRACT_AUDIO:
+            return {
+                "audio_format": str(self.audio_format.currentData()),
+                "audio_bitrate": str(self.config["video"]["audio_bitrate"]),
+            }
+        if operation is Operation.KEYFRAMES_CONTACT_SHEET:
+            return {
+                "scene_threshold": float(self.scene_sensitivity.currentData()),
+                "max_keyframes": int(self.max_keyframes.value()),
+                "columns": int(self.config["video"]["contact_sheet_columns"]),
+            }
+        if operation is Operation.RENAME_VIDEO:
+            return {
+                "rename_template": self.rename_template.text().strip()
+                or "{date}_{time}_{location}_{index}"
+            }
+        return {"输出编码": "H.264 / AAC", "容器": "MP4"}
+
+    def _show_processing_preview(self) -> None:
         if not self.paths:
             return
-        dialog = QDialog(self)
-        dialog.setWindowTitle("新文件名预览（不会修改原文件）")
-        dialog.resize(820, 360)
-        layout = QVBoxLayout(dialog)
-        table = QTableWidget(len(self.paths), 4)
-        table.setHorizontalHeaderLabels(["原文件", "拍摄时间", "地点", "输出文件"])
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeader().setStretchLastSection(True)
-        for index, source in enumerate(self.paths, start=1):
-            metadata = read_media_metadata(
-                source,
-                self.tools["exiftool"].path,
-                self.tools["ffprobe"].path,
-                ffmpeg=self.tools["ffmpeg"].path,
+        raw_operation = self.operation.currentData()
+        if raw_operation is None:
+            return
+        operation = Operation(raw_operation)
+        parameters = self._preview_parameters(operation)
+        if operation in {Operation.TO_MARKDOWN, Operation.TO_PDF}:
+            note = (
+                "转换后将显示清洗后的 Markdown、标题结构、拆分长度、OCR 页面和风险提示。"
+                if operation is Operation.TO_MARKDOWN
+                else "普通 PDF 转换只生成目标文件；处理记录保存在应用数据目录。"
             )
-            destination = self._job_output(source)
-            preview = preview_video_rename(
-                source,
-                destination,
-                metadata,
-                self.rename_template.text().strip() or "{date}_{time}_{location}_{index}",
-                index,
-                self.location.text(),
-            )
-            values = [
-                source.name,
-                metadata.captured_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
-                metadata.effective_location(self.location.text()) or "未提供",
-                preview.output.name,
+            SourcePlanDialog(
+                "文档处理参数预览",
+                self.paths,
+                {key: str(value) for key, value in parameters.items()},
+                note,
+                self,
+            ).exec()
+            return
+        try:
+            metadata = [
+                read_media_metadata(
+                    source,
+                    self._tool_path("exiftool"),
+                    self._tool_path("ffprobe"),
+                    ffmpeg=self._tool_path("ffmpeg"),
+                )
+                for source in self.paths
             ]
-            for column, value in enumerate(values):
-                table.setItem(index - 1, column, QTableWidgetItem(value))
-        layout.addWidget(table)
-        note = QLabel("预览仅读取元数据；正式处理会复制到独立目录，原文件不改名。")
-        layout.addWidget(note)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        dialog.exec()
+            if operation is Operation.RENAME_VIDEO:
+                previews = list(
+                    build_batch_rename_preview(
+                        self.paths,
+                        metadata,
+                        self._job_output(self.paths[0]),
+                        template=str(parameters["rename_template"]),
+                        manual_location=self.location.text(),
+                    )
+                )
+            else:
+                previews = [
+                    build_video_preview(
+                        source,
+                        item,
+                        operation,
+                        self._job_output(source),
+                        parameters=parameters,
+                        index=index,
+                        manual_location=self.location.text(),
+                    )
+                    for index, (source, item) in enumerate(
+                        zip(self.paths, metadata, strict=True), start=1
+                    )
+                ]
+        except Exception as exc:
+            QMessageBox.critical(self, "无法生成预览", str(exc))
+            return
+        VideoPreviewDialog(previews, self).exec()
 
     def _job_output(self, source: Path) -> Path:
         explicit = self.output_path.text().strip()
@@ -714,12 +778,9 @@ class MainWindow(QMainWindow):
         self._set_mouse_state("success" if outputs else "error")
         self.open_button.setEnabled(bool(outputs))
         if quality_reports:
-            message = self._quality_report_text(quality_reports, outputs)
+            DocumentReportDialog(quality_reports, outputs, self).exec()
             if errors:
-                message += "\n\n未完成：\n" + "\n".join(errors[:6])
-                QMessageBox.warning(self, "转换完成与质量检查", message)
-            else:
-                QMessageBox.information(self, "转换质量检查", message)
+                QMessageBox.warning(self, "部分任务未完成", "\n".join(errors[:6]))
             self.status.setText(
                 f"处理完成：已生成 {len(outputs)} 项；质量检查已显示，原文件未改动。"
             )
@@ -735,11 +796,23 @@ class MainWindow(QMainWindow):
             )
         else:
             self.status.setText(f"处理完成：已生成 {len(outputs)} 个文件，原文件未改动。")
-            QMessageBox.information(
-                self,
-                "处理完成",
-                "已生成：\n" + "\n".join(outputs[:5]) + ("\n…" if len(outputs) > 5 else ""),
+            contact_sheet = next(
+                (
+                    path
+                    for raw in outputs
+                    if (path := completed_contact_sheet(Path(raw))) is not None
+                ),
+                None,
             )
+            if contact_sheet is not None:
+                source_name = self.paths[0].name if self.paths else contact_sheet.parent.name
+                ContactSheetPreviewDialog(source_name, contact_sheet, self).exec()
+            else:
+                QMessageBox.information(
+                    self,
+                    "处理完成",
+                    "已生成：\n" + "\n".join(outputs[:5]) + ("\n…" if len(outputs) > 5 else ""),
+                )
 
     def _worker_finished(self) -> None:
         self.last_worker = self.worker

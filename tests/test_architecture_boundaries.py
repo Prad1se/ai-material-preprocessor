@@ -21,3 +21,11 @@ def test_document_pipeline_has_separate_clean_quality_and_split_modules(tmp_path
 def test_ui_theme_is_separate_and_keeps_combo_items_readable() -> None:
     assert "QComboBox QAbstractItemView" in APP_STYLESHEET
     assert "selection-color: #171717" in APP_STYLESHEET
+
+
+def test_preview_controls_have_explicit_light_and_dark_system_safe_colors() -> None:
+    assert "QPlainTextEdit, QTreeWidget" in APP_STYLESHEET
+    assert "QTabWidget::pane" in APP_STYLESHEET
+    assert "QTabBar::tab" in APP_STYLESHEET
+    assert "background: #ffffff" in APP_STYLESHEET
+    assert "color: #171717" in APP_STYLESHEET

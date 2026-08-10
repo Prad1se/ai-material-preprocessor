@@ -21,6 +21,7 @@ def test_exiftool_metadata_prefers_original_capture_time_and_named_location() ->
             "ImageWidth": 3840,
             "ImageHeight": 2160,
             "CompressorName": "HEVC",
+            "VideoFrameRate": 29.97,
             "Make": "Apple",
             "Model": "iPhone 15 Pro",
         }
@@ -36,6 +37,7 @@ def test_exiftool_metadata_prefers_original_capture_time_and_named_location() ->
     assert result.duration_seconds == 12.5
     assert result.resolution == "3840x2160"
     assert result.codec == "HEVC"
+    assert result.frame_rate == 29.97
     assert result.camera == "Apple-iPhone 15 Pro"
 
 
@@ -48,7 +50,15 @@ def test_ffprobe_parses_quicktime_iso6709_location() -> None:
             }
         },
         "duration": "8.25",
-        "streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080}],
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "30000/1001",
+            }
+        ],
     }
 
     result = metadata_from_ffprobe(payload, Path("clip.mov"))
@@ -61,6 +71,7 @@ def test_ffprobe_parses_quicktime_iso6709_location() -> None:
     assert result.duration_seconds == 8.25
     assert result.resolution == "1920x1080"
     assert result.codec == "h264"
+    assert result.frame_rate == 29.97
 
 
 def test_empty_metadata_falls_back_to_file_time(tmp_path: Path) -> None:

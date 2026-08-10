@@ -53,6 +53,16 @@ QTableWidget { color: #1d1d1f; background: #ffffff;
     alternate-background-color: #f5f5f7; gridline-color: #e5e5ea; }
 QHeaderView::section { color: #424245; background: #f5f5f7;
     border: 0; border-bottom: 1px solid #d2d2d7; padding: 8px; }
+QTabWidget QWidget { color: #171717; background: #fffdfb; }
+QTabWidget::pane { background: #fffdfb; border: 1px solid #d2d2d7; border-radius: 8px; }
+QTabBar::tab { color: #424245; background: #f0e8e4; border: 1px solid #d2d2d7;
+    padding: 7px 14px; min-width: 72px; }
+QTabBar::tab:selected { color: #171717; background: #ffffff; font-weight: 700; }
+QPlainTextEdit, QTreeWidget { color: #171717; background: #ffffff;
+    border: 1px solid #d2d2d7; selection-color: #171717;
+    selection-background-color: #ffd2da; }
+QTreeWidget::item { color: #171717; background: #ffffff; padding: 5px; }
+QTreeWidget::item:selected { color: #171717; background: #ffd2da; }
 QPushButton {
     background: #ffffff; color: #171717; border: 2px solid #171717; border-radius: 10px;
     padding: 10px 16px; font-weight: 600; min-height: 20px;
