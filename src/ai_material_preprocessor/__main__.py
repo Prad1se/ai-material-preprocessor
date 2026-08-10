@@ -1,12 +1,16 @@
 import argparse
 import json
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
 from .diagnostics import run_self_test
 from .gui import MainWindow
+from .services.config import load_config
+from .services.startup_maintenance import perform_startup_maintenance
+from .services.task_repository import PersistentTaskQueue, resolve_task_queue_path
 
 
 def main() -> int:
@@ -20,7 +24,11 @@ def main() -> int:
 
     app = QApplication([sys.argv[0], *qt_args])
     app.setApplicationName("AI 素材预处理工具")
-    window = MainWindow()
+    config = load_config()
+    with suppress(OSError):
+        perform_startup_maintenance(config)
+    task_repository = PersistentTaskQueue(resolve_task_queue_path(config))
+    window = MainWindow(config=config, task_repository=task_repository)
     window.show()
     return app.exec()
 

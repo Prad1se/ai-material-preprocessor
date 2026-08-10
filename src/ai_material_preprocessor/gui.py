@@ -33,9 +33,10 @@ from PySide6.QtWidgets import (
 )
 
 from .capabilities import available_operations
-from .models import Job, Operation, ToolStatus
+from .models import Job, Operation, TaskStatus, ToolStatus
 from .services.config import load_config, save_config
 from .services.environment import detect_tools
+from .services.history_repository import HistoryRepository, default_cache_root
 from .services.metadata import read_media_metadata
 from .services.naming import preview_video_rename
 from .services.task_manifest import (
@@ -43,6 +44,9 @@ from .services.task_manifest import (
     history_usage,
     resolve_history_root,
 )
+from .services.task_repository import PersistentTaskQueue
+from .ui.history_dialog import HistoryDialog
+from .ui.task_center_panel import TaskCenterPanel
 from .ui.theme import APP_STYLESHEET
 from .ui.workers import Worker
 
@@ -97,19 +101,50 @@ class MainWindow(QMainWindow):
         *,
         config: dict | None = None,
         tools: dict[str, ToolStatus] | None = None,
+        task_repository: PersistentTaskQueue | None = None,
     ) -> None:
         super().__init__()
         self.config = config or load_config()
         self.tools = tools or detect_tools(self.config)
         self.paths: list[Path] = []
         self.worker: Worker | None = None
+        self.last_worker: Worker | None = None
         self.last_outputs: list[str] = []
+        self.task_repository = task_repository
 
         self.setWindowTitle("AI 素材预处理工具")
         self.resize(1120, 780)
         self.setMinimumSize(900, 680)
         self._build_ui()
         self._apply_style()
+        if self.task_repository is not None:
+            self._restore_task_queue()
+
+    def _restore_task_queue(self) -> None:
+        recovery_worker = Worker(
+            [],
+            self.tools,
+            self.config,
+            task_repository=self.task_repository,
+        )
+        recoverable = [
+            task
+            for task in recovery_worker.tasks
+            if task.status in {TaskStatus.WAITING, TaskStatus.INTERRUPTED}
+        ]
+        if not recoverable:
+            return
+        self.last_worker = recovery_worker
+        for task in recoverable:
+            self.task_panel.upsert(
+                task.task_id,
+                task.job.source.name,
+                task.job.operation.value,
+                task.status,
+                task.progress,
+                task.error or task.message,
+            )
+        self.status.setText(f"发现 {len(recoverable)} 个上次未完成的任务；可在任务中心选择后重试。")
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -305,6 +340,15 @@ class MainWindow(QMainWindow):
         action_row.addWidget(self.start_button, 2)
         action_row.addWidget(self.open_button, 1)
         root.addLayout(action_row)
+
+        self.task_panel = TaskCenterPanel()
+        self.task_table = self.task_panel.table
+        self.cancel_task_button = self.task_panel.cancel_button
+        self.retry_task_button = self.task_panel.retry_button
+        self.cancel_task_button.clicked.connect(self._cancel_selected_tasks)
+        self.retry_task_button.clicked.connect(self._retry_selected_tasks)
+        self.task_panel.selection_changed.connect(self._update_task_actions)
+        root.addWidget(self.task_panel)
 
         self.progress = QProgressBar()
         self.progress.setValue(0)
@@ -561,8 +605,24 @@ class MainWindow(QMainWindow):
         self.open_button.setEnabled(False)
         self.progress.setValue(0)
         self._set_mouse_state("working")
-        self.worker = Worker(jobs, self.tools, self.config)
+        self.worker = Worker(
+            jobs,
+            self.tools,
+            self.config,
+            task_repository=self.task_repository,
+        )
+        for task in self.worker.tasks:
+            if task.task_id in self.worker.tracked_ids:
+                self.task_panel.upsert(
+                    task.task_id,
+                    task.job.source.name,
+                    task.job.operation.value,
+                    task.status,
+                    task.progress,
+                    task.message,
+                )
         self.worker.progress.connect(self._on_progress)
+        self.worker.task_changed.connect(self._on_task_changed)
         self.worker.completed.connect(self._on_completed)
         self.worker.failed.connect(self._on_failure)
         self.worker.finished.connect(self._worker_finished)
@@ -572,6 +632,59 @@ class MainWindow(QMainWindow):
         self.progress.setValue(value)
         self.status.setText(message)
         self._set_mouse_state("working")
+
+    def _on_task_changed(
+        self,
+        task_id: str,
+        status_value: str,
+        progress: int,
+        message: str,
+    ) -> None:
+        worker = self.worker or self.last_worker
+        task = (
+            next((item for item in worker.tasks if item.task_id == task_id), None)
+            if worker
+            else None
+        )
+        if task is None:
+            return
+        self.task_panel.upsert(
+            task_id,
+            task.job.source.name,
+            task.job.operation.value,
+            TaskStatus(status_value),
+            progress,
+            message,
+        )
+        self._update_task_actions()
+
+    def _update_task_actions(self) -> None:
+        worker = self.worker or self.last_worker
+        states = {task.task_id: task.status for task in worker.tasks} if worker else {}
+        self.task_panel.update_actions(
+            running=self.worker is not None,
+            states=states,
+        )
+
+    def _cancel_selected_tasks(self) -> None:
+        if self.worker is None:
+            return
+        for task_id in self.task_panel.selected_task_ids():
+            self.worker.cancel_task(task_id)
+        self._update_task_actions()
+
+    def _retry_selected_tasks(self) -> None:
+        if self.worker is not None or self.last_worker is None:
+            return
+        retried = self.last_worker.retry_tasks(self.task_panel.selected_task_ids())
+        if not retried:
+            return
+        self.worker = self.last_worker
+        self.last_worker = None
+        self.start_button.setEnabled(False)
+        self.open_button.setEnabled(False)
+        self._set_mouse_state("working")
+        self.worker.start()
 
     @staticmethod
     def _quality_report_text(reports: list[dict], outputs: list[str]) -> str:
@@ -629,8 +742,10 @@ class MainWindow(QMainWindow):
             )
 
     def _worker_finished(self) -> None:
+        self.last_worker = self.worker
         self.worker = None
         self._refresh_operations()
+        self._update_task_actions()
 
     def _on_failure(self, message: str) -> None:
         self.status.setText("处理失败；原文件未改动。")
@@ -646,9 +761,11 @@ class MainWindow(QMainWindow):
 
     def _open_history(self) -> None:
         history = resolve_history_root(self.config)
-        history.mkdir(parents=True, exist_ok=True)
-        if os.name == "nt":
-            os.startfile(str(history))
+        dialog = HistoryDialog(
+            HistoryRepository(history, cache_root=default_cache_root()),
+            self,
+        )
+        dialog.exec()
 
     @staticmethod
     def _format_bytes(value: int) -> str:

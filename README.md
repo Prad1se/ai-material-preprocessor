@@ -8,6 +8,9 @@ Windows 本地桌面工具，用于把常见文档准备成 AI 易读的 Markdow
 
 当前版本：**1.4.0**
 
+`main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 已在
+`agent/task-center` 完成可靠任务中心实现，合并前通过 Draft Pull Request 审查。
+
 ## 直接使用
 
 从 [GitHub Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest) 下载：
@@ -86,9 +89,16 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 - 按 `{date}_{time}_{location}_{index}` 规则生成视频副本
 - 命名前可预览拍摄时间、地点和最终文件名
 - 支持批量处理；单个文件失败不会中断其余任务
+- 任务中心为每个文件显示等待、运行、成功、失败、取消或中断状态
+- 视频转换直接读取 FFmpeg 的机器进度流，显示单项真实进度与批次总体进度
+- 可取消等待任务，并尽可能安全终止正在运行的 Office、FFmpeg、ffprobe、ExifTool 或 MarkItDown CLI 进程
+- 失败、取消和异常中断任务可以独立重试；应用异常退出后，运行中的任务会明确标记为“已中断”
+- 执行前按操作保守估算输出占用，并预留安全空间；空间不足时不会启动转换器
 - 只有关键帧与联系表会生成多文件资料包；其他音视频操作直接生成单个结果文件
-- 每次处理都会在统一历史目录写入成功、失败、输入输出和文件大小
-- 可在主界面查看历史记录，或在确认数量和大小后永久清除全部历史
+- 每次处理都会在统一历史目录写入输入输出、状态、时间、尝试次数、关键参数和已检测工具版本
+- 历史窗口支持搜索以及按状态、操作筛选，可删除所选记录或清空全部历史
+- 历史记录与预览缓存分开确认删除；任何历史操作都不会删除源文件或正式输出
+- 默认保留 90 天且限制为 512 MB，启动和每批处理结束后自动执行边界清理
 
 视频处理使用项目随附的 FFmpeg。元数据读取顺序为：
 
@@ -183,6 +193,14 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
     "target_tokens": 4000,
     "max_tokens": 6000,
     "ocr_enabled": false
+  },
+  "task_center": {
+    "state_directory": "",
+    "disk_space_safety_mb": 512
+  },
+  "history": {
+    "retention_days": 90,
+    "max_size_mb": 512
   }
 }
 ```
@@ -234,6 +252,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.
 - Markdown 清洗、质量报告、长度估算、分段与图片路径修复
 - RapidOCR 适配器、真实本地图片 OCR、真实 PPT/XLSX 增强输出
 - AI 资料包与文档级 / 任务级 manifest 清单
+- 持久任务队列、异常恢复、等待 / 运行取消、失败隔离与重试
+- 磁盘空间预检、真实 FFmpeg 单项进度与总体进度
+- 历史搜索筛选、选择删除、缓存分离、保留期限与容量上限
 
 运行 Office 端到端测试：
 
@@ -287,7 +308,7 @@ src\ai_material_preprocessor\
 │   ├── markdown_quality.py      # 质量检查
 │   ├── markdown_splitting.py    # 结构感知拆分
 │   └── ocr.py             # RapidOCR、Office 图片提取与 PDF 页面渲染
-├── ui\                    # Qt Worker 和可测试主题
+├── ui\                    # Qt Worker、任务中心、历史窗口和可测试主题
 ├── diagnostics.py        # 发布包自检
 └── gui.py                # PySide6 窗口与交互
 

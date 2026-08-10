@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import math
 import shutil
-from contextlib import suppress
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
 
+from ..errors import ErrorCode
+from ..infrastructure.processes import CancellationToken
 from ..services.files import unique_path
 from ..services.metadata import read_media_metadata
 from ..services.naming import preview_video_rename
@@ -148,7 +150,12 @@ def _build_first_frame_command(executable: str, source: Path, output: Path) -> l
 
 
 def create_contact_sheet(
-    frames: list[Path], output: Path, *, columns: int = 4, cell_width: int = 320
+    frames: list[Path],
+    output: Path,
+    *,
+    columns: int = 4,
+    cell_width: int = 320,
+    cancellation: CancellationToken | None = None,
 ) -> Path:
     if not frames:
         raise ConversionError("没有可用于生成联系表的关键帧。")
@@ -163,6 +170,7 @@ def create_contact_sheet(
     )
     draw = ImageDraw.Draw(sheet)
     for index, frame in enumerate(frames, start=1):
+        _raise_if_cancelled(cancellation)
         row, column = divmod(index - 1, columns)
         with Image.open(frame) as image:
             fitted = ImageOps.contain(image.convert("RGB"), (cell_width, image_height))
@@ -191,7 +199,13 @@ def parse_progress_line(line: str, duration_seconds: float) -> int | None:
     return None
 
 
-def probe_duration(executable: str, source: Path, *, runner=run_command) -> float:
+def probe_duration(
+    executable: str,
+    source: Path,
+    *,
+    runner=run_command,
+    cancellation: CancellationToken | None = None,
+) -> float:
     result = runner(
         [
             executable,
@@ -202,7 +216,9 @@ def probe_duration(executable: str, source: Path, *, runner=run_command) -> floa
             "-of",
             "default=noprint_wrappers=1:nokey=1",
             str(source),
-        ]
+        ],
+        tool_name="ffprobe",
+        cancellation=cancellation,
     )
     try:
         return max(0.0, float((result.stdout or "0").strip()))
@@ -221,26 +237,87 @@ def _require(path: str | None, tool: str) -> str:
     return path
 
 
-def _run_and_cleanup(command: list[str], output: Path) -> None:
+def _raise_if_cancelled(cancellation: CancellationToken | None) -> None:
+    if cancellation and cancellation.is_cancelled:
+        raise ConversionError(
+            "任务已取消，原文件没有改动。",
+            code=ErrorCode.CANCELLED,
+            retryable=True,
+        )
+
+
+def _run_and_cleanup(
+    command: list[str],
+    output: Path,
+    *,
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
+    progress_label: str = "正在处理视频",
+) -> None:
     try:
-        run_command(command)
+        if progress_callback is not None:
+
+            def handle_line(line: str) -> None:
+                percent = parse_progress_line(line, duration_seconds)
+                if percent is not None:
+                    progress_callback(percent, f"{progress_label}：{percent}%")
+
+            run_command(
+                command,
+                tool_name="FFmpeg",
+                cancellation=cancellation,
+                stdout_line_callback=handle_line,
+            )
+        else:
+            run_command(
+                command,
+                tool_name="FFmpeg",
+                cancellation=cancellation,
+            )
+        _raise_if_cancelled(cancellation)
     except Exception:
         if output.exists():
             output.unlink()
         raise
 
 
-def compress(source: Path, output_root: Path, ffmpeg: str | None, crf: int, preset: str) -> Path:
+def compress(
+    source: Path,
+    output_root: Path,
+    ffmpeg: str | None,
+    crf: int,
+    preset: str,
+    *,
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> Path:
     _ensure_video(source)
     exe = _require(ffmpeg, "FFmpeg")
     output_root.mkdir(parents=True, exist_ok=True)
     output = unique_path(output_root / f"{source.stem}_compressed.mp4")
-    _run_and_cleanup(build_compress_command(exe, source, output, crf, preset), output)
+    _run_and_cleanup(
+        build_compress_command(exe, source, output, crf, preset),
+        output,
+        cancellation=cancellation,
+        duration_seconds=duration_seconds,
+        progress_callback=progress_callback,
+        progress_label="正在压缩视频",
+    )
     return output
 
 
 def extract_audio(
-    source: Path, output_root: Path, ffmpeg: str | None, audio_format: str, bitrate: str
+    source: Path,
+    output_root: Path,
+    ffmpeg: str | None,
+    audio_format: str,
+    bitrate: str,
+    *,
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
 ) -> Path:
     _ensure_video(source)
     exe = _require(ffmpeg, "FFmpeg")
@@ -248,17 +325,37 @@ def extract_audio(
     output_root.mkdir(parents=True, exist_ok=True)
     output = unique_path(output_root / f"{source.stem}{extension}")
     _run_and_cleanup(
-        build_extract_audio_command(exe, source, output, audio_format, bitrate), output
+        build_extract_audio_command(exe, source, output, audio_format, bitrate),
+        output,
+        cancellation=cancellation,
+        duration_seconds=duration_seconds,
+        progress_callback=progress_callback,
+        progress_label="正在提取音频",
     )
     return output
 
 
-def standardize(source: Path, output_root: Path, ffmpeg: str | None) -> Path:
+def standardize(
+    source: Path,
+    output_root: Path,
+    ffmpeg: str | None,
+    *,
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> Path:
     _ensure_video(source)
     exe = _require(ffmpeg, "FFmpeg")
     output_root.mkdir(parents=True, exist_ok=True)
     output = unique_path(output_root / f"{source.stem}_standard.mp4")
-    _run_and_cleanup(build_standardize_command(exe, source, output), output)
+    _run_and_cleanup(
+        build_standardize_command(exe, source, output),
+        output,
+        cancellation=cancellation,
+        duration_seconds=duration_seconds,
+        progress_callback=progress_callback,
+        progress_label="正在标准化视频",
+    )
     return output
 
 
@@ -270,6 +367,9 @@ def keyframes_contact_sheet(
     scene_threshold: float = 0.30,
     max_frames: int = 24,
     columns: int = 4,
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
 ) -> Path:
     _ensure_video(source)
     exe = _require(ffmpeg, "FFmpeg")
@@ -284,18 +384,43 @@ def keyframes_contact_sheet(
     frames_dir.mkdir(parents=True)
     pattern = frames_dir / "frame_%03d.jpg"
     try:
-        with suppress(ConversionError):
+        try:
+
+            def keyframe_progress(line: str) -> None:
+                percent = parse_progress_line(line, duration_seconds)
+                if percent is not None and progress_callback is not None:
+                    scaled = min(80, round(percent * 0.8))
+                    progress_callback(scaled, f"正在提取关键帧：{scaled}%")
+
             run_command(
                 build_keyframe_command(
                     exe, source, pattern, scene_threshold=scene_threshold, max_frames=max_frames
-                )
+                ),
+                tool_name="FFmpeg",
+                cancellation=cancellation,
+                stdout_line_callback=keyframe_progress if progress_callback else None,
             )
+        except ConversionError as exc:
+            if exc.code is ErrorCode.CANCELLED:
+                raise
         frames = sorted(frames_dir.glob("frame_*.jpg"))
         if not frames:
             fallback = frames_dir / "frame_001.jpg"
-            run_command(_build_first_frame_command(exe, source, fallback))
+            run_command(
+                _build_first_frame_command(exe, source, fallback),
+                tool_name="FFmpeg",
+                cancellation=cancellation,
+            )
             frames = [fallback]
-        contact_sheet = create_contact_sheet(frames, package / "contact-sheet.jpg", columns=columns)
+        contact_sheet = create_contact_sheet(
+            frames,
+            package / "contact-sheet.jpg",
+            columns=columns,
+            cancellation=cancellation,
+        )
+        if progress_callback is not None:
+            progress_callback(90, "正在生成联系表")
+        _raise_if_cancelled(cancellation)
         manifest = {
             "package_type": "video_keyframes",
             "source": source.name,
@@ -326,14 +451,29 @@ def rename_copy(
     exiftool: str | None = None,
     ffmpeg: str | None = None,
     template: str = "{date}_{time}_{location}_{index}",
+    cancellation: CancellationToken | None = None,
 ) -> Path:
     _ensure_video(source)
-    metadata = read_media_metadata(source, exiftool, ffprobe, ffmpeg=ffmpeg)
+    _raise_if_cancelled(cancellation)
+    metadata = read_media_metadata(
+        source,
+        exiftool,
+        ffprobe,
+        ffmpeg=ffmpeg,
+        cancellation=cancellation,
+    )
     output_root.mkdir(parents=True, exist_ok=True)
     destination = output_root
     preview = preview_video_rename(
         source, destination, metadata, template, index, location_override
     )
     output = preview.output
-    shutil.copy2(source, output)
+    try:
+        _raise_if_cancelled(cancellation)
+        shutil.copy2(source, output)
+        _raise_if_cancelled(cancellation)
+    except Exception:
+        if output.exists():
+            output.unlink()
+        raise
     return output

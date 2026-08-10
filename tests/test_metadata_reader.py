@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+from ai_material_preprocessor.infrastructure.processes import CancellationToken
 from ai_material_preprocessor.services.metadata import read_media_metadata
 
 
@@ -11,7 +12,7 @@ def test_reader_prefers_exiftool(tmp_path: Path) -> None:
     source.write_bytes(b"video")
     calls: list[list[str]] = []
 
-    def runner(command: list[str]):
+    def runner(command: list[str], **_kwargs):
         calls.append(command)
         return SimpleNamespace(
             stdout=json.dumps(
@@ -38,7 +39,7 @@ def test_reader_falls_back_to_ffprobe_when_exiftool_fails(tmp_path: Path) -> Non
     source = tmp_path / "clip.mp4"
     source.write_bytes(b"video")
 
-    def runner(command: list[str]):
+    def runner(command: list[str], **_kwargs):
         if command[0] == "exiftool.exe":
             raise RuntimeError("bad metadata")
         return SimpleNamespace(
@@ -67,7 +68,7 @@ def test_reader_uses_ffmpeg_ffmetadata_when_ffprobe_is_missing(tmp_path: Path) -
     source = tmp_path / "clip.mp4"
     source.write_bytes(b"video")
 
-    def runner(command: list[str]):
+    def runner(command: list[str], **_kwargs):
         assert command[0] == "ffmpeg.exe"
         return SimpleNamespace(
             stdout=(
@@ -79,3 +80,24 @@ def test_reader_uses_ffmpeg_ffmetadata_when_ffprobe_is_missing(tmp_path: Path) -
 
     assert result.source == "FFmpeg"
     assert result.location_label == "30.2512_120.1693"
+
+
+def test_metadata_reader_forwards_cancellation_to_external_tools(tmp_path: Path) -> None:
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"video")
+    token = CancellationToken()
+    received: list[CancellationToken | None] = []
+
+    def runner(command: list[str], *, cancellation=None, tool_name=""):
+        received.append(cancellation)
+        return SimpleNamespace(stdout="[]")
+
+    read_media_metadata(
+        source,
+        "exiftool.exe",
+        None,
+        runner=runner,
+        cancellation=token,
+    )
+
+    assert received == [token]

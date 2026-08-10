@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 
 class Operation(StrEnum):
@@ -47,3 +49,29 @@ class Job:
     operation: Operation
     output_root: Path
     location: str = ""
+
+
+@dataclass(frozen=True)
+class QueuedTask:
+    """Persistable state for one independently executable job."""
+
+    task_id: str
+    job: Job
+    status: TaskStatus = TaskStatus.WAITING
+    progress: int = 0
+    attempts: int = 0
+    error: str = ""
+    output: Path | None = None
+    message: str = ""
+    created_at: datetime = datetime.min.replace(tzinfo=UTC)
+    updated_at: datetime = datetime.min.replace(tzinfo=UTC)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, TaskStatus):
+            object.__setattr__(self, "status", TaskStatus(self.status))
+        object.__setattr__(self, "progress", min(100, max(0, int(self.progress))))
+
+    def with_changes(self, **changes: Any) -> QueuedTask:
+        return replace(self, **changes)

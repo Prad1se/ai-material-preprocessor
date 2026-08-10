@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ai_material_preprocessor.errors import ErrorCode, UserFacingError
+from ai_material_preprocessor.infrastructure.processes import CancellationToken
 from ai_material_preprocessor.models import Job, Operation, ToolStatus
 from ai_material_preprocessor.services.job_executor import JobExecutor
 
@@ -11,7 +12,7 @@ class FakeDocumentService:
     def __init__(self) -> None:
         self.calls: list[tuple[Operation, Path]] = []
 
-    def convert(self, job: Job) -> tuple[Path, list[dict]]:
+    def convert(self, job: Job, *, cancellation=None) -> tuple[Path, list[dict]]:
         self.calls.append((job.operation, job.source))
         if "broken" in job.source.name:
             raise UserFacingError(
@@ -25,8 +26,22 @@ class FakeDocumentService:
 
 
 class FakeVideoService:
-    def convert(self, job: Job, index: int) -> Path:
+    def convert(self, job: Job, index: int, *, cancellation=None, on_progress=None) -> Path:
         return job.output_root / f"{index:03d}-{job.source.name}"
+
+
+class CancellationAwareDocumentService:
+    def __init__(self) -> None:
+        self.token: CancellationToken | None = None
+
+    def convert(
+        self,
+        job: Job,
+        *,
+        cancellation: CancellationToken | None = None,
+    ) -> tuple[Path, list[dict]]:
+        self.token = cancellation
+        return job.output_root / f"{job.source.stem}.md", []
 
 
 def tools() -> dict[str, ToolStatus]:
@@ -91,3 +106,24 @@ def test_batch_executor_reports_progress_for_each_item(tmp_path: Path) -> None:
     assert progress[0][:2] == (0, 2)
     assert progress[-1][:2] == (2, 2)
     assert "two.mp4" in progress[-1][2]
+
+
+def test_single_job_executor_forwards_cancellation_to_conversion_service(
+    tmp_path: Path,
+) -> None:
+    documents = CancellationAwareDocumentService()
+    executor = JobExecutor(
+        tools=tools(),
+        config={},
+        document_service=documents,
+        video_service=FakeVideoService(),
+    )
+    token = CancellationToken()
+
+    executor.execute_one(
+        Job(tmp_path / "one.docx", Operation.TO_MARKDOWN, tmp_path / "out"),
+        1,
+        cancellation=token,
+    )
+
+    assert documents.token is token

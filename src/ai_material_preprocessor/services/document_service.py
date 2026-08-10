@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ..converters.markdown import to_markdown
 from ..converters.office_pdf import to_pdf
+from ..infrastructure.processes import CancellationToken
 from ..models import Job, Operation, ToolStatus
 from .document_enhancement import EnhancementOptions
 
@@ -17,7 +18,12 @@ class DocumentConversionService:
         status = self.tools.get(name)
         return status.path if status else None
 
-    def convert(self, job: Job) -> tuple[Path, list[dict]]:
+    def convert(
+        self,
+        job: Job,
+        *,
+        cancellation: CancellationToken | None = None,
+    ) -> tuple[Path, list[dict]]:
         if job.operation is Operation.TO_MARKDOWN:
             document = self.config["document"]
             reports: list[dict] = []
@@ -35,6 +41,7 @@ class DocumentConversionService:
                 quality_callback=lambda report: reports.append(
                     {"source": job.source.name, **report.to_dict()}
                 ),
+                cancellation=cancellation,
             )
             return result, reports
         if job.operation is Operation.TO_PDF:
@@ -44,6 +51,7 @@ class DocumentConversionService:
                 self._path("libreoffice"),
                 self._path("winword"),
                 self._path("powerpoint"),
+                cancellation=cancellation,
             )
             return result, []
         raise ValueError(f"Document service cannot execute {job.operation.name}")

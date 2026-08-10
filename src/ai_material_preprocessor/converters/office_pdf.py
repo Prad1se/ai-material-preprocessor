@@ -3,6 +3,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from ..errors import ErrorCode
+from ..infrastructure.processes import CancellationToken
 from ..services.config import resource_path
 from ..services.files import unique_path
 from .common import ConversionError, run_command
@@ -39,6 +41,8 @@ def to_pdf(
     libreoffice: str | None,
     winword: str | None,
     powerpoint: str | None,
+    *,
+    cancellation: CancellationToken | None = None,
 ) -> Path:
     backend = select_pdf_backend(source, libreoffice, winword, powerpoint)
 
@@ -61,34 +65,55 @@ def to_pdf(
                     "--outdir",
                     str(temporary_path),
                     str(source),
-                ]
+                ],
+                tool_name="LibreOffice",
+                cancellation=cancellation,
             )
             generated = temporary_path / f"{source.stem}.pdf"
             if not generated.exists():
                 raise ConversionError("LibreOffice 未生成预期的 PDF。")
+            if cancellation and cancellation.is_cancelled:
+                raise ConversionError(
+                    "任务已取消，原文件没有改动。",
+                    code=ErrorCode.CANCELLED,
+                    retryable=True,
+                )
             generated.replace(output)
         return output
 
     office_kind = "word" if backend == "office-word" else "powerpoint"
 
     script = resource_path("scripts", "office_to_pdf.ps1")
-    run_command(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-STA",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(script),
-            "-InputPath",
-            str(source),
-            "-OutputPath",
-            str(output),
-            "-Kind",
-            office_kind,
-        ]
-    )
+    try:
+        run_command(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-STA",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(script),
+                "-InputPath",
+                str(source),
+                "-OutputPath",
+                str(output),
+                "-Kind",
+                office_kind,
+            ],
+            tool_name="Microsoft Office",
+            cancellation=cancellation,
+        )
+        if cancellation and cancellation.is_cancelled:
+            raise ConversionError(
+                "任务已取消，原文件没有改动。",
+                code=ErrorCode.CANCELLED,
+                retryable=True,
+            )
+    except Exception:
+        if output.exists():
+            output.unlink()
+        raise
     if not output.exists():
         raise ConversionError("Microsoft Office 未生成预期的 PDF。")
     return output

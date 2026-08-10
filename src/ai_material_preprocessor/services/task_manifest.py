@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +19,12 @@ class TaskRecord:
     status: TaskStatus
     output: Path | None = None
     error: str = ""
+    cache_paths: tuple[Path, ...] = ()
+    attempts: int = 0
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    parameters: dict[str, object] = field(default_factory=dict)
+    tool_versions: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, TaskStatus):
@@ -119,6 +125,16 @@ def write_task_manifest(
                 "output": str(record.output.resolve()) if record.output else None,
                 "output_size": _size(record.output),
                 "error": record.error or None,
+                "cache_paths": [str(path.resolve()) for path in record.cache_paths],
+                "attempts": record.attempts,
+                "started_at": (
+                    record.started_at.isoformat(timespec="seconds") if record.started_at else None
+                ),
+                "finished_at": (
+                    record.finished_at.isoformat(timespec="seconds") if record.finished_at else None
+                ),
+                "parameters": record.parameters,
+                "tool_versions": record.tool_versions,
             }
             for record in records
         ],
