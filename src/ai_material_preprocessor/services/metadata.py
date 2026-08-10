@@ -26,6 +26,7 @@ class MediaMetadata:
     codec: str = ""
     make: str = ""
     model: str = ""
+    frame_rate: float | None = None
 
     def effective_location(self, manual_override: str = "") -> str:
         return manual_override.strip() or self.location_label
@@ -66,6 +67,18 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _frame_rate(value: Any) -> float | None:
+    if isinstance(value, str) and "/" in value:
+        numerator, _, denominator = value.partition("/")
+        try:
+            divisor = float(denominator)
+            return round(float(numerator) / divisor, 2) if divisor else None
+        except ValueError:
+            return None
+    result = _number(value)
+    return round(result, 2) if result is not None else None
+
+
 def _coordinate_label(latitude: float | None, longitude: float | None) -> str:
     if latitude is None or longitude is None:
         return ""
@@ -102,6 +115,7 @@ def metadata_from_exiftool(payload: list[dict[str, Any]], source: Path) -> Media
         codec=str(values.get("CompressorName") or values.get("VideoCodec") or "").strip(),
         make=str(values.get("Make") or values.get("DeviceManufacturer") or "").strip(),
         model=str(values.get("Model") or values.get("DeviceModelName") or "").strip(),
+        frame_rate=_frame_rate(values.get("VideoFrameRate") or values.get("FrameRate")),
     )
 
 
@@ -141,6 +155,7 @@ def metadata_from_ffprobe(payload: dict[str, Any], source: Path) -> MediaMetadat
         codec=str(video.get("codec_name") or "").strip(),
         make=tags.get("make", "").strip(),
         model=(tags.get("model") or tags.get("com.apple.quicktime.model") or "").strip(),
+        frame_rate=_frame_rate(video.get("avg_frame_rate") or video.get("r_frame_rate")),
     )
 
 
@@ -177,6 +192,8 @@ def read_media_metadata(
                     "-ImageHeight",
                     "-CompressorName",
                     "-VideoCodec",
+                    "-VideoFrameRate",
+                    "-FrameRate",
                     "-Make",
                     "-Model",
                     "-DeviceManufacturer",
@@ -200,7 +217,7 @@ def read_media_metadata(
                     "-print_format",
                     "json",
                     "-show_entries",
-                    "format=duration:format_tags:stream=codec_type,codec_name,width,height:stream_tags",
+                    "format=duration:format_tags:stream=codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate:stream_tags",
                     str(source),
                 ],
                 tool_name="ffprobe",

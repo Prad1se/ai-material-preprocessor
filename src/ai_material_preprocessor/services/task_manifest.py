@@ -25,6 +25,7 @@ class TaskRecord:
     finished_at: datetime | None = None
     parameters: dict[str, object] = field(default_factory=dict)
     tool_versions: dict[str, str] = field(default_factory=dict)
+    quality_summary: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, TaskStatus):
@@ -110,7 +111,7 @@ def write_task_manifest(
     failed = sum(record.status is TaskStatus.FAILED for record in records)
     payload = {
         "manifest_type": "processing_task",
-        "schema_version": 1,
+        "schema_version": 2,
         "application_version": __version__,
         "task_id": identifier,
         "created_at": created.isoformat(timespec="seconds"),
@@ -135,6 +136,7 @@ def write_task_manifest(
                 ),
                 "parameters": record.parameters,
                 "tool_versions": record.tool_versions,
+                "quality_summary": record.quality_summary or None,
             }
             for record in records
         ],

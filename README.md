@@ -8,8 +8,8 @@ Windows 本地桌面工具，用于把常见文档准备成 AI 易读的 Markdow
 
 当前版本：**1.4.0**
 
-`main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 已在
-`agent/task-center` 完成可靠任务中心实现，合并前通过 Draft Pull Request 审查。
+`main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 可靠任务中心
+已经合并，M2 正在 `agent/preview-quality` 完善处理预览与应用内质量体验。
 
 ## 直接使用
 
@@ -55,6 +55,7 @@ AI 增强模式会执行：
 - 统一代码围栏与常见行内/块公式标记。
 - 将可访问的本地图片复制到 `assets`，并改写为相对路径。
 - 完成后以弹窗显示质量检查结果，不在资料包中生成额外报告文件。
+- 质量弹窗可查看清洗后 Markdown、标题结构、拆分顺序与预计长度、OCR 置信度及风险定位。
 - 仅在内容确实需要拆成两段以上时，按标题与目标长度生成 `chunks`。
 - 生成 `README.md` 作为资料包入口，说明 AI 应优先读取正文还是分段。
 - 在包内 `manifest.json` 记录来源、格式、文件大小、质量结论、资源和每段估算长度。
@@ -87,7 +88,10 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 - 按场景变化提取关键帧，并生成一张可快速浏览的 JPEG 联系表
 - 关键帧结果附带独立 `manifest.json`；无明显切镜时自动回退到首帧
 - 按 `{date}_{time}_{location}_{index}` 规则生成视频副本
-- 命名前可预览拍摄时间、地点和最终文件名
+- 处理前可预览拍摄时间、时长、分辨率、帧率、编码、地点、最终文件名与预计输出体积
+- 批量命名预览会提前标记批次内重名并追加编号，试运行不会创建目录或修改文件
+- 压缩、标准化及有损音频输出会在执行前显示质量风险
+- 关键帧处理完成后直接在应用内显示联系表预览
 - 支持批量处理；单个文件失败不会中断其余任务
 - 任务中心为每个文件显示等待、运行、成功、失败、取消或中断状态
 - 视频转换直接读取 FFmpeg 的机器进度流，显示单项真实进度与批次总体进度
@@ -97,6 +101,7 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 - 只有关键帧与联系表会生成多文件资料包；其他音视频操作直接生成单个结果文件
 - 每次处理都会在统一历史目录写入输入输出、状态、时间、尝试次数、关键参数和已检测工具版本
 - 历史窗口支持搜索以及按状态、操作筛选，可删除所选记录或清空全部历史
+- 历史详情保留质量分、预计长度、拆分数、OCR 摘要和风险，不保存 Markdown 正文
 - 历史记录与预览缓存分开确认删除；任何历史操作都不会删除源文件或正式输出
 - 默认保留 90 天且限制为 512 MB，启动和每批处理结束后自动执行边界清理
 
@@ -255,6 +260,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.
 - 持久任务队列、异常恢复、等待 / 运行取消、失败隔离与重试
 - 磁盘空间预检、真实 FFmpeg 单项进度与总体进度
 - 历史搜索筛选、选择删除、缓存分离、保留期限与容量上限
+- 文档结构 / OCR / 风险预览、视频体积估算、批量命名试运行和应用内历史质量详情
 
 运行 Office 端到端测试：
 
@@ -307,8 +313,9 @@ src\ai_material_preprocessor\
 │   ├── markdown_cleaning.py     # Markdown 清洗和资源路径
 │   ├── markdown_quality.py      # 质量检查
 │   ├── markdown_splitting.py    # 结构感知拆分
+│   ├── preview.py               # 文档与视频只读预览、风险和体积估算
 │   └── ocr.py             # RapidOCR、Office 图片提取与 PDF 页面渲染
-├── ui\                    # Qt Worker、任务中心、历史窗口和可测试主题
+├── ui\                    # Qt Worker、任务中心、预览、历史窗口和可测试主题
 ├── diagnostics.py        # 发布包自检
 └── gui.py                # PySide6 窗口与交互
 
@@ -318,7 +325,8 @@ docs\adr\                 # 关键技术决策
 ```
 
 成熟工具选型依据见 `docs\adr\0001-tooling-strategy.md`，2.0 架构边界见
-`docs\adr\0002-architecture-and-quality-gates.md`，许可说明见 `THIRD_PARTY_NOTICES.md`。
+`docs\adr\0002-architecture-and-quality-gates.md`，任务与预览决策见后续 ADR，许可说明见
+`THIRD_PARTY_NOTICES.md`。
 
 ## 许可证
 

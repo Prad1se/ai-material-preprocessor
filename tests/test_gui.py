@@ -77,6 +77,8 @@ def test_docx_only_shows_valid_available_operations(qtbot, tmp_path: Path) -> No
     assert window.document_mode.isVisibleTo(window)
     assert window.split_document.isVisibleTo(window)
     assert window.ocr_enabled.isVisibleTo(window)
+    assert window.preview_button.isVisibleTo(window)
+    assert window.preview_button.text() == "预览处理方案"
 
 
 def test_mixed_incompatible_batch_disables_start(qtbot, tmp_path: Path) -> None:
@@ -215,6 +217,14 @@ def test_window_exposes_central_history_location(qtbot, tmp_path: Path, monkeypa
     assert window.history_button.text() == "查看历史记录"
     assert window.clear_history_button.text() == "清除历史"
     assert window.findChild(QFrame, "capabilityBar") is None
+
+
+def test_history_dialog_exposes_application_only_details_action(qtbot, tmp_path: Path) -> None:
+    dialog = HistoryDialog(HistoryRepository(tmp_path / "History"))
+    qtbot.addWidget(dialog)
+
+    assert dialog.details_button.text() == "查看详情"
+    assert not dialog.details_button.isEnabled()
 
 
 def test_window_exposes_visible_task_center_controls(qtbot) -> None:

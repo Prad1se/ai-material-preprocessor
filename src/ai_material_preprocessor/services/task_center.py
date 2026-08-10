@@ -65,6 +65,10 @@ class TaskCenter:
                 for report in reports
             ]
 
+    def quality_reports_for(self, task_id: str) -> tuple[dict, ...]:
+        with self._lock:
+            return self._quality_reports.get(task_id, ())
+
     def _find_index(self, task_id: str) -> int | None:
         return next(
             (index for index, task in enumerate(self._tasks) if task.task_id == task_id),

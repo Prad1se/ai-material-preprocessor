@@ -98,6 +98,16 @@ class HistoryRepository:
             reverse=True,
         )
 
+    def details(self, task_id: str) -> dict | None:
+        entry = next((item for item in self.all() if item.task_id == task_id), None)
+        if entry is None:
+            return None
+        try:
+            payload = json.loads(entry.manifest_path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else None
+        except (OSError, json.JSONDecodeError):
+            return None
+
     def search(
         self,
         *,

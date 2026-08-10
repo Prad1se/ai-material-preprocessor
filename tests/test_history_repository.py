@@ -70,6 +70,37 @@ def test_history_search_and_filters_use_manifest_metadata(tmp_path: Path) -> Non
     ]
 
 
+def test_history_details_expose_quality_summary_without_document_content(tmp_path: Path) -> None:
+    history = tmp_path / "History"
+    now = datetime(2026, 8, 10, tzinfo=UTC)
+    source = tmp_path / "lesson.docx"
+    source.write_bytes(b"document")
+    write_task_manifest(
+        history,
+        [
+            TaskRecord(
+                source,
+                Operation.TO_MARKDOWN,
+                TaskStatus.SUCCESS,
+                quality_summary={
+                    "score": 88,
+                    "estimated_tokens": 4200,
+                    "issues": [{"code": "missing_image", "message": "图片缺失"}],
+                },
+            )
+        ],
+        created_at=now,
+        task_id="quality-task",
+    )
+    repository = HistoryRepository(history)
+
+    details = repository.details("quality-task")
+
+    assert details is not None
+    assert details["items"][0]["quality_summary"]["score"] == 88
+    assert "cleaned_preview" not in str(details)
+
+
 def test_deleting_selected_history_never_deletes_sources_outputs_or_other_records(
     tmp_path: Path,
 ) -> None:

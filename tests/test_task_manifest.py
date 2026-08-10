@@ -30,6 +30,11 @@ def test_task_manifest_records_success_failure_sizes_and_absolute_outputs(tmp_pa
             finished_at=datetime(2026, 8, 1, 2, 3, 4, tzinfo=UTC),
             parameters={"mode": "enhanced", "target_tokens": 4000},
             tool_versions={"markitdown": "0.1.6"},
+            quality_summary={
+                "score": 90,
+                "estimated_tokens": 3200,
+                "issues": [{"code": "missing_image", "message": "图片缺失"}],
+            },
         ),
         TaskRecord(tmp_path / "broken.pdf", Operation.TO_MARKDOWN, "failed", error="bad pdf"),
     ]
@@ -56,6 +61,8 @@ def test_task_manifest_records_success_failure_sizes_and_absolute_outputs(tmp_pa
         "target_tokens": 4000,
     }
     assert payload["items"][0]["tool_versions"] == {"markitdown": "0.1.6"}
+    assert payload["items"][0]["quality_summary"]["score"] == 90
+    assert "cleaned_preview" not in payload["items"][0]["quality_summary"]
     assert payload["items"][1]["error"] == "bad pdf"
 
 

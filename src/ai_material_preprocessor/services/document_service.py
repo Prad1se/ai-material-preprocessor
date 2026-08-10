@@ -7,6 +7,11 @@ from ..converters.office_pdf import to_pdf
 from ..infrastructure.processes import CancellationToken
 from ..models import Job, Operation, ToolStatus
 from .document_enhancement import EnhancementOptions
+from .preview import (
+    build_document_preview,
+    document_preview_to_dict,
+    ocr_pages_from_markdown,
+)
 
 
 class DocumentConversionService:
@@ -26,24 +31,36 @@ class DocumentConversionService:
     ) -> tuple[Path, list[dict]]:
         if job.operation is Operation.TO_MARKDOWN:
             document = self.config["document"]
-            reports: list[dict] = []
+            enhanced = str(document["mode"]) == "enhanced"
+            options = EnhancementOptions(
+                split_enabled=bool(document["split_enabled"]) if enhanced else False,
+                target_tokens=int(document["target_tokens"]),
+                max_tokens=int(document["max_tokens"]),
+                ocr_enabled=bool(document["ocr_enabled"]) if enhanced else False,
+            )
             result = to_markdown(
                 job.source,
                 job.output_root,
                 self._path("markitdown"),
-                enhance=str(document["mode"]) == "enhanced",
-                enhancement_options=EnhancementOptions(
-                    split_enabled=bool(document["split_enabled"]),
-                    target_tokens=int(document["target_tokens"]),
-                    max_tokens=int(document["max_tokens"]),
-                    ocr_enabled=bool(document["ocr_enabled"]),
-                ),
-                quality_callback=lambda report: reports.append(
-                    {"source": job.source.name, **report.to_dict()}
-                ),
+                enhance=enhanced,
+                enhancement_options=options,
                 cancellation=cancellation,
             )
-            return result, reports
+            markdown = result.read_text(encoding="utf-8")
+            preview = build_document_preview(
+                job.source,
+                markdown,
+                base_dir=result.parent,
+                options=options,
+                ocr_pages=ocr_pages_from_markdown(markdown),
+                parameters={
+                    "模式": "AI 增强" if enhanced else "原始转换",
+                    "自动拆分": "是" if options.split_enabled else "否",
+                    "目标长度": f"{options.target_tokens} tokens",
+                    "OCR": "开启" if options.ocr_enabled else "关闭",
+                },
+            )
+            return result, [document_preview_to_dict(preview)]
         if job.operation is Operation.TO_PDF:
             result = to_pdf(
                 job.source,
