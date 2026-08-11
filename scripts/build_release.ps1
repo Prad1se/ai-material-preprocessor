@@ -23,7 +23,7 @@ try {
     & $python -m pytest -p no:cacheprovider
     if ($LASTEXITCODE -ne 0) { throw "Tests failed; release build stopped." }
 
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "scripts\bootstrap_tools.ps1")
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "scripts\bootstrap_tools.ps1") -ProjectRoot $ProjectRoot -PythonExecutable $python
     if ($LASTEXITCODE -ne 0) { throw "Portable FFmpeg setup failed." }
 
     & $python -m PyInstaller --noconfirm --clean "app.spec"

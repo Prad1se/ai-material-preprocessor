@@ -96,6 +96,12 @@ def test_release_scripts_support_clean_ci_python_without_project_venv() -> None:
         assert "Resolve-PythonExecutable" in script
     assert "-PythonExecutable $python" in workflow
 
+    bootstrap = (PROJECT_ROOT / "scripts" / "bootstrap_tools.ps1").read_text(encoding="utf-8-sig")
+    build_script = (PROJECT_ROOT / "scripts" / "build_release.ps1").read_text(encoding="utf-8-sig")
+    assert "[string]$PythonExecutable" in bootstrap
+    assert "Resolve-PythonExecutable" in bootstrap
+    assert "-PythonExecutable $python" in build_script
+
 
 def test_quality_gate_keeps_pytest_temp_data_in_project_work_directory() -> None:
     quality_script = (PROJECT_ROOT / "scripts" / "check_quality.ps1").read_text(
