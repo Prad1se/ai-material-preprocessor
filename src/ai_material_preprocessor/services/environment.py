@@ -94,18 +94,20 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
     runtime_root = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else None
     result: dict[str, ToolStatus] = {}
 
-    try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv.*")
-            import markitdown  # noqa: F401
+    markitdown_override = str(overrides.get("markitdown", ""))
+    if markitdown_override and Path(markitdown_override).is_file():
+        result["markitdown"] = resolve_tool("markitdown", markitdown_override, [], shutil.which)
+    else:
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv.*")
+                import markitdown  # noqa: F401
 
-        result["markitdown"] = ToolStatus(
-            name="markitdown", path="Python API", source="内置 Python 包"
-        )
-    except ImportError:
-        result["markitdown"] = resolve_tool(
-            "markitdown", overrides.get("markitdown", ""), [], shutil.which
-        )
+            result["markitdown"] = ToolStatus(
+                name="markitdown", path="Python API", source="内置 Python 包"
+            )
+        except ImportError:
+            result["markitdown"] = resolve_tool("markitdown", markitdown_override, [], shutil.which)
 
     try:
         import onnxruntime  # noqa: F401

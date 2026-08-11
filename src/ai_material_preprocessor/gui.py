@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from contextlib import suppress
 from pathlib import Path
 
@@ -32,6 +31,7 @@ from .models import Job, Operation, TaskStatus, ToolStatus
 from .services.config import load_config, save_config
 from .services.environment import detect_tools
 from .services.history_repository import HistoryRepository, default_cache_root
+from .services.input_discovery import discover_input_files
 from .services.metadata import read_media_metadata
 from .services.preview import (
     build_batch_rename_preview,
@@ -45,33 +45,22 @@ from .services.task_manifest import (
     resolve_history_root,
 )
 from .services.task_repository import PersistentTaskQueue
+from .services.tool_capabilities import missing_feature_guidance
+from .services.tool_versions import detect_tools_with_versions
 from .services.video_management import annotate_duplicate_previews, find_duplicate_videos
 from .ui.history_dialog import HistoryDialog
+from .ui.mascot import MOUSE_STATE_ASSETS, mouse_asset_path
+from .ui.onboarding_dialog import OnboardingDialog
 from .ui.preview_dialog import (
     ContactSheetPreviewDialog,
     DocumentReportDialog,
     SourcePlanDialog,
     VideoPreviewDialog,
 )
+from .ui.settings_dialog import SettingsDialog
 from .ui.task_center_panel import TaskCenterPanel
-from .ui.theme import APP_STYLESHEET
+from .ui.theme import stylesheet_for_theme
 from .ui.workers import Worker
-
-MOUSE_STATE_ASSETS = {
-    "idle": "mouse-grin.png",
-    "thinking": "mouse-thinking.png",
-    "working": "mouse-thinking.png",
-    "success": "mouse-strong.png",
-    "error": "mouse-thinking.png",
-}
-
-
-def mouse_asset_path(filename: str) -> Path:
-    """Resolve a mascot asset in source and PyInstaller onedir builds."""
-    packaged = Path(getattr(sys, "_MEIPASS", Path.cwd())) / "assets" / "mouse" / filename
-    if packaged.is_file():
-        return packaged
-    return Path(__file__).resolve().parents[2] / "assets" / "mouse" / filename
 
 
 class DropList(QListWidget):
@@ -95,7 +84,8 @@ class DropList(QListWidget):
         paths = [
             url.toLocalFile()
             for url in event.mimeData().urls()
-            if url.isLocalFile() and Path(url.toLocalFile()).is_file()
+            if url.isLocalFile()
+            and (Path(url.toLocalFile()).is_file() or Path(url.toLocalFile()).is_dir())
         ]
         if paths:
             self.files_added.emit(paths)
@@ -211,12 +201,16 @@ class MainWindow(QMainWindow):
         add_button = QPushButton("选择文件…")
         add_button.setObjectName("secondary")
         add_button.clicked.connect(self._choose_files)
+        folder_button = QPushButton("选择文件夹…")
+        folder_button.setObjectName("secondary")
+        folder_button.clicked.connect(self._choose_folder)
         clear_button = QPushButton("清空")
         clear_button.setObjectName("secondary")
         clear_button.clicked.connect(self._clear_files)
         file_header.addWidget(file_title)
         file_header.addStretch()
         file_header.addWidget(add_button)
+        file_header.addWidget(folder_button)
         file_header.addWidget(clear_button)
         file_description = QLabel("拖入 Word、PPT、Excel、PDF、网页或视频；鼠鼠会自动判断可用操作")
         file_description.setObjectName("sectionDescription")
@@ -239,6 +233,10 @@ class MainWindow(QMainWindow):
         options_title.setObjectName("sectionTitle")
         options_description = QLabel("只显示当前素材真正可用的操作")
         options_description.setObjectName("sectionDescription")
+        self.tool_hint = QLabel()
+        self.tool_hint.setObjectName("toolHint")
+        self.tool_hint.setWordWrap(True)
+        self.tool_hint.setVisible(False)
         self.operation = QComboBox()
         self.operation.currentIndexChanged.connect(self._operation_changed)
         self.document_mode = QComboBox()
@@ -321,6 +319,7 @@ class MainWindow(QMainWindow):
         output_row.addWidget(output_button)
         options_layout.addWidget(options_title)
         options_layout.addWidget(options_description)
+        options_layout.addWidget(self.tool_hint)
         options_layout.addWidget(self.operation)
         options_layout.addWidget(self.document_mode)
         options_layout.addWidget(self.split_document)
@@ -387,12 +386,16 @@ class MainWindow(QMainWindow):
         self.history_button = QPushButton("查看历史记录")
         self.history_button.setObjectName("linkButton")
         self.history_button.clicked.connect(self._open_history)
+        self.settings_button = QPushButton("设置")
+        self.settings_button.setObjectName("linkButton")
+        self.settings_button.clicked.connect(self._open_settings)
         self.clear_history_button = QPushButton("清除历史")
         self.clear_history_button.setObjectName("dangerLinkButton")
         self.clear_history_button.clicked.connect(self._clear_history)
         history_layout.addWidget(self.history_label)
         history_layout.addStretch()
         history_layout.addWidget(self.history_button)
+        history_layout.addWidget(self.settings_button)
         history_layout.addWidget(self.clear_history_button)
         root.addWidget(history_frame)
 
@@ -418,20 +421,27 @@ class MainWindow(QMainWindow):
         self.mouse_mascot.setProperty("state", state)
 
     def _apply_style(self) -> None:
-        self.setStyleSheet(APP_STYLESHEET)
+        self.setStyleSheet(stylesheet_for_theme(self.config["app"].get("theme", "system")))
 
     def _choose_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, "选择素材文件")
         self._add_files(paths)
 
+    def _choose_folder(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "选择素材文件夹")
+        if path:
+            self._add_files([path])
+
     def _add_files(self, paths: list[str]) -> None:
-        known = {str(path).lower() for path in self.paths}
-        for raw_path in paths:
-            path = Path(raw_path).resolve()
-            if path.is_file() and str(path).lower() not in known:
-                self.paths.append(path)
-                self.file_list.addItem(str(path))
-                known.add(str(path).lower())
+        known = {str(path).casefold() for path in self.paths}
+        for path in discover_input_files(paths):
+            key = str(path).casefold()
+            if key in known:
+                continue
+            self.paths.append(path)
+            self.file_list.addItem(str(path))
+            known.add(key)
+        self.paths.sort(key=lambda item: str(item).casefold())
         if self.paths:
             self._refresh_operations()
             self._set_mouse_state("thinking")
@@ -442,6 +452,33 @@ class MainWindow(QMainWindow):
         self._refresh_operations()
         self.status.setText("等待文件")
         self._set_mouse_state("idle")
+
+    def _settings_applied(self, config: dict, tools: dict[str, ToolStatus]) -> None:
+        self.config = config
+        self.tools = tools
+        self._apply_style()
+        ocr_available = self.tools.get("rapidocr", ToolStatus("rapidocr", None)).available
+        self.ocr_enabled.setEnabled(ocr_available)
+        self.ocr_enabled.setToolTip(
+            "" if ocr_available else "当前未检测到本地 OCR；普通转换和 AI 增强仍可使用。"
+        )
+        self.history_label.setToolTip(str(resolve_history_root(self.config)))
+        self._refresh_operations()
+
+    def _open_settings(self) -> None:
+        detected = detect_tools_with_versions(self.config)
+        dialog = SettingsDialog(self.config, detected, self)
+        dialog.settings_saved.connect(self._settings_applied)
+        dialog.exec()
+
+    def show_onboarding_if_needed(self) -> None:
+        if bool(self.config["app"].get("onboarding_completed", False)):
+            return
+        self.tools = detect_tools_with_versions(self.config)
+        self.onboarding_dialog = OnboardingDialog(self.config, self.tools, self)
+        self.onboarding_dialog.onboarding_completed.connect(self._settings_applied)
+        self.onboarding_dialog.setModal(False)
+        self.onboarding_dialog.show()
 
     def _choose_output(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "选择输出目录")
@@ -540,8 +577,14 @@ class MainWindow(QMainWindow):
                     break
         self.operation.blockSignals(False)
         self.start_button.setEnabled(bool(self.paths and common and self.worker is None))
+        guidance = missing_feature_guidance(self.paths[0].suffix, self.tools) if self.paths else ""
+        self.tool_hint.setText(guidance)
+        self.tool_hint.setVisible(bool(guidance))
         if self.paths and not common:
-            self.status.setText("所选文件没有共同可执行的操作，请按文档或视频分批处理。")
+            if guidance:
+                self.status.setText("当前文件缺少所需本机能力；请打开设置重新检测或选择工具路径。")
+            else:
+                self.status.setText("所选文件没有共同可执行的操作，请按文档或视频分批处理。")
         elif self.paths:
             self.status.setText(f"已添加 {len(self.paths)} 个文件；请选择处理方式。")
         self._operation_changed()

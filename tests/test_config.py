@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from ai_material_preprocessor.services.config import DEFAULT_CONFIG, load_config, save_config
+from ai_material_preprocessor.services.config import (
+    DEFAULT_CONFIG,
+    load_config,
+    resolve_user_config_path,
+    save_config,
+)
 
 
 def test_load_config_deep_merges_partial_user_values(tmp_path: Path) -> None:
@@ -25,6 +30,9 @@ def test_load_config_deep_merges_partial_user_values(tmp_path: Path) -> None:
     assert config["task_center"]["disk_space_safety_mb"] == 512
     assert config["history"]["retention_days"] == 90
     assert config["history"]["max_size_mb"] == 512
+    assert config["app"]["schema_version"] == 2
+    assert config["app"]["onboarding_completed"] is False
+    assert config["app"]["theme"] == "system"
 
 
 def test_save_config_is_utf8_and_round_trips(tmp_path: Path) -> None:
@@ -35,3 +43,26 @@ def test_save_config_is_utf8_and_round_trips(tmp_path: Path) -> None:
     save_config(config, path)
 
     assert load_config(path)["video"]["rename_template"] == "{date}_{location}_旅行"
+
+
+def test_default_config_path_uses_local_application_data(tmp_path: Path) -> None:
+    path = resolve_user_config_path({"LOCALAPPDATA": str(tmp_path)})
+
+    assert path == tmp_path / "AI Material Preprocessor" / "config.json"
+
+
+def test_load_default_path_migrates_legacy_config_without_overwriting_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    legacy = tmp_path / "portable" / "config.json"
+    user = tmp_path / "Local" / "AI Material Preprocessor" / "config.json"
+    legacy.parent.mkdir()
+    legacy.write_text(json.dumps({"video": {"compression_crf": 28}}), encoding="utf-8")
+    monkeypatch.setattr("ai_material_preprocessor.services.config.LEGACY_CONFIG_PATH", legacy)
+    monkeypatch.setattr("ai_material_preprocessor.services.config.USER_CONFIG_PATH", user)
+
+    config = load_config()
+
+    assert config["video"]["compression_crf"] == 28
+    assert legacy.is_file()
+    assert user.is_file()

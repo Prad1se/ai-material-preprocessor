@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import copy
 import json
 import os
@@ -12,9 +13,25 @@ PROJECT_ROOT = (
     if getattr(sys, "frozen", False)
     else Path(__file__).resolve().parents[3]
 )
-CONFIG_PATH = PROJECT_ROOT / "config.json"
+LEGACY_CONFIG_PATH = PROJECT_ROOT / "config.json"
+
+
+def resolve_user_config_path(environ: dict[str, str] | None = None) -> Path:
+    values = os.environ if environ is None else environ
+    local_app_data = values.get("LOCALAPPDATA")
+    root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+    return root / "AI Material Preprocessor" / "config.json"
+
+
+USER_CONFIG_PATH = resolve_user_config_path()
+CONFIG_PATH = USER_CONFIG_PATH
 
 DEFAULT_CONFIG: dict[str, Any] = {
+    "app": {
+        "schema_version": 2,
+        "onboarding_completed": False,
+        "theme": "system",
+    },
     "output_folder_name": "AI素材处理结果",
     "history_directory": "",
     "tools": {
@@ -81,7 +98,10 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 
 def load_config(path: Path | None = None) -> dict[str, Any]:
-    config_path = path or CONFIG_PATH
+    config_path = path or USER_CONFIG_PATH
+    should_migrate = path is None and not config_path.is_file() and LEGACY_CONFIG_PATH.is_file()
+    if should_migrate:
+        config_path = LEGACY_CONFIG_PATH
     if not config_path.is_file():
         return copy.deepcopy(DEFAULT_CONFIG)
     try:
@@ -91,11 +111,15 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         return copy.deepcopy(DEFAULT_CONFIG)
     if not isinstance(user_config, dict):
         return copy.deepcopy(DEFAULT_CONFIG)
-    return _deep_merge(DEFAULT_CONFIG, user_config)
+    merged = _deep_merge(DEFAULT_CONFIG, user_config)
+    if should_migrate:
+        with contextlib.suppress(OSError):
+            save_config(merged, USER_CONFIG_PATH)
+    return merged
 
 
 def save_config(config: dict[str, Any], path: Path | None = None) -> Path:
-    config_path = path or CONFIG_PATH
+    config_path = path or USER_CONFIG_PATH
     config_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = config_path.with_suffix(config_path.suffix + ".tmp")
     temporary.write_text(
