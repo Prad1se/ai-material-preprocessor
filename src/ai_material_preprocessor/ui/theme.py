@@ -83,7 +83,10 @@ QPushButton#dangerLinkButton { color: #d70015; background: transparent; padding:
 QPushButton#dangerLinkButton:hover { color: #b60012; background: #fff0f1; }
 QPushButton:disabled { color: #a29a97; background: #e9e2de; border-color: #bdb4b0; }
 QCheckBox { color: #424245; spacing: 8px; padding: 3px 0; }
-QCheckBox::indicator { width: 17px; height: 17px; }
+QCheckBox::indicator { width: 17px; height: 17px; border-radius: 4px; }
+QCheckBox::indicator:unchecked { background: #ffffff; border: 2px solid #171717; }
+QCheckBox::indicator:checked { background: #ef6f82; border: 2px solid #171717; }
+QCheckBox::indicator:disabled { background: #e9e2de; border: 2px solid #bdb4b0; }
 QProgressBar {
     border: 2px solid #171717; background: #f0e8e4; border-radius: 5px;
     text-align: center; min-height: 8px; max-height: 8px; color: transparent;

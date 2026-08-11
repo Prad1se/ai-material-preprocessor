@@ -6,14 +6,15 @@ The release includes applicable license texts under `third_party_licenses/`. Pyt
 
 ## Runtime components
 
-| Component | Version used by v1.4.0 | License | Purpose |
+| Component | Version used by v2.0.0rc1 | License | Purpose |
 |---|---:|---|---|
-| Microsoft MarkItDown | 0.1.6 | MIT | Document-to-Markdown conversion |
+| Microsoft MarkItDown | 0.1.7 | MIT | Document-to-Markdown conversion |
 | PySide6 / Qt for Python | 6.11.1 | LGPLv3 / GPLv3 / commercial | Desktop user interface |
 | RapidOCR | 3.9.2 | Apache-2.0 | Local OCR |
 | ONNX Runtime | 1.20.1 | MIT | Local OCR model inference |
-| pypdfium2 / PDFium | 5.9.0 | Apache-2.0 / BSD-3-Clause and bundled third-party terms | PDF page rendering for OCR |
+| pypdfium2 / PDFium | 5.12.1 | Apache-2.0 / BSD-3-Clause and bundled third-party terms | PDF page rendering for OCR |
 | FFmpeg / ffprobe Gyan Essentials Build | 8.1.2 | GPLv3 | Media conversion and metadata probing |
+| packaging | 26.3 | Apache-2.0 or BSD-2-Clause | Safe release-version comparison |
 
 The bundled FFmpeg build reports `--enable-gpl`, `--enable-version3`, and GPL-covered libraries including libx264. It is therefore distributed under GPLv3. Its exact source commit is `38b88335f9`; the corresponding source archive is published alongside the Windows ZIP in the GitHub Release. See `third_party_licenses/ffmpeg/`.
 
@@ -23,8 +24,10 @@ The bundled FFmpeg build reports `--enable-gpl`, `--enable-version3`, and GPL-co
 |---|---|---|
 | imageio-ffmpeg | BSD-2-Clause | Source-mode FFmpeg fallback discovery |
 | static-ffmpeg | MIT | Build-time FFmpeg / ffprobe acquisition |
-| PyInstaller | GPLv2-or-later with bootloader exception | Windows packaging |
-| pytest / pytest-qt | MIT | Tests |
+| PyInstaller 6.22.0 | GPLv2-or-later with bootloader exception | Windows packaging |
+| NSIS 3.12 | zlib/libpng; bundled compression modules have their own terms | Installer generation |
+| 7-Zip 26.02 | Public domain / LGPL-2.1-or-later with unRAR restriction | Verified build-time extraction of NSIS; not redistributed |
+| pytest 9.1.1 / pytest-qt 4.5.0 | MIT | Tests |
 
 ## External applications
 
@@ -39,5 +42,7 @@ Microsoft Office, LibreOffice, and ExifTool are not included by default. The app
 - pypdfium2: https://github.com/pypdfium2-team/pypdfium2
 - FFmpeg: https://ffmpeg.org/
 - Gyan Windows builds: https://www.gyan.dev/ffmpeg/builds/
+- NSIS: https://nsis.sourceforge.io/
+- 7-Zip: https://www.7-zip.org/
 
 This file is informational and is not legal advice. Refer to the included license texts and upstream projects for the complete terms.

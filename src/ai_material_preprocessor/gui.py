@@ -48,6 +48,7 @@ from .services.task_repository import PersistentTaskQueue
 from .services.tool_capabilities import missing_feature_guidance
 from .services.tool_versions import detect_tools_with_versions
 from .services.video_management import annotate_duplicate_previews, find_duplicate_videos
+from .ui.about_dialog import AboutDialog
 from .ui.history_dialog import HistoryDialog
 from .ui.mascot import MOUSE_STATE_ASSETS, mouse_asset_path
 from .ui.onboarding_dialog import OnboardingDialog
@@ -389,6 +390,9 @@ class MainWindow(QMainWindow):
         self.settings_button = QPushButton("设置")
         self.settings_button.setObjectName("linkButton")
         self.settings_button.clicked.connect(self._open_settings)
+        self.about_button = QPushButton("关于")
+        self.about_button.setObjectName("linkButton")
+        self.about_button.clicked.connect(self._open_about)
         self.clear_history_button = QPushButton("清除历史")
         self.clear_history_button.setObjectName("dangerLinkButton")
         self.clear_history_button.clicked.connect(self._clear_history)
@@ -396,6 +400,7 @@ class MainWindow(QMainWindow):
         history_layout.addStretch()
         history_layout.addWidget(self.history_button)
         history_layout.addWidget(self.settings_button)
+        history_layout.addWidget(self.about_button)
         history_layout.addWidget(self.clear_history_button)
         root.addWidget(history_frame)
 
@@ -927,6 +932,9 @@ class MainWindow(QMainWindow):
             self,
         )
         dialog.exec()
+
+    def _open_about(self) -> None:
+        AboutDialog(self.config, self).exec()
 
     @staticmethod
     def _format_bytes(value: int) -> str:

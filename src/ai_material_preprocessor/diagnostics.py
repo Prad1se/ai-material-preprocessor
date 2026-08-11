@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from . import __version__
 from .converters.common import run_command
 from .converters.markdown import to_markdown
 from .converters.video import keyframes_contact_sheet
@@ -114,6 +115,7 @@ def run_self_test(
 
     report = {
         "application": "AI Material Preprocessor",
+        "application_version": __version__,
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "overall": (
             "passed" if all(check["passed"] is not False for check in checks.values()) else "failed"

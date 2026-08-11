@@ -30,9 +30,10 @@ def test_load_config_deep_merges_partial_user_values(tmp_path: Path) -> None:
     assert config["task_center"]["disk_space_safety_mb"] == 512
     assert config["history"]["retention_days"] == 90
     assert config["history"]["max_size_mb"] == 512
-    assert config["app"]["schema_version"] == 2
+    assert config["app"]["schema_version"] == 3
     assert config["app"]["onboarding_completed"] is False
     assert config["app"]["theme"] == "system"
+    assert config["app"]["update_check_enabled"] is False
 
 
 def test_save_config_is_utf8_and_round_trips(tmp_path: Path) -> None:

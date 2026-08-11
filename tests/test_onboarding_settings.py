@@ -56,11 +56,13 @@ def test_settings_saves_theme_and_custom_tool_paths(qtbot) -> None:
     )
     qtbot.addWidget(dialog)
     dialog.theme_combo.setCurrentIndex(dialog.theme_combo.findData("dark"))
+    dialog.update_check_enabled.setChecked(True)
     dialog.tool_path_inputs["ffprobe"].setText("D:/工具/ffprobe.exe")
 
     dialog._save()
 
     assert saved[0]["app"]["theme"] == "dark"
+    assert saved[0]["app"]["update_check_enabled"] is True
     assert saved[0]["tools"]["ffprobe"] == "D:/工具/ffprobe.exe"
     assert dialog.tool_path_scroll.widgetResizable()
 

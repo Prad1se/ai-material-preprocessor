@@ -1,0 +1,57 @@
+name: release-build
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      RELEASE_VERSION: 2.0.0rc1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install build dependencies
+        run: python -m pip install -e ".[dev,build]"
+      - name: Check release metadata
+        shell: powershell
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "" }
+          python scripts/check_release_metadata.py --expected-version $env:RELEASE_VERSION --tag $tag
+      - name: Run quality gate
+        shell: powershell
+        run: |
+          $python = (Get-Command python).Source
+          .\scripts\check_quality.ps1 -PythonExecutable $python
+      - name: Build portable application
+        shell: powershell
+        run: |
+          $python = (Get-Command python).Source
+          .\scripts\build_release.ps1 -PythonExecutable $python
+      - name: Package ZIP and installer
+        shell: powershell
+        run: |
+          $python = (Get-Command python).Source
+          .\scripts\package_release.ps1 -Version $env:RELEASE_VERSION -PythonExecutable $python
+      - name: Verify portable application
+        shell: powershell
+        run: .\scripts\verify_release.ps1 -ProjectRoot ${{ github.workspace }} -Version $env:RELEASE_VERSION
+      - name: Verify installer lifecycle
+        shell: powershell
+        run: .\scripts\verify_installer.ps1 -ProjectRoot ${{ github.workspace }} -Version $env:RELEASE_VERSION
+      - uses: actions/upload-artifact@v6
+        with:
+          name: AI-Material-Preprocessor-v${{ env.RELEASE_VERSION }}-windows-x64
+          path: release/v${{ env.RELEASE_VERSION }}/*
+          if-no-files-found: error

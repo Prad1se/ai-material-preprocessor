@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -86,10 +87,18 @@ class SettingsDialog(QDialog):
         self.history_size_mb.setRange(32, 102400)
         self.history_size_mb.setValue(int(self.config["history"]["max_size_mb"]))
         self.history_size_mb.setSuffix(" MB")
+        self.update_check_enabled = QCheckBox("允许连接 GitHub 检查新版本")
+        self.update_check_enabled.setChecked(
+            bool(self.config["app"].get("update_check_enabled", False))
+        )
+        self.update_check_enabled.setToolTip(
+            "默认关闭。开启后仅在你点击“检查更新”时访问 GitHub Releases，不上传文件。"
+        )
         general_form.addRow("界面主题", self.theme_combo)
         general_form.addRow("默认结果目录名", self.output_folder_name)
         general_form.addRow("历史保留期限", self.retention_days)
         general_form.addRow("历史容量上限", self.history_size_mb)
+        general_form.addRow("联网更新检查", self.update_check_enabled)
         tabs.addTab(general, "常规")
 
         tools_page = QWidget()
@@ -140,6 +149,7 @@ class SettingsDialog(QDialog):
     def _config_from_fields(self) -> dict:
         result = copy.deepcopy(self.config)
         result["app"]["theme"] = str(self.theme_combo.currentData())
+        result["app"]["update_check_enabled"] = self.update_check_enabled.isChecked()
         result["output_folder_name"] = self.output_folder_name.text().strip() or "AI素材处理结果"
         result["history"]["retention_days"] = self.retention_days.value()
         result["history"]["max_size_mb"] = self.history_size_mb.value()
