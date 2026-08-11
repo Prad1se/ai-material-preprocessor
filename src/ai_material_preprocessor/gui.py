@@ -37,6 +37,7 @@ from .services.preview import (
     build_batch_rename_preview,
     build_video_preview,
     completed_contact_sheet,
+    resolve_batch_output_collisions,
 )
 from .services.task_manifest import (
     clear_history,
@@ -44,6 +45,7 @@ from .services.task_manifest import (
     resolve_history_root,
 )
 from .services.task_repository import PersistentTaskQueue
+from .services.video_management import annotate_duplicate_previews, find_duplicate_videos
 from .ui.history_dialog import HistoryDialog
 from .ui.preview_dialog import (
     ContactSheetPreviewDialog,
@@ -290,6 +292,17 @@ class MainWindow(QMainWindow):
         self.max_keyframes.setValue(int(self.config["video"]["max_keyframes"]))
         self.location = QLineEdit()
         self.location.setPlaceholderText("地点（可选；优先于视频元数据，例如：杭州西湖）")
+        self.project_name = QLineEdit(str(self.config["video"].get("project_name", "")))
+        self.project_name.setPlaceholderText("项目名称（可选，例如：毕业短片）")
+        self.organize_mode = QComboBox()
+        self.organize_mode.addItem("按日期和地点分层", "date_location")
+        self.organize_mode.addItem("只按日期分层", "date")
+        self.organize_mode.addItem("只按地点分层", "location")
+        configured_organize = str(self.config["video"].get("organize_mode", "date_location"))
+        for index in range(self.organize_mode.count()):
+            if self.organize_mode.itemData(index) == configured_organize:
+                self.organize_mode.setCurrentIndex(index)
+                break
         self.rename_template = QLineEdit(str(self.config["video"]["rename_template"]))
         self.rename_template.setPlaceholderText("命名模板：{date}_{time}_{location}_{index}")
         self.rename_template.setToolTip(
@@ -318,6 +331,8 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(self.scene_sensitivity)
         options_layout.addWidget(self.max_keyframes)
         options_layout.addWidget(self.location)
+        options_layout.addWidget(self.project_name)
+        options_layout.addWidget(self.organize_mode)
         options_layout.addWidget(self.rename_template)
         options_layout.addWidget(self.preview_button)
         output_label = QLabel("保存到")
@@ -445,6 +460,8 @@ class MainWindow(QMainWindow):
             self.scene_sensitivity.setVisible(False)
             self.max_keyframes.setVisible(False)
             self.location.setVisible(False)
+            self.project_name.setVisible(False)
+            self.organize_mode.setVisible(False)
             self.rename_template.setVisible(False)
             self.preview_button.setVisible(False)
             self.output_hint.setText("添加素材后，这里会说明最终生成单个文件还是资料包。")
@@ -456,13 +473,16 @@ class MainWindow(QMainWindow):
         self.split_document.setVisible(enhanced)
         self.target_tokens.setVisible(enhanced)
         self.ocr_enabled.setVisible(enhanced)
-        renaming = operation == Operation.RENAME_VIDEO
+        renaming = operation in {Operation.RENAME_VIDEO, Operation.ORGANIZE_VIDEO}
+        organizing = operation == Operation.ORGANIZE_VIDEO
         self.quality.setVisible(operation == Operation.COMPRESS_VIDEO)
         self.audio_format.setVisible(operation == Operation.EXTRACT_AUDIO)
         storyboard = operation == Operation.KEYFRAMES_CONTACT_SHEET
         self.scene_sensitivity.setVisible(storyboard)
         self.max_keyframes.setVisible(storyboard)
         self.location.setVisible(renaming)
+        self.project_name.setVisible(renaming)
+        self.organize_mode.setVisible(organizing)
         self.rename_template.setVisible(renaming)
         self.preview_button.setVisible(True)
         if markdown and enhanced:
@@ -476,6 +496,10 @@ class MainWindow(QMainWindow):
         elif operation == Operation.KEYFRAMES_CONTACT_SHEET:
             self.output_hint.setText(
                 "输出：一个关键帧包文件夹，包含联系表、关键帧与 manifest.json。"
+            )
+        elif operation == Operation.ORGANIZE_VIDEO:
+            self.output_hint.setText(
+                "输出：按日期/地点目录保存命名副本；原视频不移动、不改名，操作写入统一历史。"
             )
         else:
             self.output_hint.setText("输出：单个处理结果文件，直接保存在所选目录。")
@@ -491,7 +515,7 @@ class MainWindow(QMainWindow):
             and not self.tools.get("ffmpeg", ToolStatus("ffmpeg", None)).available
         ):
             hint = "（需要安装 FFmpeg）"
-        elif operation == Operation.RENAME_VIDEO and not any(
+        elif operation in {Operation.RENAME_VIDEO, Operation.ORGANIZE_VIDEO} and not any(
             self.tools.get(name, ToolStatus(name, None)).available
             for name in ("exiftool", "ffprobe", "ffmpeg")
         ):
@@ -555,10 +579,13 @@ class MainWindow(QMainWindow):
                 "max_keyframes": int(self.max_keyframes.value()),
                 "columns": int(self.config["video"]["contact_sheet_columns"]),
             }
-        if operation is Operation.RENAME_VIDEO:
+        if operation in {Operation.RENAME_VIDEO, Operation.ORGANIZE_VIDEO}:
             return {
                 "rename_template": self.rename_template.text().strip()
-                or "{date}_{time}_{location}_{index}"
+                or "{date}_{time}_{location}_{index}",
+                "project_name": self.project_name.text().strip(),
+                "organize_mode": str(self.organize_mode.currentData()),
+                "location_dictionary": dict(self.config["video"].get("location_dictionary", {})),
             }
         return {"输出编码": "H.264 / AAC", "容器": "MP4"}
 
@@ -595,6 +622,12 @@ class MainWindow(QMainWindow):
                 for source in self.paths
             ]
             if operation is Operation.RENAME_VIDEO:
+                raw_dictionary = parameters["location_dictionary"]
+                location_dictionary = (
+                    {str(key): str(value) for key, value in raw_dictionary.items()}
+                    if isinstance(raw_dictionary, dict)
+                    else {}
+                )
                 previews = list(
                     build_batch_rename_preview(
                         self.paths,
@@ -602,6 +635,8 @@ class MainWindow(QMainWindow):
                         self._job_output(self.paths[0]),
                         template=str(parameters["rename_template"]),
                         manual_location=self.location.text(),
+                        project_name=str(parameters["project_name"]),
+                        location_dictionary=location_dictionary,
                     )
                 )
             else:
@@ -619,6 +654,13 @@ class MainWindow(QMainWindow):
                         zip(self.paths, metadata, strict=True), start=1
                     )
                 ]
+            previews = list(resolve_batch_output_collisions(previews))
+            previews = list(
+                annotate_duplicate_previews(
+                    previews,
+                    find_duplicate_videos(self.paths, metadata),
+                )
+            )
         except Exception as exc:
             QMessageBox.critical(self, "无法生成预览", str(exc))
             return
@@ -642,6 +684,8 @@ class MainWindow(QMainWindow):
         self.config["video"]["rename_template"] = (
             self.rename_template.text().strip() or "{date}_{time}_{location}_{index}"
         )
+        self.config["video"]["project_name"] = self.project_name.text().strip()
+        self.config["video"]["organize_mode"] = str(self.organize_mode.currentData())
         self.config["video"]["scene_threshold"] = float(self.scene_sensitivity.currentData())
         self.config["video"]["max_keyframes"] = int(self.max_keyframes.value())
         self.config["document"]["mode"] = str(self.document_mode.currentData())
@@ -662,6 +706,7 @@ class MainWindow(QMainWindow):
                 operation=operation,
                 output_root=self._job_output(path),
                 location=self.location.text(),
+                project=self.project_name.text().strip(),
             )
             for path in self.paths
         ]

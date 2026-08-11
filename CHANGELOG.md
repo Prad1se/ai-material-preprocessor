@@ -55,6 +55,21 @@
   AI package manifests.
 - Raise the suite to 151 passing tests plus one opt-in Office environment test.
 
+### M4 video material management
+
+- Record capture-time priority sources from ExifTool, ffprobe, or file metadata fallbacks.
+- Add an offline GPS-to-place dictionary with explicit manual location overrides and no network use.
+- Add project and device naming fields while retaining existing date, location, camera, codec, and
+  resolution fields.
+- Add non-destructive organization copies under date, location, or date-and-location folders.
+- Add batch conflict previews for nested destinations and preserve all original files.
+- Detect duplicate materials using streaming SHA-256 plus duration and resolution.
+- Expand the video metadata preview with GPS, camera, metadata source, and capture-time source.
+- Label contact sheets and keyframe manifests with source filenames and FFmpeg scene timestamps.
+- Persist project, organization mode, location override, parameters, and tool versions in the
+  centralized processing history.
+- Raise the suite to 162 passing tests plus one opt-in Office environment test.
+
 ## 1.4.0 — 2026-08-04
 
 - 移除首页“本机能力”状态栏；缺失工具只在相关操作需要时提示。

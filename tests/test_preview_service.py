@@ -11,6 +11,7 @@ from ai_material_preprocessor.services.preview import (
     build_document_preview,
     build_video_preview,
     completed_contact_sheet,
+    resolve_batch_output_collisions,
 )
 
 
@@ -122,3 +123,52 @@ def test_completed_contact_sheet_only_accepts_an_existing_storyboard_image(tmp_p
     assert completed_contact_sheet(sheet) == sheet
     assert completed_contact_sheet(package / "missing.jpg") is None
     assert completed_contact_sheet(tmp_path / "ordinary.mp4") is None
+
+
+def test_organization_preview_shows_nested_destination_and_metadata_sources(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "旅行.mov"
+    source.write_bytes(b"video")
+    preview = build_video_preview(
+        source,
+        video_metadata(location="杭州西湖"),
+        Operation.ORGANIZE_VIDEO,
+        tmp_path / "library",
+        parameters={
+            "organize_mode": "date_location",
+            "rename_template": "{date}_{project}_{index}",
+            "project_name": "短片",
+        },
+    )
+
+    assert preview.output_name == "2026/2026-07-31/杭州西湖/2026-07-31_短片_001.mov"
+    assert preview.latitude == 30.2512
+    assert preview.longitude == 120.1693
+    assert preview.metadata_source == "fixture"
+
+
+def test_batch_organization_preview_detects_conflicting_nested_names(tmp_path: Path) -> None:
+    previews = []
+    for filename in ("a.mov", "b.mov"):
+        source = tmp_path / filename
+        source.write_bytes(b"video")
+        previews.append(
+            build_video_preview(
+                source,
+                video_metadata(location="杭州西湖"),
+                Operation.ORGANIZE_VIDEO,
+                tmp_path / "library",
+                parameters={
+                    "organize_mode": "date_location",
+                    "rename_template": "{date}_{project}",
+                    "project_name": "短片",
+                },
+            )
+        )
+
+    resolved = resolve_batch_output_collisions(previews)
+
+    assert resolved[0].output_name.endswith("2026-07-31_短片.mov")
+    assert resolved[1].output_name.endswith("2026-07-31_短片_2.mov")
+    assert any(risk.code == "planned_name_collision" for risk in resolved[1].risks)

@@ -170,7 +170,7 @@ class VideoPreviewDialog(QDialog):
         self.setWindowTitle("视频处理预览（不会修改文件）")
         self.resize(1120, 520)
         layout = QVBoxLayout(self)
-        self.table = QTableWidget(len(previews), 9)
+        self.table = QTableWidget(len(previews), 12)
         self.table.setHorizontalHeaderLabels(
             [
                 "文件",
@@ -182,6 +182,9 @@ class VideoPreviewDialog(QDialog):
                 "地点",
                 "输出",
                 "预计体积",
+                "GPS",
+                "设备",
+                "元数据来源",
             ]
         )
         for row, preview in enumerate(previews):
@@ -201,6 +204,16 @@ class VideoPreviewDialog(QDialog):
                 preview.location or "未提供",
                 preview.output_name,
                 estimate,
+                (
+                    f"{preview.latitude:.5f}, {preview.longitude:.5f}"
+                    if preview.latitude is not None and preview.longitude is not None
+                    else "无"
+                ),
+                preview.camera or "未知",
+                (
+                    f"{preview.metadata_source or '文件'} · "
+                    f"时间：{preview.capture_time_source or '未知'}"
+                ),
             ]
             for column, value in enumerate(values):
                 self.table.setItem(row, column, QTableWidgetItem(value))

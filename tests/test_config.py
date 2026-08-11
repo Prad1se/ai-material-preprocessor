@@ -19,6 +19,9 @@ def test_load_config_deep_merges_partial_user_values(tmp_path: Path) -> None:
     assert config["document"]["ocr_enabled"] is False
     assert config["video"]["scene_threshold"] == 0.30
     assert config["video"]["max_keyframes"] == 24
+    assert config["video"]["project_name"] == ""
+    assert config["video"]["organize_mode"] == "date_location"
+    assert config["video"]["location_dictionary"] == {}
     assert config["task_center"]["disk_space_safety_mb"] == 512
     assert config["history"]["retention_days"] == 90
     assert config["history"]["max_size_mb"] == 512

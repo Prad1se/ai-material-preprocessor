@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -197,7 +198,10 @@ def test_real_ffmpeg_video_pipeline_preserves_source(tmp_path: Path, detected_to
             renamed,
         )
     )
-    assert (contact_sheet.parent / "manifest.json").is_file()
+    storyboard_manifest = json.loads(
+        (contact_sheet.parent / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert storyboard_manifest["frames"][0]["timestamp_seconds"] is not None
     assert list((contact_sheet.parent / "frames").glob("frame_*.jpg"))
     assert "杭州西湖" in renamed.name
     assert _sha256(source) == original_hash

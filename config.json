@@ -16,6 +16,9 @@
     "audio_format": "mp3",
     "audio_bitrate": "192k",
     "rename_template": "{date}_{time}_{location}_{index}",
+    "project_name": "",
+    "organize_mode": "date_location",
+    "location_dictionary": {},
     "scene_threshold": 0.3,
     "max_keyframes": 24,
     "contact_sheet_columns": 4

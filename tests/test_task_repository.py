@@ -16,6 +16,7 @@ def _task(tmp_path: Path, *, status: TaskStatus = TaskStatus.WAITING) -> QueuedT
             tmp_path / "课程 资料.docx",
             Operation.TO_MARKDOWN,
             tmp_path / "输出 目录",
+            project="毕业项目",
         ),
         status=status,
         progress=35 if status is TaskStatus.RUNNING else 0,

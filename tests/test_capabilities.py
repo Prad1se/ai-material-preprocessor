@@ -30,7 +30,7 @@ def test_pdf_only_exposes_markdown() -> None:
 
 def test_video_conversion_requires_ffmpeg_but_rename_remains_available() -> None:
     result = available_operations("clip.mp4", tools())
-    assert result == [Operation.RENAME_VIDEO]
+    assert result == [Operation.RENAME_VIDEO, Operation.ORGANIZE_VIDEO]
 
 
 def test_video_with_ffmpeg_exposes_all_creation_operations() -> None:
@@ -41,6 +41,7 @@ def test_video_with_ffmpeg_exposes_all_creation_operations() -> None:
         Operation.STANDARDIZE_MP4,
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
+        Operation.ORGANIZE_VIDEO,
     ]
 
 

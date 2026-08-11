@@ -23,6 +23,11 @@ from .markdown_quality import check_quality, preserve_original_issues
 from .markdown_splitting import split_markdown
 from .metadata import MediaMetadata
 from .naming import preview_video_rename
+from .video_management import (
+    OrganizationMode,
+    plan_video_organization,
+    resolve_local_location,
+)
 
 LOW_OCR_CONFIDENCE = 0.75
 OCR_HEADING = re.compile(r"^###\s+(.+?)（平均置信度\s+([\d.]+)%）\s*$")
@@ -41,6 +46,11 @@ def _source_preview(source: Path) -> SourceFilePreview:
 
 def _parameters(values: Mapping[str, object] | None) -> tuple[tuple[str, str], ...]:
     return tuple((str(key), str(value)) for key, value in (values or {}).items())
+
+
+def _location_dictionary(values: Mapping[str, object]) -> dict[str, str]:
+    raw = values.get("location_dictionary", {})
+    return {str(key): str(value) for key, value in raw.items()} if isinstance(raw, Mapping) else {}
 
 
 def _risk_level(value: str) -> PreviewRiskLevel:
@@ -246,6 +256,7 @@ def build_video_preview(
     manual_location: str = "",
 ) -> VideoPreview:
     values = parameters or {}
+    planned_collision = False
     if operation is Operation.RENAME_VIDEO:
         rename = preview_video_rename(
             source,
@@ -254,11 +265,34 @@ def build_video_preview(
             str(values.get("rename_template", "{date}_{time}_{location}_{index}")),
             index,
             manual_location,
+            str(values.get("project_name", "")),
         )
         output_name = rename.output.name
+    elif operation is Operation.ORGANIZE_VIDEO:
+        plan = plan_video_organization(
+            source,
+            output_root,
+            metadata,
+            OrganizationMode(str(values.get("organize_mode", "date_location"))),
+            template=str(values.get("rename_template", "{date}_{time}_{location}_{index}")),
+            index=index,
+            manual_location=manual_location,
+            project_name=str(values.get("project_name", "")),
+            location_dictionary=_location_dictionary(values),
+        )
+        output_name = plan.output.relative_to(output_root).as_posix()
+        planned_collision = plan.collision_avoided
     else:
         output_name = _predicted_video_name(source, operation, values)
     risks: list[PreviewRisk] = []
+    if planned_collision:
+        risks.append(
+            PreviewRisk(
+                "planned_name_collision",
+                PreviewRiskLevel.WARNING,
+                "目标位置已有同名文件，实际执行时将追加编号；原文件不会覆盖。",
+            )
+        )
     if operation in {Operation.COMPRESS_VIDEO, Operation.STANDARDIZE_MP4}:
         risks.append(
             PreviewRisk(
@@ -288,7 +322,11 @@ def build_video_preview(
     return VideoPreview(
         source=source_info,
         captured_at=metadata.captured_at,
-        location=metadata.effective_location(manual_location),
+        location=resolve_local_location(
+            metadata,
+            _location_dictionary(values),
+            manual_override=manual_location,
+        ),
         duration_seconds=float(metadata.duration_seconds or 0),
         resolution=metadata.resolution,
         codec=metadata.codec,
@@ -299,6 +337,10 @@ def build_video_preview(
         estimated_size_max=size_max,
         risks=tuple(risks),
         parameters=_parameters(values),
+        latitude=metadata.latitude,
+        longitude=metadata.longitude,
+        metadata_source=metadata.source,
+        capture_time_source=metadata.capture_time_source,
     )
 
 
@@ -320,6 +362,8 @@ def build_batch_rename_preview(
     *,
     template: str,
     manual_location: str = "",
+    project_name: str = "",
+    location_dictionary: dict[str, str] | None = None,
 ) -> tuple[VideoPreview, ...]:
     if len(sources) != len(metadata):
         raise ValueError("视频文件和元数据数量不一致。")
@@ -333,9 +377,17 @@ def build_batch_rename_preview(
             values,
             Operation.RENAME_VIDEO,
             output_root,
-            parameters={"rename_template": template},
+            parameters={
+                "rename_template": template,
+                "project_name": project_name,
+                "location_dictionary": location_dictionary or {},
+            },
             index=index,
-            manual_location=manual_location,
+            manual_location=resolve_local_location(
+                values,
+                location_dictionary,
+                manual_override=manual_location,
+            ),
         )
         output_name, planned_collision = _collision_name(preview.output_name, reserved)
         risks = preview.risks
@@ -349,6 +401,39 @@ def build_batch_rename_preview(
             )
         results.append(replace(preview, output_name=output_name, risks=risks))
     return tuple(results)
+
+
+def resolve_batch_output_collisions(
+    previews: Sequence[VideoPreview],
+) -> tuple[VideoPreview, ...]:
+    reserved: set[str] = set()
+    resolved: list[VideoPreview] = []
+    for preview in previews:
+        candidate = Path(preview.output_name)
+        key = candidate.as_posix().casefold()
+        counter = 2
+        while key in reserved:
+            candidate = candidate.with_name(
+                f"{Path(preview.output_name).stem}_{counter}{Path(preview.output_name).suffix}"
+            )
+            key = candidate.as_posix().casefold()
+            counter += 1
+        if candidate.as_posix() != Path(preview.output_name).as_posix():
+            preview = replace(
+                preview,
+                output_name=candidate.as_posix(),
+                risks=preview.risks
+                + (
+                    PreviewRisk(
+                        "planned_name_collision",
+                        PreviewRiskLevel.WARNING,
+                        "批次中存在重名，预览已追加编号；原文件不会覆盖。",
+                    ),
+                ),
+            )
+        reserved.add(key)
+        resolved.append(preview)
+    return tuple(resolved)
 
 
 def completed_contact_sheet(output: Path) -> Path | None:

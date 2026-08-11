@@ -80,3 +80,7 @@ class VideoPreview:
     estimated_size_max: int
     risks: tuple[PreviewRisk, ...]
     parameters: tuple[tuple[str, str], ...]
+    latitude: float | None = None
+    longitude: float | None = None
+    metadata_source: str = ""
+    capture_time_source: str = ""

@@ -9,7 +9,7 @@ Windows 本地桌面工具，用于把常见文档准备成 AI 易读的 Markdow
 当前版本：**1.4.0**
 
 `main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 可靠任务中心
-和 M2 预览质量体验已经合并，M3 正在完善文档来源追溯与精简资料包清单。
+、M2 预览质量体验、M3 文档来源追溯和 M4 视频素材管理已经完成，下一阶段将完善首次启动与设置体验。
 
 ## 直接使用
 
@@ -91,10 +91,15 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 - 按场景变化提取关键帧，并生成一张可快速浏览的 JPEG 联系表
 - 关键帧结果附带独立 `manifest.json`；无明显切镜时自动回退到首帧
 - 按 `{date}_{time}_{location}_{index}` 规则生成视频副本
-- 处理前可预览拍摄时间、时长、分辨率、帧率、编码、地点、最终文件名与预计输出体积
+- 支持 `{project}` / `{device}` 等项目与设备命名字段，并可在处理前手动修正地点
+- 通过完全本地的坐标地点词典将常用 GPS 坐标映射为易读名称，不上传坐标
+- 可按“年 / 日期 / 地点”目录保存整理副本；原视频不移动、不就地改名
+- 使用 SHA-256、时长和分辨率组合检测批量中的重复素材
+- 处理前可预览拍摄时间及其来源、时长、分辨率、帧率、编码、GPS、设备、元数据来源、
+  地点、最终文件名与预计输出体积
 - 批量命名预览会提前标记批次内重名并追加编号，试运行不会创建目录或修改文件
 - 压缩、标准化及有损音频输出会在执行前显示质量风险
-- 关键帧处理完成后直接在应用内显示联系表预览
+- 关键帧联系表和清单会标出源文件名及 `HH:MM:SS.mmm` 时间戳，完成后直接在应用内预览
 - 支持批量处理；单个文件失败不会中断其余任务
 - 任务中心为每个文件显示等待、运行、成功、失败、取消或中断状态
 - 视频转换直接读取 FFmpeg 的机器进度流，显示单项真实进度与批次总体进度
@@ -191,6 +196,11 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
     "audio_format": "mp3",
     "audio_bitrate": "192k",
     "rename_template": "{date}_{time}_{location}_{index}",
+    "project_name": "",
+    "organize_mode": "date_location",
+    "location_dictionary": {
+      "30.2512,120.1693": "杭州西湖"
+    },
     "scene_threshold": 0.3,
     "max_keyframes": 24,
     "contact_sheet_columns": 4
@@ -219,6 +229,7 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 - 日期：`{year}`、`{month}`、`{day}`、`{hour}`、`{minute}`、`{second}`
 - 视频：`{resolution}`、`{width}`、`{height}`、`{duration_s}`、`{codec}`
 - 设备：`{camera}`、`{make}`、`{model}`、`{metadata_source}`
+- 项目与设备别名：`{project}`、`{device}`
 - 坐标：`{latitude}`、`{longitude}`，输出为 `30.2512N`、`120.1693E` 等适合文件名的形式
 
 部分字段依赖 ExifTool 或 ffprobe 中确实存在相应元数据；缺失字段会自动从名称中收缩，不留下连续分隔符。
@@ -318,6 +329,7 @@ src\ai_material_preprocessor\
 │   ├── markdown_splitting.py    # 结构感知拆分
 │   ├── document_provenance.py   # 页面、幻灯片、工作表和 OCR 来源映射
 │   ├── preview.py               # 文档与视频只读预览、风险和体积估算
+│   ├── video_management.py      # 离线地点、整理计划和重复检测
 │   └── ocr.py             # RapidOCR、Office 图片提取与 PDF 页面渲染
 ├── ui\                    # Qt Worker、任务中心、预览、历史窗口和可测试主题
 ├── diagnostics.py        # 发布包自检
