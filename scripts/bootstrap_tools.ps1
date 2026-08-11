@@ -1,9 +1,12 @@
 param(
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
-    [switch]$IncludeExifTool
+    [switch]$IncludeExifTool,
+    [string]$PythonExecutable
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "python_runtime.ps1")
+$python = Resolve-PythonExecutable -ProjectRoot $ProjectRoot -Preferred $PythonExecutable
 $toolsRoot = Join-Path $ProjectRoot "tools"
 $downloadRoot = Join-Path $toolsRoot "_downloads"
 New-Item -ItemType Directory -Force -Path $toolsRoot, $downloadRoot | Out-Null
@@ -20,8 +23,6 @@ function Install-FFmpeg {
         Write-Host "FFmpeg and ffprobe already exist; skipping download."
         return
     }
-    $python = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
-    if (-not (Test-Path -LiteralPath $python)) { throw "Project Python environment not found." }
     $resolvedLines = & $python -c "from static_ffmpeg import run; print('|'.join(run.get_or_fetch_platform_executables_else_raise()))"
     $resolved = ($resolvedLines | Select-Object -Last 1).Trim()
     $paths = $resolved -split '\|'

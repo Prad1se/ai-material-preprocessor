@@ -35,6 +35,16 @@ def test_preview_controls_have_explicit_light_and_dark_system_safe_colors() -> N
     assert "color: #171717" in APP_STYLESHEET
 
 
+def test_light_and_dark_themes_keep_checkbox_states_visible() -> None:
+    for stylesheet in (
+        stylesheet_for_theme(ThemeMode.LIGHT),
+        stylesheet_for_theme(ThemeMode.DARK),
+    ):
+        assert "QCheckBox::indicator:unchecked" in stylesheet
+        assert "QCheckBox::indicator:checked" in stylesheet
+        assert "QCheckBox::indicator:disabled" in stylesheet
+
+
 def test_light_and_dark_themes_keep_lists_and_combo_items_explicitly_readable() -> None:
     light = stylesheet_for_theme(ThemeMode.LIGHT)
     dark = stylesheet_for_theme(ThemeMode.DARK)

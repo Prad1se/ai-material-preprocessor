@@ -6,26 +6,26 @@ Windows 本地桌面工具，用于把常见文档准备成 AI 易读的 Markdow
 [![Release](https://img.shields.io/github/v/release/Prad1se/ai-material-preprocessor)](https://github.com/Prad1se/ai-material-preprocessor/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-当前版本：**1.4.0**
+当前版本：**2.0.0rc1**
 
-`main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 可靠任务中心
-、M2 预览质量体验、M3 文档来源追溯、M4 视频素材管理和 M5 首次启动与设置体验已经完成；下一阶段将建设可复现的 Windows 2.0 RC 发布流水线。
+2.0 RC1 已完成 M0–M6：架构基线、可靠任务中心、预览质量、来源追溯、视频素材管理、首次引导和可复现 Windows 发布流水线。正式公开 Release 仅在全部本地与 GitHub 检查通过后创建。
 
 ## 直接使用
 
 从 [GitHub Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest) 下载：
 
 ```text
-AI-Material-Preprocessor-v1.4.0-windows-x64.zip
+AI-Material-Preprocessor-v2.0.0rc1-windows-x64.zip
+AI-Material-Preprocessor-v2.0.0rc1-windows-x64-setup.exe
 ```
 
-完整解压后双击：
+安装版会安装到当前用户目录并创建卸载入口；便携 ZIP 需要完整解压后双击：
 
 ```text
 AI-Material-Preprocessor.exe
 ```
 
-这是 onedir 发布包，`_internal`、`tools` 和第三方许可目录必须与 EXE 一起保留。程序完全在本机处理文件，不需要上传素材。个人发布的 EXE 未进行商业代码签名，Windows SmartScreen 可能显示“未知发布者”。
+便携版是 onedir 发布包，`_internal`、`tools` 和第三方许可目录必须与 EXE 一起保留。程序完全在本机处理文件，不需要上传素材。更新检查默认关闭，只有在设置中授权并手动点击时才访问 GitHub Releases；详见 [PRIVACY.md](PRIVACY.md)。RC1 未进行商业代码签名，Windows SmartScreen 可能显示“未知发布者”。
 
 ## 已完成功能
 
@@ -164,14 +164,14 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 | 能力 | 状态 |
 |---|---|
 | Python | 3.12.9 |
-| MarkItDown | 0.1.6，Python API 与文档格式扩展可用 |
+| MarkItDown | 0.1.7，Python API 与文档格式扩展可用 |
 | RapidOCR | 3.9.2，本地 ONNX OCR 与中英文模型可用 |
 | pypdfium2 | 5.12.1，PDF OCR 页面渲染可用 |
-| FFmpeg | 8.0.1 Essentials Build，随发布包提供 |
+| FFmpeg | 8.1.2 Essentials Build，随发布包提供 |
 | Microsoft Word | 已检测并完成真实 DOCX→PDF 测试 |
 | Microsoft PowerPoint | 已检测 |
 | LibreOffice | 未检测，作为可选回退 |
-| ffprobe | 8.0.1，随发布包提供；已验证时长、分辨率和编码命名字段 |
+| ffprobe | 8.1.2，随发布包提供；已验证时长、分辨率和编码命名字段 |
 | ExifTool | 已实现集成，当前机器未安装 |
 
 首次启动欢迎页和“设置 → 本机能力”会按实际运行机器检测可用、缺失、版本异常和可选状态，不依赖上表的开发机结果。主工作台只在当前功能缺少依赖时显示简短安装指引，不长期占用空间展示完整能力表。
@@ -189,9 +189,10 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 ```json
 {
   "app": {
-    "schema_version": 2,
+    "schema_version": 3,
     "onboarding_completed": true,
-    "theme": "system"
+    "theme": "system",
+    "update_check_enabled": false
   },
   "output_folder_name": "AI素材处理结果",
   "history_directory": "",
@@ -306,14 +307,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_release.
 验证打包后的 MarkItDown 和 FFmpeg：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1 -Version 2.0.0rc1
 ```
 
-生成 GitHub Release ZIP、FFmpeg 对应源码包和 SHA-256 校验文件：
+生成便携 ZIP、当前用户安装程序、FFmpeg 对应源码包和 SHA-256 校验文件：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package_release.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_installer.ps1 -Version 2.0.0rc1
 ```
+
+发布产物位于 `release\v2.0.0rc1`。Actions 只构建和验证产物，不会未经确认自动创建公开 Release。故障处理见 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)。
 
 也可直接调用 EXE 自检：
 

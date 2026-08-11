@@ -7,7 +7,7 @@ if (-not (Test-Path -LiteralPath $PythonExe)) {
     python -m venv (Join-Path $ProjectRoot ".venv")
 }
 
-& $PythonExe -c "import PySide6, markitdown, rapidocr, onnxruntime, pypdfium2, pytest, PyInstaller, ai_material_preprocessor" 2>$null
+& $PythonExe -c "import PySide6, markitdown, rapidocr, onnxruntime, pypdfium2, packaging, pytest, PyInstaller, ai_material_preprocessor" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "First run: installing desktop dependencies..."
     Push-Location $ProjectRoot

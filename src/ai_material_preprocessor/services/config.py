@@ -28,9 +28,10 @@ CONFIG_PATH = USER_CONFIG_PATH
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "app": {
-        "schema_version": 2,
+        "schema_version": 3,
         "onboarding_completed": False,
         "theme": "system",
+        "update_check_enabled": False,
     },
     "output_folder_name": "AI素材处理结果",
     "history_directory": "",

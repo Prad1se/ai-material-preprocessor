@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased — 2.0.0 RC development
+## [2.0.0rc1] - 2026-08-11
+
+### M6 release and maintenance
+
+- Add a current-user NSIS installer and deterministic portable ZIP packaging.
+- Add version consistency, SHA-256, packaged self-test, GUI smoke, install and uninstall gates.
+- Add a clean Windows GitHub Actions release build without automatic public publication.
+- Add an About dialog, explicit opt-in manual update checks, privacy documentation, troubleshooting, contribution guidance, and GitHub templates.
+- Pin NSIS 3.12 and build-only 7-Zip 26.02 bootstrap files by SHA-256 and extract them without a
+  machine-wide installation.
+- Validate the actual portable ZIP after extraction and the full current-user installer lifecycle.
+- Allow release scripts to use an explicitly selected Python runtime in clean CI environments.
+- Keep unchecked, checked, disabled, and focused checkbox states visible in light and dark themes.
+- Raise the suite to 200 passing tests plus one opt-in Office environment test.
 
 ### M0 architecture baseline
 

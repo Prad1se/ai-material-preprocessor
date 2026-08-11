@@ -369,6 +369,7 @@ def test_window_exposes_settings_without_capability_bar(qtbot, tmp_path: Path, m
     qtbot.addWidget(window)
 
     assert window.settings_button.text() == "设置"
+    assert window.about_button.text() == "关于"
     assert window.findChild(QFrame, "capabilityBar") is None
 
 

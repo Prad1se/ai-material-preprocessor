@@ -4,3 +4,4 @@ imageio-ffmpeg>=0.6,<0.7
 rapidocr>=3.9,<4
 onnxruntime>=1.20,<2
 pypdfium2>=5.10,<6
+packaging>=24,<27
