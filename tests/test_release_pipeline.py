@@ -118,6 +118,14 @@ def test_ffmpeg_source_download_avoids_unstable_proxy_tls() -> None:
     assert '"*"' in package_script
 
 
+def test_release_metadata_omits_empty_tag_argument_on_pull_requests() -> None:
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert '$arguments = @("scripts/check_release_metadata.py"' in workflow
+    assert '$arguments += @("--tag", $env:GITHUB_REF_NAME)' in workflow
+    assert "--tag $tag" not in workflow
+
+
 def test_release_documentation_and_github_templates_exist() -> None:
     required = (
         "PRIVACY.md",

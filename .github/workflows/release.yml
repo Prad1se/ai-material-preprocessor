@@ -27,8 +27,11 @@ jobs:
       - name: Check release metadata
         shell: powershell
         run: |
-          $tag = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "" }
-          python scripts/check_release_metadata.py --expected-version $env:RELEASE_VERSION --tag $tag
+          $arguments = @("scripts/check_release_metadata.py", "--expected-version", $env:RELEASE_VERSION)
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $arguments += @("--tag", $env:GITHUB_REF_NAME)
+          }
+          python @arguments
       - name: Run quality gate
         shell: powershell
         run: |

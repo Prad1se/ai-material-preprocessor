@@ -13,7 +13,7 @@
 - Validate the actual portable ZIP after extraction and the full current-user installer lifecycle.
 - Allow release scripts to use an explicitly selected Python runtime in clean CI environments.
 - Keep unchecked, checked, disabled, and focused checkbox states visible in light and dark themes.
-- Raise the suite to 199 passing tests plus one opt-in Office environment test.
+- Raise the suite to 200 passing tests plus one opt-in Office environment test.
 
 ### M0 architecture baseline
 
