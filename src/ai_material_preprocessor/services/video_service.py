@@ -7,6 +7,7 @@ from ..converters.video import (
     compress,
     extract_audio,
     keyframes_contact_sheet,
+    organize_copy,
     probe_duration,
     rename_copy,
     standardize,
@@ -97,6 +98,23 @@ class VideoProcessingService:
                 exiftool=self._path("exiftool"),
                 ffmpeg=self._path("ffmpeg"),
                 template=str(video["rename_template"]),
+                project_name=job.project or str(video.get("project_name", "")),
+                location_dictionary=dict(video.get("location_dictionary", {})),
+                cancellation=cancellation,
+            )
+        if job.operation is Operation.ORGANIZE_VIDEO:
+            return organize_copy(
+                job.source,
+                job.output_root,
+                self._path("ffprobe"),
+                job.location,
+                index,
+                exiftool=self._path("exiftool"),
+                ffmpeg=self._path("ffmpeg"),
+                template=str(video["rename_template"]),
+                project_name=job.project or str(video.get("project_name", "")),
+                organize_mode=str(video.get("organize_mode", "date_location")),
+                location_dictionary=dict(video.get("location_dictionary", {})),
                 cancellation=cancellation,
             )
         raise ValueError(f"Video service cannot execute {job.operation.name}")

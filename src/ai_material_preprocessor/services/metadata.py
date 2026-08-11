@@ -27,6 +27,7 @@ class MediaMetadata:
     make: str = ""
     model: str = ""
     frame_rate: float | None = None
+    capture_time_source: str = "文件修改时间"
 
     def effective_location(self, manual_override: str = "") -> str:
         return manual_override.strip() or self.location_label
@@ -87,13 +88,9 @@ def _coordinate_label(latitude: float | None, longitude: float | None) -> str:
 
 def metadata_from_exiftool(payload: list[dict[str, Any]], source: Path) -> MediaMetadata:
     values = payload[0] if payload else {}
-    captured = _parse_datetime(
-        values.get("DateTimeOriginal")
-        or values.get("MediaCreateDate")
-        or values.get("CreateDate")
-        or values.get("TrackCreateDate"),
-        source,
-    )
+    time_keys = ("DateTimeOriginal", "MediaCreateDate", "CreateDate", "TrackCreateDate")
+    capture_time_source = next((key for key in time_keys if values.get(key)), "文件修改时间")
+    captured = _parse_datetime(values.get(capture_time_source), source)
     latitude = _number(values.get("GPSLatitude"))
     longitude = _number(values.get("GPSLongitude"))
     place_parts: list[str] = []
@@ -116,6 +113,7 @@ def metadata_from_exiftool(payload: list[dict[str, Any]], source: Path) -> Media
         make=str(values.get("Make") or values.get("DeviceManufacturer") or "").strip(),
         model=str(values.get("Model") or values.get("DeviceModelName") or "").strip(),
         frame_rate=_frame_rate(values.get("VideoFrameRate") or values.get("FrameRate")),
+        capture_time_source=capture_time_source,
     )
 
 
@@ -131,7 +129,11 @@ def _flatten_ffprobe_tags(payload: dict[str, Any]) -> dict[str, str]:
 
 def metadata_from_ffprobe(payload: dict[str, Any], source: Path) -> MediaMetadata:
     tags = _flatten_ffprobe_tags(payload)
-    captured = _parse_datetime(tags.get("creation_time") or tags.get("date"), source)
+    capture_time_source = next(
+        (key for key in ("creation_time", "date") if tags.get(key)),
+        "文件修改时间",
+    )
+    captured = _parse_datetime(tags.get(capture_time_source), source)
     raw_location = tags.get("com.apple.quicktime.location.iso6709") or tags.get("location") or ""
     match = ISO6709.search(raw_location)
     latitude = float(match.group("lat")) if match else None
@@ -156,6 +158,7 @@ def metadata_from_ffprobe(payload: dict[str, Any], source: Path) -> MediaMetadat
         make=tags.get("make", "").strip(),
         model=(tags.get("model") or tags.get("com.apple.quicktime.model") or "").strip(),
         frame_rate=_frame_rate(video.get("avg_frame_rate") or video.get("r_frame_rate")),
+        capture_time_source=capture_time_source,
     )
 
 
@@ -255,4 +258,11 @@ def read_media_metadata(
         except (OSError, RuntimeError, ValueError):
             pass
 
-    return MediaMetadata(_file_time(source), None, None, "", "文件时间")
+    return MediaMetadata(
+        _file_time(source),
+        None,
+        None,
+        "",
+        "文件时间",
+        capture_time_source="文件修改时间",
+    )

@@ -21,14 +21,15 @@ def test_disk_preflight_estimates_all_jobs_and_reports_remaining_capacity(
     jobs = [
         _job(tmp_path, "document.docx", Operation.TO_MARKDOWN, 1000),
         _job(tmp_path, "video.mp4", Operation.STANDARDIZE_MP4, 2000),
+        _job(tmp_path, "organized.mov", Operation.ORGANIZE_VIDEO, 500),
     ]
     preflight = DiskSpacePreflight(free_space=lambda _path: 10_000)
 
     result = preflight.check(jobs, safety_margin_bytes=1000)
 
-    assert result.required_bytes == 4000
+    assert result.required_bytes == 4500
     assert result.free_bytes == 10_000
-    assert result.remaining_bytes == 5000
+    assert result.remaining_bytes == 4500
 
 
 def test_disk_preflight_stops_before_processing_with_actionable_error(tmp_path: Path) -> None:

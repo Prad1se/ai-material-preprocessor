@@ -15,6 +15,7 @@ class Operation(StrEnum):
     STANDARDIZE_MP4 = "标准化为 MP4"
     KEYFRAMES_CONTACT_SHEET = "提取关键帧和联系表"
     RENAME_VIDEO = "按拍摄时间/地点命名"
+    ORGANIZE_VIDEO = "按日期/地点整理"
 
 
 class TaskStatus(StrEnum):
@@ -49,6 +50,7 @@ class Job:
     operation: Operation
     output_root: Path
     location: str = ""
+    project: str = ""
 
 
 @dataclass(frozen=True)

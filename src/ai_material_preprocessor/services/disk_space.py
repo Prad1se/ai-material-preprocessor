@@ -38,6 +38,7 @@ class DiskSpacePreflight:
         Operation.STANDARDIZE_MP4: 1.25,
         Operation.KEYFRAMES_CONTACT_SHEET: 0.5,
         Operation.RENAME_VIDEO: 1.0,
+        Operation.ORGANIZE_VIDEO: 1.0,
     }
 
     def __init__(self, *, free_space: Callable[[Path], int] | None = None) -> None:

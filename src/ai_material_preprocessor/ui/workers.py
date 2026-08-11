@@ -181,13 +181,16 @@ class Worker(QThread):
                 "max_keyframes",
                 "contact_sheet_columns",
             ),
-            "RENAME_VIDEO": ("rename_template",),
+            "RENAME_VIDEO": ("rename_template", "project_name"),
+            "ORGANIZE_VIDEO": ("rename_template", "project_name", "organize_mode"),
         }
         parameters = {
             key: video.get(key) for key in keys_by_operation.get(task.job.operation.name, ())
         }
         if task.job.location:
             parameters["location_override"] = task.job.location
+        if task.job.project:
+            parameters["project_name"] = task.job.project
         return parameters
 
     def _tool_versions_for(self, task: QueuedTask) -> dict[str, str]:

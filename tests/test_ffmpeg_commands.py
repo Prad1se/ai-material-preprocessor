@@ -9,6 +9,7 @@ from ai_material_preprocessor.converters.video import (
     build_extract_audio_command,
     build_keyframe_command,
     build_standardize_command,
+    parse_keyframe_timestamps,
     parse_progress_line,
     probe_duration,
 )
@@ -75,8 +76,18 @@ def test_keyframe_command_uses_scene_detection_and_caps_output() -> None:
     )
     filter_value = command[command.index("-vf") + 1]
     assert "gt(scene\\,0.32)" in filter_value
+    assert "showinfo" in filter_value
     assert command[command.index("-frames:v") + 1] == "18"
     assert "-n" in command
+
+
+def test_keyframe_timestamp_parser_reads_showinfo_pts_times() -> None:
+    stderr = """
+[Parsed_showinfo_1 @ 000] n:0 pts:1280 pts_time:1.25 pos:0
+[Parsed_showinfo_1 @ 000] n:1 pts:67072 pts_time:65.5 pos:1
+"""
+
+    assert parse_keyframe_timestamps(stderr) == (1.25, 65.5)
 
 
 def test_video_conversion_forwards_cancellation_and_removes_partial_output(

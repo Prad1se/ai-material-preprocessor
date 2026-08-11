@@ -38,5 +38,6 @@ def available_operations(filename: str | Path, tools: dict[str, ToolStatus]) -> 
                 ]
             )
         operations.append(Operation.RENAME_VIDEO)
+        operations.append(Operation.ORGANIZE_VIDEO)
 
     return operations

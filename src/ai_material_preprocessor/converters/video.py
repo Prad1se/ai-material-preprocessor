@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shutil
 from collections.abc import Callable
 from datetime import datetime
@@ -14,6 +15,12 @@ from ..infrastructure.processes import CancellationToken
 from ..services.files import unique_path
 from ..services.metadata import read_media_metadata
 from ..services.naming import preview_video_rename
+from ..services.video_management import (
+    OrganizationMode,
+    copy_organized_video,
+    plan_video_organization,
+    resolve_local_location,
+)
 from .common import ConversionError, run_command
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
@@ -115,7 +122,7 @@ def build_keyframe_command(
         "-i",
         str(source),
         "-vf",
-        f"select=gt(scene\\,{threshold:.2f}),scale='min(1920,iw)':-2",
+        f"select=gt(scene\\,{threshold:.2f}),showinfo,scale='min(1920,iw)':-2",
         "-fps_mode",
         "vfr",
         "-c:v",
@@ -156,6 +163,8 @@ def create_contact_sheet(
     columns: int = 4,
     cell_width: int = 320,
     cancellation: CancellationToken | None = None,
+    source_name: str = "",
+    timestamps: tuple[float, ...] = (),
 ) -> Path:
     if not frames:
         raise ConversionError("没有可用于生成联系表的关键帧。")
@@ -177,9 +186,17 @@ def create_contact_sheet(
             x = column * cell_width + (cell_width - fitted.width) // 2
             y = row * (image_height + caption_height) + (image_height - fitted.height) // 2
             sheet.paste(fitted, (x, y))
+        seconds = timestamps[index - 1] if index - 1 < len(timestamps) else None
+        if seconds is None:
+            caption = f"Frame {index:03d}"
+        else:
+            minutes, remainder = divmod(max(0.0, seconds), 60)
+            hours, minutes = divmod(int(minutes), 60)
+            timestamp = f"{hours:02d}:{minutes:02d}:{remainder:06.3f}"
+            caption = f"{source_name} · {timestamp}" if source_name else timestamp
         draw.text(
             (column * cell_width + 10, row * (image_height + caption_height) + image_height + 8),
-            f"Frame {index:03d}",
+            caption,
             fill="#222222",
         )
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -197,6 +214,12 @@ def parse_progress_line(line: str, duration_seconds: float) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def parse_keyframe_timestamps(stderr: str) -> tuple[float, ...]:
+    return tuple(
+        float(match.group(1)) for match in re.finditer(r"\bpts_time:([0-9]+(?:\.[0-9]+)?)", stderr)
+    )
 
 
 def probe_duration(
@@ -383,6 +406,7 @@ def keyframes_contact_sheet(
     frames_dir = package / "frames"
     frames_dir.mkdir(parents=True)
     pattern = frames_dir / "frame_%03d.jpg"
+    timestamps: tuple[float, ...] = ()
     try:
         try:
 
@@ -392,7 +416,7 @@ def keyframes_contact_sheet(
                     scaled = min(80, round(percent * 0.8))
                     progress_callback(scaled, f"正在提取关键帧：{scaled}%")
 
-            run_command(
+            result = run_command(
                 build_keyframe_command(
                     exe, source, pattern, scene_threshold=scene_threshold, max_frames=max_frames
                 ),
@@ -400,6 +424,7 @@ def keyframes_contact_sheet(
                 cancellation=cancellation,
                 stdout_line_callback=keyframe_progress if progress_callback else None,
             )
+            timestamps = parse_keyframe_timestamps(getattr(result, "stderr", ""))
         except ConversionError as exc:
             if exc.code is ErrorCode.CANCELLED:
                 raise
@@ -412,11 +437,14 @@ def keyframes_contact_sheet(
                 cancellation=cancellation,
             )
             frames = [fallback]
+            timestamps = (0.0,)
         contact_sheet = create_contact_sheet(
             frames,
             package / "contact-sheet.jpg",
             columns=columns,
             cancellation=cancellation,
+            source_name=source.name,
+            timestamps=timestamps,
         )
         if progress_callback is not None:
             progress_callback(90, "正在生成联系表")
@@ -429,7 +457,13 @@ def keyframes_contact_sheet(
             "max_frames": max_frames,
             "frame_count": len(frames),
             "contact_sheet": contact_sheet.name,
-            "frames": [f"frames/{path.name}" for path in frames],
+            "frames": [
+                {
+                    "file": f"frames/{path.name}",
+                    "timestamp_seconds": (timestamps[index] if index < len(timestamps) else None),
+                }
+                for index, path in enumerate(frames)
+            ],
         }
         (package / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -451,6 +485,8 @@ def rename_copy(
     exiftool: str | None = None,
     ffmpeg: str | None = None,
     template: str = "{date}_{time}_{location}_{index}",
+    project_name: str = "",
+    location_dictionary: dict[str, str] | None = None,
     cancellation: CancellationToken | None = None,
 ) -> Path:
     _ensure_video(source)
@@ -464,8 +500,19 @@ def rename_copy(
     )
     output_root.mkdir(parents=True, exist_ok=True)
     destination = output_root
+    location = resolve_local_location(
+        metadata,
+        location_dictionary,
+        manual_override=location_override,
+    )
     preview = preview_video_rename(
-        source, destination, metadata, template, index, location_override
+        source,
+        destination,
+        metadata,
+        template,
+        index,
+        location,
+        project_name,
     )
     output = preview.output
     try:
@@ -477,3 +524,41 @@ def rename_copy(
             output.unlink()
         raise
     return output
+
+
+def organize_copy(
+    source: Path,
+    output_root: Path,
+    ffprobe: str | None,
+    location_override: str,
+    index: int = 1,
+    *,
+    exiftool: str | None = None,
+    ffmpeg: str | None = None,
+    template: str = "{date}_{time}_{location}_{index}",
+    project_name: str = "",
+    organize_mode: str = "date_location",
+    location_dictionary: dict[str, str] | None = None,
+    cancellation: CancellationToken | None = None,
+) -> Path:
+    _ensure_video(source)
+    _raise_if_cancelled(cancellation)
+    metadata = read_media_metadata(
+        source,
+        exiftool,
+        ffprobe,
+        ffmpeg=ffmpeg,
+        cancellation=cancellation,
+    )
+    plan = plan_video_organization(
+        source,
+        output_root,
+        metadata,
+        OrganizationMode(organize_mode),
+        template=template,
+        index=index,
+        manual_location=location_override,
+        project_name=project_name,
+        location_dictionary=location_dictionary,
+    )
+    return copy_organized_video(plan, cancellation=cancellation)

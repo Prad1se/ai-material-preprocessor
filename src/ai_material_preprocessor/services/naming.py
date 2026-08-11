@@ -22,6 +22,7 @@ def build_video_name(
     template: str,
     index: int,
     manual_location: str = "",
+    project_name: str = "",
 ) -> str:
     captured = metadata.captured_at
     duration = round(metadata.duration_seconds or 0)
@@ -57,6 +58,8 @@ def build_video_name(
         "make": safe_component(metadata.make, ""),
         "model": safe_component(metadata.model, ""),
         "metadata_source": safe_component(metadata.source, ""),
+        "device": safe_component(metadata.camera, ""),
+        "project": safe_component(project_name, ""),
     }
     try:
         stem = template.format(**values)
@@ -73,7 +76,15 @@ def preview_video_rename(
     template: str,
     index: int,
     manual_location: str = "",
+    project_name: str = "",
 ) -> RenamePreview:
-    intended = destination / build_video_name(source, metadata, template, index, manual_location)
+    intended = destination / build_video_name(
+        source,
+        metadata,
+        template,
+        index,
+        manual_location,
+        project_name,
+    )
     output = unique_path(intended)
     return RenamePreview(source, output, metadata, output != intended)

@@ -84,3 +84,5 @@ def test_video_preview_dialog_shows_media_fields_estimate_and_risks(qtbot, tmp_p
     assert dialog.table.item(0, 4).text() == "29.97 fps"
     assert dialog.table.item(0, 7).text() == "clip_compressed.mp4"
     assert "可能损失画质" in dialog.risk_list.item(0).text()
+    assert dialog.table.horizontalHeaderItem(9).text() == "GPS"
+    assert dialog.table.horizontalHeaderItem(10).text() == "设备"

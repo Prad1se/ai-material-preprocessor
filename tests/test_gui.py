@@ -113,6 +113,7 @@ def test_video_exposes_all_creation_operations(qtbot, tmp_path: Path) -> None:
         Operation.STANDARDIZE_MP4,
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
+        Operation.ORGANIZE_VIDEO,
     ]
 
 
@@ -130,6 +131,23 @@ def test_location_and_preview_only_show_for_rename(qtbot, tmp_path: Path) -> Non
     assert window.preview_button.isVisibleTo(window)
     assert window.rename_template.isVisibleTo(window)
     assert not window.audio_format.isVisibleTo(window)
+
+
+def test_organize_video_shows_project_location_and_folder_mode(qtbot, tmp_path: Path) -> None:
+    source = tmp_path / "clip.mp4"
+    source.touch()
+    window = MainWindow(config=DEFAULT_CONFIG, tools=toolset(ffmpeg=True))
+    qtbot.addWidget(window)
+    window._add_files([str(source)])
+
+    organize_index = combo_operations(window).index(Operation.ORGANIZE_VIDEO)
+    window.operation.setCurrentIndex(organize_index)
+
+    assert window.location.isVisibleTo(window)
+    assert window.project_name.isVisibleTo(window)
+    assert window.organize_mode.isVisibleTo(window)
+    assert window.rename_template.isVisibleTo(window)
+    assert "原视频不移动" in window.output_hint.text()
 
 
 def test_audio_options_show_for_extract_audio(qtbot, tmp_path: Path) -> None:
