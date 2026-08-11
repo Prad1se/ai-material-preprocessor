@@ -1,3 +1,9 @@
+import re
+from enum import StrEnum
+
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QApplication, QWidget
+
 APP_STYLESHEET = r"""
 QMainWindow, QDialog, QScrollArea { background: #f5efe9; }
 QWidget { color: #171717; font-family: "Microsoft YaHei UI"; }
@@ -87,3 +93,76 @@ QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical { background: #c7c7cc; border-radius: 5px; min-height: 34px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
+
+
+class ThemeMode(StrEnum):
+    SYSTEM = "system"
+    LIGHT = "light"
+    DARK = "dark"
+
+
+LIGHT_STYLESHEET = APP_STYLESHEET
+_DARK_COLORS = {
+    "#f5efe9": "#18191c",
+    "#fff8f3": "#242529",
+    "#171717": "#f5f5f7",
+    "#111111": "#ffffff",
+    "#5e5552": "#c9c7c5",
+    "#fffdfb": "#202124",
+    "#ffd9df": "#5a2c36",
+    "#746966": "#aaa5a2",
+    "#fff5f2": "#2b2527",
+    "#e7cac5": "#55474a",
+    "#ffffff": "#202124",
+    "#fff4f5": "#272124",
+    "#ef6f82": "#ff8fa1",
+    "#ffe7eb": "#3b292e",
+    "#ffd2da": "#5a3039",
+    "#1d1d1f": "#f5f5f7",
+    "#f5f5f7": "#292a2e",
+    "#e5e5ea": "#44454a",
+    "#424245": "#dedde0",
+    "#d2d2d7": "#505157",
+    "#f0e8e4": "#303136",
+    "#c63f55": "#ff9aaa",
+    "#a52c40": "#ffc0ca",
+    "#ffe9ec": "#3b292e",
+    "#d70015": "#ff6b76",
+    "#b60012": "#ff939b",
+    "#fff0f1": "#402629",
+    "#a29a97": "#77787d",
+    "#e9e2de": "#303136",
+    "#bdb4b0": "#5b5c61",
+    "#c7c7cc": "#68696f",
+    "#3f3735": "#efedef",
+}
+_DARK_PATTERN = re.compile("|".join(re.escape(color) for color in _DARK_COLORS), re.I)
+DARK_STYLESHEET = _DARK_PATTERN.sub(
+    lambda match: _DARK_COLORS[match.group(0).lower()], LIGHT_STYLESHEET
+)
+
+
+def system_uses_dark_palette() -> bool:
+    app = QApplication.instance()
+    if app is None:
+        return False
+    return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
+
+
+def stylesheet_for_theme(
+    mode: ThemeMode | str,
+    *,
+    system_dark: bool | None = None,
+) -> str:
+    try:
+        selected = ThemeMode(mode)
+    except ValueError:
+        selected = ThemeMode.SYSTEM
+    if selected is ThemeMode.SYSTEM:
+        dark = system_uses_dark_palette() if system_dark is None else system_dark
+        selected = ThemeMode.DARK if dark else ThemeMode.LIGHT
+    return DARK_STYLESHEET if selected is ThemeMode.DARK else LIGHT_STYLESHEET
+
+
+def apply_theme(widget: QWidget, mode: ThemeMode | str) -> None:
+    widget.setStyleSheet(stylesheet_for_theme(mode))

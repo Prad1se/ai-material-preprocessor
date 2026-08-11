@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -353,10 +354,75 @@ def test_file_rows_and_combo_items_stay_readable_with_dark_system_palette(
         window.show()
         app.processEvents()
 
-        expected = "#171717"
+        expected = "#f5f5f7" if "background: #202124" in window.styleSheet() else "#171717"
         assert window.file_list.palette().color(QPalette.ColorRole.Text).name() == expected
         assert window.operation.palette().color(QPalette.ColorRole.Text).name() == expected
         assert window.operation.view().palette().color(QPalette.ColorRole.Text).name() == expected
         assert window.file_list.item(0).text().endswith("lesson.docx")
     finally:
         app.setPalette(original)
+
+
+def test_window_exposes_settings_without_capability_bar(qtbot, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+
+    assert window.settings_button.text() == "设置"
+    assert window.findChild(QFrame, "capabilityBar") is None
+
+
+def test_window_expands_dropped_folder_and_keeps_file_rows_visible(qtbot, tmp_path: Path) -> None:
+    document = tmp_path / "资料" / "课程.docx"
+    video = tmp_path / "视频" / "片段.mp4"
+    document.parent.mkdir()
+    video.parent.mkdir()
+    document.touch()
+    video.touch()
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=toolset(markitdown=True, ffmpeg=True),
+    )
+    qtbot.addWidget(window)
+
+    window._add_files([str(tmp_path)])
+
+    assert set(window.paths) == {document.resolve(), video.resolve()}
+    assert window.file_list.count() == 2
+    assert window.file_list.item(0).text()
+
+
+def test_missing_tool_hint_links_to_settings_without_full_capability_bar(
+    qtbot, tmp_path: Path
+) -> None:
+    source = tmp_path / "课件.pdf"
+    source.touch()
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+
+    window._add_files([str(source)])
+
+    assert window.tool_hint.isVisibleTo(window)
+    assert "MarkItDown" in window.tool_hint.text()
+    assert window.settings_button.isVisibleTo(window)
+    assert window.findChild(QFrame, "capabilityBar") is None
+
+
+def test_window_uses_configured_dark_theme(qtbot) -> None:
+    config = deepcopy(DEFAULT_CONFIG)
+    config["app"]["theme"] = "dark"
+    window = MainWindow(config=config, tools=toolset())
+    qtbot.addWidget(window)
+
+    assert "background: #202124" in window.styleSheet()
+
+
+def test_completed_onboarding_is_not_shown(qtbot) -> None:
+    config = deepcopy(DEFAULT_CONFIG)
+    config["app"]["onboarding_completed"] = True
+    window = MainWindow(config=config, tools=toolset())
+    qtbot.addWidget(window)
+
+    window.show_onboarding_if_needed()
+
+    assert not hasattr(window, "onboarding_dialog")

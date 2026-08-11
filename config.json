@@ -1,4 +1,9 @@
 {
+  "app": {
+    "schema_version": 2,
+    "onboarding_completed": false,
+    "theme": "system"
+  },
   "output_folder_name": "AI素材处理结果",
   "history_directory": "",
   "tools": {

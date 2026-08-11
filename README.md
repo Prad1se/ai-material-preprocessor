@@ -9,7 +9,7 @@ Windows 本地桌面工具，用于把常见文档准备成 AI 易读的 Markdow
 当前版本：**1.4.0**
 
 `main` 保持当前稳定发布；2.0 Release Candidate 正按独立里程碑分支开发。M1 可靠任务中心
-、M2 预览质量体验、M3 文档来源追溯和 M4 视频素材管理已经完成，下一阶段将完善首次启动与设置体验。
+、M2 预览质量体验、M3 文档来源追溯、M4 视频素材管理和 M5 首次启动与设置体验已经完成；下一阶段将建设可复现的 Windows 2.0 RC 发布流水线。
 
 ## 直接使用
 
@@ -174,14 +174,25 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 | ffprobe | 8.0.1，随发布包提供；已验证时长、分辨率和编码命名字段 |
 | ExifTool | 已实现集成，当前机器未安装 |
 
-程序首页会按实际运行机器重新检测，不依赖上表的开发机结果。
+首次启动欢迎页和“设置 → 本机能力”会按实际运行机器检测可用、缺失、版本异常和可选状态，不依赖上表的开发机结果。主工作台只在当前功能缺少依赖时显示简短安装指引，不长期占用空间展示完整能力表。
 
 ## 配置
 
-`config.json` 可设置输出目录名称、统一历史目录、工具绝对路径和视频默认参数：
+首次启动会解释本地隐私约束并检测工具；之后可通过主界面的“设置”重新检测、选择自定义可执行文件、切换浅色/深色/跟随 Windows 主题，以及调整历史保留期限。用户设置保存在：
+
+```text
+%LOCALAPPDATA%\AI Material Preprocessor\config.json
+```
+
+发布包旁的 `config.json` 仅作为旧版兼容和默认模板；首次迁移不会修改该文件。配置可设置输出目录名称、统一历史目录、工具绝对路径和视频默认参数：
 
 ```json
 {
+  "app": {
+    "schema_version": 2,
+    "onboarding_completed": true,
+    "theme": "system"
+  },
   "output_folder_name": "AI素材处理结果",
   "history_directory": "",
   "tools": {
@@ -258,7 +269,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.
 
 测试包括：
 
-- 能力矩阵和工具查找优先级
+- 能力矩阵、工具查找优先级、版本异常与自定义路径
+- 首次启动、图形化设置、配置迁移、文件夹拖入和深浅主题
 - 配置合并与 UTF-8 保存
 - Windows 安全文件名、命名模板和冲突避让
 - ExifTool、ffprobe、FFmpeg 元数据回退
@@ -330,8 +342,11 @@ src\ai_material_preprocessor\
 │   ├── document_provenance.py   # 页面、幻灯片、工作表和 OCR 来源映射
 │   ├── preview.py               # 文档与视频只读预览、风险和体积估算
 │   ├── video_management.py      # 离线地点、整理计划和重复检测
+│   ├── input_discovery.py       # 文件与文件夹拖入、格式过滤和去重
+│   ├── tool_capabilities.py     # 工具健康状态与功能安装指引
+│   ├── tool_versions.py         # 有超时的本地版本检测
 │   └── ocr.py             # RapidOCR、Office 图片提取与 PDF 页面渲染
-├── ui\                    # Qt Worker、任务中心、预览、历史窗口和可测试主题
+├── ui\                    # 欢迎页、设置、工具状态、任务中心、预览、历史和主题
 ├── diagnostics.py        # 发布包自检
 └── gui.py                # PySide6 窗口与交互
 

@@ -55,6 +55,22 @@
   AI package manifests.
 - Raise the suite to 151 passing tests plus one opt-in Office environment test.
 
+### M5 onboarding and settings experience
+
+- Add a first-run mouse welcome dialog that explains local-only processing, non-destructive output,
+  and the distinction between single-file conversions and AI packages.
+- Move complete capability details out of the workbench into welcome and graphical settings dialogs.
+- Detect MarkItDown, Microsoft Office, LibreOffice, FFmpeg, ffprobe, ExifTool, and local OCR with
+  typed available, missing, optional, and version-warning states.
+- Add re-detection, actionable installation hints, and custom executable paths that safely support
+  spaces and Chinese characters.
+- Move mutable user configuration to `%LOCALAPPDATA%` with deep-merge compatibility and non-
+  destructive migration from the legacy adjacent configuration.
+- Add recursive file/folder drag-and-drop with supported-format filtering and de-duplication.
+- Add explicit light, dark, and Windows-following themes plus pass-through high-DPI scaling.
+- Keep combo boxes, file rows, tool tables, disabled controls, selection, and focus states readable
+  in both themes.
+- Raise the suite to 183 passing tests plus one opt-in Office environment test.
 ### M4 video material management
 
 - Record capture-time priority sources from ExifTool, ffprobe, or file metadata fallbacks.
