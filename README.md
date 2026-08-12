@@ -157,28 +157,9 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 %LOCALAPPDATA%\AI Material Preprocessor\History\年\月\时间-task-id\manifest.json
 ```
 
-## 本机检测结果
-
-完成开发与发布验证时检测到：
-
-| 能力 | 状态 |
-|---|---|
-| Python | 3.12.9 |
-| MarkItDown | 0.1.7，Python API 与文档格式扩展可用 |
-| RapidOCR | 3.9.2，本地 ONNX OCR 与中英文模型可用 |
-| pypdfium2 | 5.12.1，PDF OCR 页面渲染可用 |
-| FFmpeg | 8.1.2 Essentials Build，随发布包提供 |
-| Microsoft Word | 已检测并完成真实 DOCX→PDF 测试 |
-| Microsoft PowerPoint | 已检测 |
-| LibreOffice | 未检测，作为可选回退 |
-| ffprobe | 8.1.2，随发布包提供；已验证时长、分辨率和编码命名字段 |
-| ExifTool | 已实现集成，当前机器未安装 |
-
-首次启动欢迎页和“设置 → 本机能力”会按实际运行机器检测可用、缺失、版本异常和可选状态，不依赖上表的开发机结果。主工作台只在当前功能缺少依赖时显示简短安装指引，不长期占用空间展示完整能力表。
-
 ## 配置
 
-首次启动会解释本地隐私约束并检测工具；之后可通过主界面的“设置”重新检测、选择自定义可执行文件、切换浅色/深色/跟随 Windows 主题，以及调整历史保留期限。用户设置保存在：
+首次启动会解释本地隐私约束并检测工具；之后可通过主界面的“设置”重新检测、选择自定义可执行文件、补充 ExifTool / LibreOffice / FFmpeg、选择工具保存目录、切换浅色/深色/跟随 Windows 主题，以及调整历史保留期限。每次下载前都会显示来源、版本、许可证和保存位置，只有用户确认后才联网。用户设置保存在：
 
 ```text
 %LOCALAPPDATA%\AI Material Preprocessor\config.json
@@ -189,7 +170,7 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
 ```json
 {
   "app": {
-    "schema_version": 3,
+    "schema_version": 4,
     "onboarding_completed": true,
     "theme": "system",
     "update_check_enabled": false
@@ -201,6 +182,9 @@ OCR 使用 ONNX Runtime 和本地中英文模型，不上传文件，默认关�
     "ffprobe": "",
     "exiftool": "",
     "libreoffice": ""
+  },
+  "tool_management": {
+    "install_directory": "D:/AI-Tools/AI-Material-Preprocessor"
   },
   "video": {
     "compression_crf": 23,
@@ -367,6 +351,6 @@ docs\adr\                 # 关键技术决策
 
 本项目自行编写的源代码采用 [MIT License](LICENSE)。MarkItDown、PySide6、RapidOCR、ONNX Runtime、pypdfium2、FFmpeg 等第三方组件继续遵循各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `third_party_licenses/`。
 
-界面使用的鼠鼠图片由项目维护者直接提供并确认可修改、再分发及商业使用，素材来源和处理版本说明见 [`assets/mouse/README.md`](assets/mouse/README.md)。本项目未复制 FlyingMouse Format 的源代码、赞助信息或品牌标识。
+界面使用的鼠鼠图片由项目维护者直接提供并确认可修改、再分发及商业使用，素材来源和处理版本说明见 [`assets/mouse/README.md`](assets/mouse/README.md)。
 
 Windows 便携包附带的 FFmpeg 8.1.2 Gyan Essentials Build 使用 GPLv3；对应源码压缩包会作为同一 GitHub Release 的独立附件发布。

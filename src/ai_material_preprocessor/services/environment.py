@@ -35,13 +35,31 @@ TOOL_LOCATIONS: dict[str, list[tuple[str, ...]]] = {
 }
 
 
-def candidate_paths(name: str, project_root: Path, runtime_root: Path | None) -> list[Path]:
+def candidate_paths(
+    name: str,
+    project_root: Path,
+    runtime_root: Path | None,
+    managed_root: Path | None = None,
+) -> list[Path]:
     roots = [root for root in (runtime_root, project_root) if root is not None]
-    return [
+    candidates = [
         root / "tools" / Path(*relative)
         for root in roots
         for relative in TOOL_LOCATIONS.get(name, [])
     ]
+    if managed_root and managed_root.is_dir():
+        filenames = {
+            "ffmpeg": ("ffmpeg.exe",),
+            "ffprobe": ("ffprobe.exe",),
+            "exiftool": ("exiftool.exe", "exiftool(-k).exe"),
+            "libreoffice": ("soffice.exe",),
+        }.get(name, ())
+        managed = sorted(
+            (path for filename in filenames for path in managed_root.glob(f"{name}/**/{filename}")),
+            reverse=True,
+        )
+        candidates = [*managed, *candidates]
+    return candidates
 
 
 def resolve_tool(
@@ -89,8 +107,10 @@ def resolve_ffmpeg(
 
 def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
     from .config import PROJECT_ROOT
+    from .tool_installer import configured_tool_install_root
 
     overrides = config.get("tools", {})
+    managed_root = configured_tool_install_root(config)
     runtime_root = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else None
     result: dict[str, ToolStatus] = {}
 
@@ -119,7 +139,7 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
 
     result["ffmpeg"] = resolve_ffmpeg(
         overrides.get("ffmpeg", ""),
-        candidate_paths("ffmpeg", PROJECT_ROOT, runtime_root),
+        candidate_paths("ffmpeg", PROJECT_ROOT, runtime_root, managed_root),
         shutil.which,
     )
 
@@ -127,12 +147,12 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
         result[name] = resolve_tool(
             name,
             overrides.get(name, ""),
-            candidate_paths(name, PROJECT_ROOT, runtime_root),
+            candidate_paths(name, PROJECT_ROOT, runtime_root, managed_root),
             shutil.which,
         )
 
     for name in ("libreoffice", "winword", "powerpoint"):
-        bundled = candidate_paths(name, PROJECT_ROOT, runtime_root)
+        bundled = candidate_paths(name, PROJECT_ROOT, runtime_root, managed_root)
         bundled.extend(Path(path) for path in OFFICE_DEFAULTS[name])
         status = resolve_tool(name, overrides.get(name, ""), bundled, shutil.which)
         if status.path and any(

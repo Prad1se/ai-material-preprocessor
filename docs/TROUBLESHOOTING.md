@@ -9,8 +9,10 @@
 
 ## A conversion tool is missing
 
-Open **Settings → Local capabilities**, choose **Re-detect**, and optionally select a custom tool
-path. FFmpeg and ffprobe are included. Microsoft Office, LibreOffice, and ExifTool are not bundled.
+Open **Settings → Local capabilities** and choose **Re-detect**. Missing ExifTool, LibreOffice, or
+FFmpeg capabilities show a supplement button. Before downloading, the application displays the
+source, version, license, and destination and asks for network consent. You can select a custom
+tool directory or executable path. Microsoft Office is never downloaded by the application.
 
 ## Word or PowerPoint cannot create PDF
 

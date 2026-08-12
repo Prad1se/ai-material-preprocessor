@@ -1,6 +1,6 @@
 {
   "app": {
-    "schema_version": 3,
+    "schema_version": 4,
     "onboarding_completed": false,
     "theme": "system",
     "update_check_enabled": false
@@ -15,6 +15,9 @@
     "libreoffice": "",
     "winword": "",
     "powerpoint": ""
+  },
+  "tool_management": {
+    "install_directory": ""
   },
   "video": {
     "compression_crf": 23,

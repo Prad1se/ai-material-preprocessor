@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from PySide6.QtWidgets import QTableWidget
+from PySide6.QtWidgets import QPushButton, QTableWidget
 
 from ai_material_preprocessor.models import ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
@@ -32,6 +32,12 @@ def test_onboarding_has_mouse_welcome_privacy_and_tool_detection(qtbot) -> None:
     assert isinstance(dialog.tool_table, QTableWidget)
     assert dialog.tool_table.rowCount() == 8
     assert dialog.redetect_button.text() == "重新检测"
+    exiftool_action = dialog.tool_table.action_button("exiftool")
+    libreoffice_action = dialog.tool_table.action_button("libreoffice")
+    assert isinstance(exiftool_action, QPushButton)
+    assert exiftool_action.text() == "一键补充"
+    assert isinstance(libreoffice_action, QPushButton)
+    assert libreoffice_action.text() == "通过 WinGet 安装"
 
 
 def test_onboarding_finish_persists_completion(qtbot) -> None:
@@ -57,12 +63,14 @@ def test_settings_saves_theme_and_custom_tool_paths(qtbot) -> None:
     qtbot.addWidget(dialog)
     dialog.theme_combo.setCurrentIndex(dialog.theme_combo.findData("dark"))
     dialog.update_check_enabled.setChecked(True)
+    dialog.tool_install_directory.setText("D:/Codex-workspace/managed tools")
     dialog.tool_path_inputs["ffprobe"].setText("D:/工具/ffprobe.exe")
 
     dialog._save()
 
     assert saved[0]["app"]["theme"] == "dark"
     assert saved[0]["app"]["update_check_enabled"] is True
+    assert saved[0]["tool_management"]["install_directory"] == ("D:/Codex-workspace/managed tools")
     assert saved[0]["tools"]["ffprobe"] == "D:/工具/ffprobe.exe"
     assert dialog.tool_path_scroll.widgetResizable()
 

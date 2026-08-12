@@ -29,6 +29,7 @@ from ..services.config import save_config
 from ..services.tool_capabilities import TOOL_DESCRIPTORS, build_tool_capabilities
 from ..services.tool_versions import detect_tools_with_versions
 from .theme import ThemeMode, stylesheet_for_theme
+from .tool_installation import ToolInstallationCoordinator
 from .tool_status_table import ToolStatusTable
 
 ConfigSaver = Callable[[dict], object]
@@ -57,6 +58,14 @@ class SettingsDialog(QDialog):
         self.resize(900, 680)
         self.setMinimumSize(760, 580)
         self._build_ui()
+        self.tool_installation = ToolInstallationCoordinator(
+            self,
+            self.config,
+            save_callback=self.save_callback,
+            detector=self.detector,
+            changed_callback=self._tools_changed,
+        )
+        self.tool_table.install_requested.connect(self._request_tool_install)
         self._render_tools()
         self.setStyleSheet(stylesheet_for_theme(self.config["app"].get("theme", "system")))
 
@@ -111,6 +120,18 @@ class SettingsDialog(QDialog):
         tools_layout.addWidget(self.tool_table)
         paths_widget = QWidget()
         path_form = QFormLayout(paths_widget)
+        install_row = QHBoxLayout()
+        self.tool_install_directory = QLineEdit(
+            str(self.config.get("tool_management", {}).get("install_directory", ""))
+        )
+        self.tool_install_directory.setPlaceholderText(
+            "默认使用应用数据目录；可改为 D 盘等空间充足的位置"
+        )
+        install_browse = QPushButton("选择目录…")
+        install_browse.clicked.connect(self._browse_install_directory)
+        install_row.addWidget(self.tool_install_directory, 1)
+        install_row.addWidget(install_browse)
+        path_form.addRow("工具补充目录", install_row)
         for key, descriptor in TOOL_DESCRIPTORS.items():
             if not descriptor.custom_path_supported:
                 continue
@@ -153,6 +174,7 @@ class SettingsDialog(QDialog):
         result["output_folder_name"] = self.output_folder_name.text().strip() or "AI素材处理结果"
         result["history"]["retention_days"] = self.retention_days.value()
         result["history"]["max_size_mb"] = self.history_size_mb.value()
+        result["tool_management"]["install_directory"] = self.tool_install_directory.text().strip()
         for key, field in self.tool_path_inputs.items():
             result["tools"][key] = field.text().strip()
         return result
@@ -168,6 +190,15 @@ class SettingsDialog(QDialog):
         if selected:
             self.tool_path_inputs[key].setText(selected)
 
+    def _browse_install_directory(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "选择工具补充目录",
+            self.tool_install_directory.text().strip(),
+        )
+        if selected:
+            self.tool_install_directory.setText(selected)
+
     def _render_tools(self) -> None:
         self.tool_table.set_capabilities(build_tool_capabilities(self.tools))
 
@@ -175,6 +206,22 @@ class SettingsDialog(QDialog):
         candidate = self._config_from_fields()
         self.tools = self.detector(candidate)
         self._render_tools()
+
+    def _tools_changed(self, config: dict, tools: dict[str, ToolStatus]) -> None:
+        self.config = copy.deepcopy(config)
+        self.tools = dict(tools)
+        for key, field in self.tool_path_inputs.items():
+            field.setText(str(self.config["tools"].get(key, "")))
+        self.tool_install_directory.setText(
+            str(self.config["tool_management"].get("install_directory", ""))
+        )
+        self._render_tools()
+        self.settings_saved.emit(copy.deepcopy(self.config), dict(self.tools))
+
+    def _request_tool_install(self, key: str) -> None:
+        candidate = self._config_from_fields()
+        self.tool_installation.update_config(candidate)
+        self.tool_installation.request(key)
 
     def _save(self) -> None:
         candidate = self._config_from_fields()
@@ -184,6 +231,7 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "无法保存设置", f"请检查应用数据目录权限。\n\n{exc}")
             return
         self.config = candidate
+        self.tool_installation.update_config(candidate)
         self.tools = self.detector(candidate)
         self.settings_saved.emit(copy.deepcopy(candidate), dict(self.tools))
         self.accept()

@@ -20,6 +20,7 @@ from ..services.tool_capabilities import build_tool_capabilities
 from ..services.tool_versions import detect_tools_with_versions
 from .mascot import mouse_asset_path
 from .theme import stylesheet_for_theme
+from .tool_installation import ToolInstallationCoordinator
 from .tool_status_table import ToolStatusTable
 
 ConfigSaver = Callable[[dict], object]
@@ -47,6 +48,14 @@ class OnboardingDialog(QDialog):
         self.resize(860, 680)
         self.setMinimumSize(720, 580)
         self._build_ui()
+        self.tool_installation = ToolInstallationCoordinator(
+            self,
+            self.config,
+            save_callback=self.save_callback,
+            detector=self.detector,
+            changed_callback=self._tools_changed,
+        )
+        self.tool_table.install_requested.connect(self.tool_installation.request)
         self._render_tools()
         self.setStyleSheet(stylesheet_for_theme(self.config["app"].get("theme", "system")))
 
@@ -119,6 +128,11 @@ class OnboardingDialog(QDialog):
         self.tools = self.detector(copy.deepcopy(self.config))
         self._render_tools()
 
+    def _tools_changed(self, config: dict, tools: dict[str, ToolStatus]) -> None:
+        self.config = copy.deepcopy(config)
+        self.tools = dict(tools)
+        self._render_tools()
+
     def _finish(self) -> None:
         candidate = copy.deepcopy(self.config)
         candidate["app"]["onboarding_completed"] = True
@@ -128,5 +142,6 @@ class OnboardingDialog(QDialog):
             QMessageBox.critical(self, "无法保存首次设置", f"请检查应用数据目录权限。\n\n{exc}")
             return
         self.config = candidate
+        self.tool_installation.update_config(candidate)
         self.onboarding_completed.emit(copy.deepcopy(candidate), dict(self.tools))
         self.accept()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,8 @@ class CommandRequest:
     tool_name: str = "外部工具"
     cwd: Path | None = None
     timeout_seconds: float | None = 300.0
+    success_codes: tuple[int, ...] = (0,)
+    environment: Mapping[str, str] | None = None
 
     @property
     def command(self) -> tuple[str, ...]:
@@ -74,6 +77,9 @@ class ProcessRunner:
             )
         flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
         started = time.monotonic()
+        environment = None
+        if request.environment is not None:
+            environment = {**os.environ, **request.environment}
         try:
             process = subprocess.Popen(
                 list(request.command),
@@ -85,6 +91,7 @@ class ProcessRunner:
                 errors="replace",
                 creationflags=flags,
                 shell=False,
+                env=environment,
             )
         except OSError as exc:
             raise UserFacingError(
@@ -180,7 +187,7 @@ class ProcessRunner:
 
         elapsed = time.monotonic() - started
         result = CommandResult(request.command, process.returncode, stdout, stderr, elapsed)
-        if result.returncode:
+        if result.returncode not in request.success_codes:
             detail = (result.stderr or result.stdout or "no process output").strip()
             raise UserFacingError(
                 ErrorCode.EXTERNAL_TOOL_FAILED,
