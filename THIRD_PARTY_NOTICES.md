@@ -31,7 +31,11 @@ The bundled FFmpeg build reports `--enable-gpl`, `--enable-version3`, and GPL-co
 
 ## External applications
 
-Microsoft Office, LibreOffice, and ExifTool are not included by default. The application only detects and invokes installations already present on the user's computer. If a user adds ExifTool to a custom portable build, ExifTool remains under the Artistic License 1.0 or GPLv1+.
+Microsoft Office, LibreOffice, and ExifTool are not included by default. After explicit user
+confirmation, the application can ask WinGet to install LibreOffice or download the official
+ExifTool portable archive with a pinned SHA-256. Those tools remain governed by their own licenses;
+Microsoft Office is never downloaded by the application. If a user adds ExifTool to a custom
+portable build, ExifTool remains under the Artistic License 1.0 or GPLv1+.
 
 ## Upstream links
 

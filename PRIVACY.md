@@ -23,6 +23,12 @@ contents, names, paths, GPS coordinates, history, or configuration.
 External tools installed by the user remain subject to their own privacy policies. This release
 does not provide online geocoding or cloud OCR.
 
+The application only downloads an optional local tool after the user selects its supplement action
+and confirms the displayed source, version, license, and destination. ExifTool is downloaded from
+its official release location and checked against a pinned SHA-256. LibreOffice and FFmpeg repairs
+are delegated to Windows Package Manager. No source document, media path, GPS coordinate, or
+processing history is included in those requests.
+
 ## Local deletion
 
 History can be searched, deleted selectively, or cleared in the application. Deleting history is

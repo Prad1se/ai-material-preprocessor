@@ -152,3 +152,32 @@ def test_legacy_converter_boundary_accepts_timeout() -> None:
         )
 
     assert captured.value.code is ErrorCode.EXTERNAL_TOOL_TIMEOUT
+
+
+def test_process_runner_accepts_declared_reboot_required_success_code() -> None:
+    request = CommandRequest(
+        executable=sys.executable,
+        arguments=("-c", "import sys; sys.exit(194)"),
+        tool_name="安装器",
+        success_codes=(0, 194),
+    )
+
+    result = ProcessRunner().run(request)
+
+    assert result.returncode == 194
+
+
+def test_process_runner_merges_explicit_environment_without_shell() -> None:
+    request = CommandRequest(
+        executable=sys.executable,
+        arguments=(
+            "-c",
+            "import os; print(os.environ['TOOL_DOWNLOAD_ROOT'].encode('unicode_escape').decode())",
+        ),
+        tool_name="环境测试",
+        environment={"TOOL_DOWNLOAD_ROOT": "D:/带 空格/缓存"},
+    )
+
+    result = ProcessRunner().run(request)
+
+    assert result.stdout.strip() == "D:/\\u5e26 \\u7a7a\\u683c/\\u7f13\\u5b58"

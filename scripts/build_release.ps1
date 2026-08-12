@@ -12,8 +12,11 @@ $testTemp = Join-Path $workRoot ("pytest-release-" + [Guid]::NewGuid().ToString(
 New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
 $previousTemp = $env:TEMP
 $previousTmp = $env:TMP
+$previousPyInstallerConfig = $env:PYINSTALLER_CONFIG_DIR
 $env:TEMP = $testTemp
 $env:TMP = $testTemp
+$env:PYINSTALLER_CONFIG_DIR = Join-Path $workRoot "pyinstaller-cache"
+New-Item -ItemType Directory -Force -Path $env:PYINSTALLER_CONFIG_DIR | Out-Null
 
 Push-Location $ProjectRoot
 try {
@@ -65,6 +68,10 @@ finally {
     else { $env:TEMP = $previousTemp }
     if ($null -eq $previousTmp) { Remove-Item Env:TMP -ErrorAction SilentlyContinue }
     else { $env:TMP = $previousTmp }
+    if ($null -eq $previousPyInstallerConfig) {
+        Remove-Item Env:PYINSTALLER_CONFIG_DIR -ErrorAction SilentlyContinue
+    }
+    else { $env:PYINSTALLER_CONFIG_DIR = $previousPyInstallerConfig }
 
     $resolvedTestTemp = [IO.Path]::GetFullPath($testTemp)
     $workPrefix = $workRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar

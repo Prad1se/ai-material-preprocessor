@@ -4,6 +4,7 @@ import re
 from collections.abc import Callable
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
+from pathlib import Path
 
 from ..infrastructure.processes import CommandRequest, ProcessRunner
 from ..models import ToolStatus
@@ -60,9 +61,14 @@ def inspect_tool_versions(
             if status.path == "Python API" and name in PACKAGE_NAMES:
                 raw_version = package_lookup(PACKAGE_NAMES[name])
             elif name in VERSION_ARGUMENTS and status.path:
+                executable = status.path
+                if name == "libreoffice":
+                    console_executable = Path(status.path).with_suffix(".com")
+                    if console_executable.is_file():
+                        executable = str(console_executable)
                 result = active_runner.run(
                     CommandRequest(
-                        status.path,
+                        executable,
                         VERSION_ARGUMENTS[name],
                         tool_name=name,
                         timeout_seconds=5,

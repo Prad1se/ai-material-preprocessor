@@ -28,7 +28,7 @@ CONFIG_PATH = USER_CONFIG_PATH
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "app": {
-        "schema_version": 3,
+        "schema_version": 4,
         "onboarding_completed": False,
         "theme": "system",
         "update_check_enabled": False,
@@ -43,6 +43,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "libreoffice": "",
         "winword": "",
         "powerpoint": "",
+    },
+    "tool_management": {
+        "install_directory": "",
     },
     "video": {
         "compression_crf": 23,

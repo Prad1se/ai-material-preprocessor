@@ -44,6 +44,17 @@ def test_candidate_paths_include_project_tools(tmp_path: Path) -> None:
     assert tmp_path / "tools" / "ffmpeg" / "bin" / "ffprobe.exe" in paths
 
 
+def test_candidate_paths_include_managed_user_tool_versions(tmp_path: Path) -> None:
+    managed = tmp_path / "用户 工具"
+    executable = managed / "exiftool" / "13.59" / "exiftool.exe"
+    executable.parent.mkdir(parents=True)
+    executable.touch()
+
+    paths = candidate_paths("exiftool", tmp_path / "project", None, managed)
+
+    assert executable in paths
+
+
 def test_ffmpeg_uses_imageio_bundled_binary_as_final_fallback(tmp_path: Path) -> None:
     bundled = tmp_path / "ffmpeg.exe"
     bundled.touch()
