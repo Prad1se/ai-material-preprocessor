@@ -16,6 +16,8 @@ A local Windows desktop app that turns raw documents (PDF, Word, PowerPoint, Exc
 
 **Status**: public stable release **2.0.0rc1**. Newer capabilities (such as one-click supplementation of missing tools from Settings) are already merged into `main` and will ship in the next release.
 
+<!-- release-version: 2.0.0rc1 -->
+
 <!-- TODO: hero image at assets/gallery/hero.png — Before (messy raw files) → After (a clean AI-ready package) -->
 
 ## Why
