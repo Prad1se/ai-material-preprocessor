@@ -35,7 +35,7 @@ def test_self_test_writes_machine_readable_report(tmp_path: Path) -> None:
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
-    assert report["application_version"] == "2.0.0rc1"
+    assert report["application_version"] == "2.0.0"
     assert report["overall"] == "passed"
     assert report["checks"]["markitdown"]["passed"] is True
     assert Path(report["checks"]["markitdown"]["output"]).is_file()

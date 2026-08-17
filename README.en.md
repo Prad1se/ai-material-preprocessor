@@ -14,9 +14,9 @@ A local Windows desktop app that turns raw documents (PDF, Word, PowerPoint, Exc
 - Video → standardized, named, deduplicated creative assets with keyframe contact sheets
 - Local-first: processing happens on your machine, and source files are never overwritten
 
-**Status**: public stable release **2.0.0rc1**. Newer capabilities (such as one-click supplementation of missing tools from Settings) are already merged into `main` and will ship in the next release.
+**Status**: public stable release **2.0.0**.
 
-<!-- release-version: 2.0.0rc1 -->
+<!-- release-version: 2.0.0 -->
 
 <!-- TODO: hero image at assets/gallery/hero.png — Before (messy raw files) → After (a clean AI-ready package) -->
 
@@ -154,7 +154,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.
 # Build and verify a release
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_release.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package_release.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1 -Version 2.0.0rc1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1 -Version 2.0.0
 ```
 
 - User configuration lives at `%LOCALAPPDATA%\AI Material Preprocessor\config.json` with versioned, backward-compatible migration; see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).

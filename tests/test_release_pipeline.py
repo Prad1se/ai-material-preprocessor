@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def test_release_metadata_is_consistent_for_2_0_rc() -> None:
     result = validate_release_metadata(PROJECT_ROOT)
 
-    assert result.version == "2.0.0rc1"
+    assert result.version == "2.0.0"
     assert __version__ == result.version
     assert result.errors == ()
 
@@ -144,7 +144,7 @@ def test_release_documentation_and_github_templates_exist() -> None:
         "PRIVACY.md",
         "CONTRIBUTING.md",
         "docs/TROUBLESHOOTING.md",
-        "docs/releases/v2.0.0rc1.md",
+        "docs/releases/v2.0.0.md",
         ".github/ISSUE_TEMPLATE/bug_report.yml",
         ".github/ISSUE_TEMPLATE/feature_request.yml",
         ".github/pull_request_template.md",

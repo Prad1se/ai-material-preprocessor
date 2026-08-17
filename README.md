@@ -14,9 +14,9 @@
 - 视频 → 便于继续创作的标准素材库（压缩、命名、整理、去重、关键帧联系表）
 - 本地优先，文件不出本机，永不覆盖原始文件
 
-**当前状态**：公开稳定版本 **2.0.0rc1**。最新源码已合入新能力（如设置页可一键补充缺失工具），将在下一版本随安装包发布。
+**当前状态**：正式发布版本 **2.0.0**。
 
-<!-- release-version: 2.0.0rc1 -->
+<!-- release-version: 2.0.0 -->
 
 <!-- 待补充图片：assets/gallery/hero.png —— Hero 图：Before（混乱的原始文件）→ After（规整的 AI 资料包） -->
 
@@ -149,7 +149,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.
 # 构建与发布验证
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_release.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package_release.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1 -Version 2.0.0rc1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1 -Version 2.0.0
 ```
 
 - 用户配置位于 `%LOCALAPPDATA%\AI Material Preprocessor\config.json`，带版本兼容迁移，详见 [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)。
