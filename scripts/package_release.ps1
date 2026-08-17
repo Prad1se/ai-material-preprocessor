@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$Version = "2.0.0rc1",
+    [string]$Version = "2.0.0",
     [string]$PythonExecutable
 )
 

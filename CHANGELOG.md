@@ -2,13 +2,16 @@
 
 ## Unreleased
 
+## [2.0.0] - 2026-08-17
+
 - Add user-confirmed one-click supplementation for ExifTool and WinGet-backed LibreOffice/FFmpeg.
 - Verify the official ExifTool archive with a pinned SHA-256 and reject unsafe ZIP paths.
 - Add a configurable tool directory so downloads and managed executables can live on a spacious
   drive instead of the system drive.
 - Re-detect capabilities and save managed executable paths after a successful supplement action.
-- Remove the development-machine capability snapshot and unnecessary comparison statement from
-  public documentation.
+- Probe the LibreOffice version through the adjacent `soffice.com` so GUI executables do not block
+  version detection.
+- Add a bilingual English/Chinese README and product-oriented project presentation.
 
 ## [2.0.0rc1] - 2026-08-11
 

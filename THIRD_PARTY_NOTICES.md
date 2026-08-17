@@ -6,7 +6,7 @@ The release includes applicable license texts under `third_party_licenses/`. Pyt
 
 ## Runtime components
 
-| Component | Version used by v2.0.0rc1 | License | Purpose |
+| Component | Version used by v2.0.0 | License | Purpose |
 |---|---:|---|---|
 | Microsoft MarkItDown | 0.1.7 | MIT | Document-to-Markdown conversion |
 | PySide6 / Qt for Python | 6.11.1 | LGPLv3 / GPLv3 / commercial | Desktop user interface |

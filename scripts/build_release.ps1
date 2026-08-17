@@ -36,6 +36,7 @@ try {
     foreach ($document in @(
         "config.json",
         "README.md",
+        "README.en.md",
         "ROADMAP.md",
         "CHANGELOG.md",
         "LICENSE",
@@ -49,7 +50,7 @@ try {
     $docs = Join-Path $release "docs"
     New-Item -ItemType Directory -Force -Path $docs | Out-Null
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\TROUBLESHOOTING.md") -Destination $docs -Force
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\releases\v2.0.0rc1.md") -Destination $docs -Force
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\releases\v2.0.0.md") -Destination $docs -Force
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "third_party_licenses") -Destination $release -Recurse -Force
 
     $releaseTools = Join-Path $release "tools"
