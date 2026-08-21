@@ -151,3 +151,21 @@ def test_release_documentation_and_github_templates_exist() -> None:
     )
 
     assert all((PROJECT_ROOT / relative).is_file() for relative in required)
+
+
+def test_post_release_documentation_records_the_stable_2_0_release() -> None:
+    readme_en = (PROJECT_ROOT / "README.en.md").read_text(encoding="utf-8")
+    roadmap = (PROJECT_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+    progress = (PROJECT_ROOT / "docs" / "PROJECT_PROGRESS.md").read_text(encoding="utf-8")
+
+    assert readme_en.splitlines()[0] == "> [English](README.en.md) | [中文](README.md)"
+    assert "## 2.0.0 — 已发布" in roadmap
+    assert "2.0.0 RC — 进行中" not in roadmap
+    m6_row = next(line for line in progress.splitlines() if line.startswith("| M6 |"))
+    assert m6_row.endswith("| merged |")
+    assert "[#9](https://github.com/Prad1se/ai-material-preprocessor/pull/9)" in progress
+    assert "[#10](https://github.com/Prad1se/ai-material-preprocessor/pull/10)" in progress
+    assert (
+        "[v2.0.0](https://github.com/Prad1se/ai-material-preprocessor/releases/tag/v2.0.0)"
+        in progress
+    )
