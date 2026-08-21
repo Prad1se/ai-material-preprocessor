@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QStackedWidget,
     QTableWidget,
     QToolButton,
     QTreeWidget,
@@ -34,7 +35,9 @@ from ...apps.documents.workspace_controller import (
     DocumentWorkspaceController,
 )
 from ...models import Operation, ToolStatus
+from ...services.source_map import load_source_map
 from ..document_mascot import DocumentMascotState, DocumentMascotView
+from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
 
 _OPERATION_LABELS = {
@@ -133,9 +136,15 @@ class DocumentWorkspace(WorkspaceView):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(page)
+        self.source_map_view = SourceMapView()
+        self.source_map_view.back_requested.connect(self._close_source_map)
+        self._source_map_pack_dir: Path | None = None
+        self.content_stack = QStackedWidget()
+        self.content_stack.addWidget(scroll)
+        self.content_stack.addWidget(self.source_map_view)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(scroll)
+        layout.addWidget(self.content_stack)
         self._render_input_paths()
         self.set_presentation_state(WorkspacePresentationState.EMPTY)
 
@@ -457,11 +466,16 @@ class DocumentWorkspace(WorkspaceView):
         self.report_button.setObjectName("secondary")
         self.report_button.setVisible(False)
         self.report_button.clicked.connect(self._open_context_report)
+        self.source_map_button = QPushButton("View Source Map")
+        self.source_map_button.setObjectName("secondary")
+        self.source_map_button.setVisible(False)
+        self.source_map_button.clicked.connect(self._open_source_map)
         result_actions = QHBoxLayout()
         result_actions.addWidget(self.result_heading)
         result_actions.addStretch()
         result_actions.addWidget(self.technical_details_button)
         result_actions.addWidget(self.report_button)
+        result_actions.addWidget(self.source_map_button)
         result_actions.addWidget(self.open_button)
         layout.addLayout(header)
         layout.addWidget(self.state_message)
@@ -919,6 +933,8 @@ class DocumentWorkspace(WorkspaceView):
         )
         overflow = int(context_report.get("overflow_packs", 0)) if context_report else 0
         self.report_button.setVisible(bool(context_report and outputs))
+        self._source_map_pack_dir = Path(outputs[0]) if (context_report and outputs) else None
+        self.source_map_button.setVisible(self._source_map_pack_dir is not None)
         state = (
             WorkspacePresentationState.WARNING
             if outputs and (errors or overflow)
@@ -959,6 +975,21 @@ class DocumentWorkspace(WorkspaceView):
         report = Path(self.last_outputs[0]) / "context-report.json"
         if report.is_file():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(report)))
+
+    def _open_source_map(self) -> None:
+        if self._source_map_pack_dir is None:
+            return
+        try:
+            source_map = load_source_map(self._source_map_pack_dir)
+        except (OSError, ValueError) as exc:
+            self.source_map_view.set_source_map(None)
+            QMessageBox.critical(self, "Source Map unavailable", str(exc))
+            return
+        self.source_map_view.set_source_map(source_map)
+        self.content_stack.setCurrentWidget(self.source_map_view)
+
+    def _close_source_map(self) -> None:
+        self.content_stack.setCurrentIndex(0)
 
     def _show_technical_details(self) -> None:
         if self._technical_details:
