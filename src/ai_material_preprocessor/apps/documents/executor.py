@@ -14,6 +14,7 @@ class DocumentService(Protocol):
         job: Job,
         *,
         cancellation: CancellationToken | None = None,
+        on_progress=None,
     ) -> tuple[Path, list[dict]]: ...
 
 
@@ -29,6 +30,8 @@ class DocumentOperationExecutor:
         cancellation: CancellationToken | None = None,
         on_progress=None,
     ) -> TaskExecutionResult:
-        del index, on_progress
-        output, reports = self.service.convert(job, cancellation=cancellation)
+        del index
+        output, reports = self.service.convert(
+            job, cancellation=cancellation, on_progress=on_progress
+        )
         return TaskExecutionResult(output, tuple(reports))

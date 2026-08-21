@@ -76,7 +76,11 @@ def test_docx_only_shows_valid_available_operations(qtbot, tmp_path: Path) -> No
     workspace = window.document_workspace
     workspace.add_inputs([str(source)])
 
-    assert combo_operations(workspace) == [Operation.TO_MARKDOWN, Operation.TO_PDF]
+    assert combo_operations(workspace) == [
+        Operation.TO_MARKDOWN,
+        Operation.DOCUMENT_CONTEXT_PACK,
+        Operation.TO_PDF,
+    ]
     assert workspace.start_button.isEnabled()
     assert workspace.document_mode.isVisibleTo(workspace)
     assert workspace.split_document.isVisibleTo(workspace)
@@ -100,7 +104,11 @@ def test_mixed_incompatible_batch_disables_start(qtbot, tmp_path: Path) -> None:
     workspace = window.document_workspace
     workspace.add_inputs([str(document), str(video)])
 
-    assert combo_operations(workspace) == [Operation.TO_MARKDOWN, Operation.TO_PDF]
+    assert combo_operations(workspace) == [
+        Operation.TO_MARKDOWN,
+        Operation.DOCUMENT_CONTEXT_PACK,
+        Operation.TO_PDF,
+    ]
     assert workspace.start_button.isEnabled()
     assert workspace.paths == [document.resolve()]
     assert window.video_workspace.paths == []
@@ -446,3 +454,21 @@ def test_completed_onboarding_is_not_shown(qtbot) -> None:
     window.show_onboarding_if_needed()
 
     assert not hasattr(window, "onboarding_dialog")
+
+
+def test_open_output_opens_pack_directory_but_parent_for_files(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+    pack = tmp_path / "Context-Pack"
+    pack.mkdir()
+    file_output = tmp_path / "result.md"
+    file_output.touch()
+    opened = []
+    monkeypatch.setattr("ai_material_preprocessor.gui.os.startfile", opened.append)
+
+    window._open_output(str(pack))
+    window._open_output(str(file_output))
+
+    assert opened == [str(pack), str(tmp_path)]

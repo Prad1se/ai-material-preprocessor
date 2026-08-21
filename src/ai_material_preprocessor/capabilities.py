@@ -33,6 +33,9 @@ def available_operations(
     ):
         operations.append(Operation.TO_PDF)
 
+    if suffix in MARKDOWN_EXTENSIONS and _available(tools, "markitdown"):
+        operations.append(Operation.DOCUMENT_CONTEXT_PACK)
+
     if suffix in VIDEO_EXTENSIONS:
         if _available(tools, "ffmpeg"):
             operations.extend(

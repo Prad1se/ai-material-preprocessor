@@ -62,8 +62,37 @@ def test_task_manifest_records_success_failure_sizes_and_absolute_outputs(tmp_pa
     }
     assert payload["items"][0]["tool_versions"] == {"markitdown": "0.1.6"}
     assert payload["items"][0]["quality_summary"]["score"] == 90
+    assert payload["items"][0]["sources"] is None
     assert "cleaned_preview" not in payload["items"][0]["quality_summary"]
     assert payload["items"][1]["error"] == "bad pdf"
+
+
+def test_task_manifest_additively_records_multi_source_jobs_without_schema_bump(
+    tmp_path: Path,
+) -> None:
+    sources = tuple(tmp_path / name for name in ("one.pdf", "two.pptx", "three.docx"))
+    for source in sources:
+        source.write_bytes(b"source")
+
+    manifest = write_task_manifest(
+        tmp_path / "history",
+        [
+            TaskRecord(
+                sources[0],
+                Operation.TO_MARKDOWN,
+                "success",
+                sources=sources,
+                parameters={"context_budget": 64000},
+            )
+        ],
+        task_id="multi-source",
+    )
+
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 2
+    assert payload["items"][0]["source"] == str(sources[0].resolve())
+    assert payload["items"][0]["sources"] == [str(path.resolve()) for path in sources]
+    assert payload["items"][0]["parameters"] == {"context_budget": 64000}
 
 
 def test_default_history_root_uses_local_app_data(monkeypatch, tmp_path: Path) -> None:

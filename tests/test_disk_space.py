@@ -42,3 +42,20 @@ def test_disk_preflight_stops_before_processing_with_actionable_error(tmp_path: 
     assert raised.value.code is ErrorCode.FILE_SYSTEM
     assert "空间" in raised.value.user_message
     assert raised.value.retryable is True
+
+
+def test_context_pack_preflight_sums_all_input_sources(tmp_path: Path) -> None:
+    primary = _job(tmp_path, "primary.docx", Operation.DOCUMENT_CONTEXT_PACK, 1000)
+    secondary = tmp_path / "secondary.pdf"
+    secondary.write_bytes(b"x" * 2000)
+    job = Job(
+        primary.source,
+        Operation.DOCUMENT_CONTEXT_PACK,
+        primary.output_root,
+        sources=(secondary,),
+    )
+    preflight = DiskSpacePreflight(free_space=lambda _path: 10_000)
+
+    result = preflight.check([job], safety_margin_bytes=1000)
+
+    assert result.required_bytes == 4500

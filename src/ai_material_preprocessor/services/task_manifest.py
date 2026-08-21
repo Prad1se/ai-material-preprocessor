@@ -26,6 +26,7 @@ class TaskRecord:
     parameters: dict[str, object] = field(default_factory=dict)
     tool_versions: dict[str, str] = field(default_factory=dict)
     quality_summary: dict[str, object] = field(default_factory=dict)
+    sources: tuple[Path, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, TaskStatus):
@@ -119,6 +120,9 @@ def write_task_manifest(
         "items": [
             {
                 "source": str(record.source.resolve()),
+                "sources": [str(path.resolve()) for path in record.sources]
+                if record.sources
+                else None,
                 "source_size": _size(record.source),
                 "operation": record.operation.name,
                 "operation_label": record.operation.value,

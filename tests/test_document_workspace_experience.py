@@ -105,12 +105,83 @@ def test_missing_document_tool_is_explained_before_start(qtbot, tmp_path: Path) 
     source.touch()
     view.add_inputs([str(source)])
 
-    assert view.operation.count() == 1
+    assert view.operation.count() == 2
     assert view.operation.currentData() == Operation.TO_MARKDOWN.value
     assert not view.operation.model().item(0).isEnabled()
     assert not view.start_button.isEnabled()
     assert "MarkItDown" in view.tool_hint.text()
     assert view.setup_tool_button.isVisibleTo(view)
+
+
+def test_context_pack_budget_is_only_visible_for_context_pack_mode(qtbot, tmp_path: Path) -> None:
+    view = workspace(qtbot, markitdown=True, rapidocr=True)
+    sources = [tmp_path / "讲义一.txt", tmp_path / "lecture-two.txt"]
+    for source in sources:
+        source.write_text("notes", encoding="utf-8")
+    view.add_inputs([str(source) for source in sources])
+
+    assert not view.context_budget_panel.isVisibleTo(view)
+    index = view.operation.findData(Operation.DOCUMENT_CONTEXT_PACK.value)
+    view.operation.setCurrentIndex(index)
+
+    assert view.context_budget_panel.isVisibleTo(view)
+    assert view.context_budget.currentText() == "No limit"
+    assert not view.custom_budget.isVisibleTo(view)
+    assert "Available after preprocessing" in str(view._parameters()["Estimated context"])
+
+    view.context_budget.setCurrentIndex(view.context_budget.findData(64000))
+    assert view._context_budget_value() == 64000
+    view.context_budget.setCurrentIndex(view.context_budget.findData("custom"))
+    view.custom_budget.setValue(1000)
+    assert view.custom_budget.isVisibleTo(view)
+    assert view._context_budget_value() == 1000
+
+
+def test_context_pack_creates_one_multi_source_job_and_preserves_budget(
+    qtbot, tmp_path: Path
+) -> None:
+    view = workspace(qtbot, markitdown=True)
+    sources = [tmp_path / "one.txt", tmp_path / "two.txt"]
+    for source in sources:
+        source.write_text("notes", encoding="utf-8")
+    view.add_inputs([str(source) for source in sources])
+    view.operation.setCurrentIndex(view.operation.findData(Operation.DOCUMENT_CONTEXT_PACK.value))
+    view.context_budget.setCurrentIndex(view.context_budget.findData(32000))
+    emitted = []
+    view.jobs_requested.connect(lambda workspace_id, jobs: emitted.append((workspace_id, jobs)))
+
+    view._request_jobs()
+
+    assert len(emitted) == 1
+    jobs = emitted[0][1]
+    assert len(jobs) == 1
+    assert jobs[0].input_sources == tuple(sources)
+    assert jobs[0].context_budget == 32000
+    assert jobs[0].context_ocr_enabled is False
+    assert view.config["document"]["context_pack_default_budget"] == 32000
+
+
+def test_context_pack_completion_distinguishes_overflow_warning(qtbot, tmp_path: Path) -> None:
+    view = workspace(qtbot, markitdown=True)
+    output = tmp_path / "pack"
+    output.mkdir()
+    (output / "context-report.json").write_text("{}", encoding="utf-8")
+    report = {
+        "context_pack_version": 1,
+        "source_count": 3,
+        "pack_count": 2,
+        "estimated_tokens": 90000,
+        "requested_budget": 32000,
+        "overflow_packs": 1,
+    }
+
+    view.set_completed([str(output)], [], [report])
+
+    assert view.presentation_state is WorkspacePresentationState.WARNING
+    assert view.result_heading.text() == "Context Pack ready"
+    assert "3 sources" in view.result_details.text()
+    assert "over-budget" in view.state_message.text()
+    assert view.report_button.isVisibleTo(view)
 
 
 def test_document_summary_and_mascot_follow_real_presentation_state(qtbot, tmp_path: Path) -> None:

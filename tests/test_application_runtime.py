@@ -156,3 +156,63 @@ def test_application_runner_does_not_run_recovered_work_without_explicit_retry(
 
     assert [job.source.name for job in executor.calls] == ["new.docx"]
     assert [task.task_id for task in repository.load()] == ["recovered"]
+
+
+def test_application_runner_records_context_pack_sources_budget_and_integrity(
+    tmp_path: Path,
+) -> None:
+    sources = (tmp_path / "one.txt", tmp_path / "two.txt")
+    for source in sources:
+        source.write_text("notes", encoding="utf-8")
+    written = []
+
+    class ContextExecutor(FakeExecutor):
+        def execute_one(self, job, index, *, cancellation=None, on_progress=None):
+            self.calls.append(job)
+            return TaskExecutionResult(
+                job.output_root / "pack",
+                (
+                    {
+                        "context_pack_version": 1,
+                        "source_count": 2,
+                        "requested_budget": 32000,
+                        "soft_target": 30400,
+                        "estimated_tokens": 40000,
+                        "pack_count": 2,
+                        "overflow_packs": 0,
+                        "integrity": "complete",
+                        "warnings": [],
+                    },
+                ),
+            )
+
+    job = Job(
+        sources[0],
+        Operation.DOCUMENT_CONTEXT_PACK,
+        tmp_path / "out",
+        sources=sources,
+        context_budget=32000,
+        context_ocr_enabled=True,
+    )
+    runner = ApplicationTaskRunner(
+        [job],
+        {"markitdown": ToolStatus("markitdown", "Python API", version="1.0")},
+        {"task_center": {"disk_space_safety_mb": 0}},
+        executor=ContextExecutor(),
+        task_repository=PersistentTaskQueue(tmp_path / "state.json"),
+        history_root=tmp_path / "history",
+        history_writer=lambda root, records: written.extend(records),
+    )
+
+    result = runner.run()
+
+    assert result.errors == ()
+    assert written[0].sources == sources
+    assert written[0].parameters == {
+        "context_budget": 32000,
+        "budget_unit": "estimated_tokens",
+        "source_count": 2,
+        "ocr_enabled": True,
+    }
+    assert written[0].tool_versions == {"markitdown": "1.0"}
+    assert written[0].quality_summary["integrity"] == "complete"

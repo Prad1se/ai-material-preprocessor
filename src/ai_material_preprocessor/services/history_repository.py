@@ -70,7 +70,18 @@ class HistoryRepository:
             operations = frozenset(
                 Operation[str(item["operation"])] for item in items if item.get("operation")
             )
-            sources = tuple(Path(str(item["source"])) for item in items if item.get("source"))
+            sources = tuple(
+                dict.fromkeys(
+                    Path(str(source))
+                    for item in items
+                    for source in (
+                        item.get("sources")
+                        if isinstance(item.get("sources"), list) and item.get("sources")
+                        else [item.get("source")]
+                    )
+                    if source
+                )
+            )
             outputs = tuple(Path(str(item["output"])) for item in items if item.get("output"))
             cache_paths = tuple(
                 Path(str(cache)) for item in items for cache in item.get("cache_paths", []) if cache

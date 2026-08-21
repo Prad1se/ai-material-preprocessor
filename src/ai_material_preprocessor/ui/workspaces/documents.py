@@ -40,6 +40,7 @@ from .common import WorkspacePresentationState, WorkspaceView
 _OPERATION_LABELS = {
     Operation.TO_MARKDOWN: "AI-ready Markdown",
     Operation.TO_PDF: "Create a PDF copy",
+    Operation.DOCUMENT_CONTEXT_PACK: "AI Context Pack",
 }
 
 
@@ -285,10 +286,49 @@ class DocumentWorkspace(WorkspaceView):
         self.ocr_enabled = QCheckBox("Use local OCR for scanned pages and embedded images")
         self.ocr_enabled.setChecked(bool(self.config["document"]["ocr_enabled"]))
         self.ocr_enabled.stateChanged.connect(self._update_summary)
+        self.context_budget_panel = QFrame()
+        self.context_budget_panel.setObjectName("contextBudgetPanel")
+        budget_layout = QVBoxLayout(self.context_budget_panel)
+        budget_layout.setContentsMargins(0, 8, 0, 4)
+        budget_label = QLabel("Context Budget")
+        budget_label.setObjectName("fieldLabel")
+        budget_note = QLabel(
+            "Uses a model-independent estimated token count. Content is never intentionally "
+            "removed to meet the budget."
+        )
+        budget_note.setObjectName("sectionDescription")
+        budget_note.setWordWrap(True)
+        self.context_budget = QComboBox()
+        self.context_budget.addItem("No limit", None)
+        self.context_budget.addItem("32K", 32000)
+        self.context_budget.addItem("64K", 64000)
+        self.context_budget.addItem("128K", 128000)
+        self.context_budget.addItem("Custom", "custom")
+        self.context_budget.currentIndexChanged.connect(self._budget_changed)
+        self.custom_budget = QSpinBox()
+        self.custom_budget.setRange(1000, 10000000)
+        self.custom_budget.setSingleStep(1000)
+        self.custom_budget.setSuffix(" estimated tokens")
+        configured_budget = self.config["document"].get("context_pack_default_budget")
+        if isinstance(configured_budget, int) and not isinstance(configured_budget, bool):
+            preset_index = self.context_budget.findData(configured_budget)
+            if preset_index >= 0:
+                self.context_budget.setCurrentIndex(preset_index)
+            else:
+                self.context_budget.setCurrentIndex(self.context_budget.findData("custom"))
+                self.custom_budget.setValue(configured_budget)
+        else:
+            self.custom_budget.setValue(100000)
+        self.custom_budget.valueChanged.connect(self._update_summary)
+        budget_layout.addWidget(budget_label)
+        budget_layout.addWidget(self.context_budget)
+        budget_layout.addWidget(self.custom_budget)
+        budget_layout.addWidget(budget_note)
         basic.addWidget(basic_title)
         basic.addWidget(self.document_mode)
         basic.addWidget(self.split_document)
         basic.addWidget(self.ocr_enabled)
+        basic.addWidget(self.context_budget_panel)
 
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("Default: an AI素材处理结果 folder beside each source")
@@ -331,6 +371,7 @@ class DocumentWorkspace(WorkspaceView):
         advanced.addWidget(self.target_tokens)
         advanced.addWidget(technical_note)
         self.advanced_panel.setVisible(False)
+        self.custom_budget.setVisible(self.context_budget.currentData() == "custom")
         layout.addWidget(self.advanced_panel)
         return panel
 
@@ -348,10 +389,17 @@ class DocumentWorkspace(WorkspaceView):
         self.summary_mode.setObjectName("documentSummaryValue")
         self.summary_ocr = QLabel("OCR: —")
         self.summary_ocr.setObjectName("documentSummaryValue")
+        self.summary_budget = QLabel()
+        self.summary_budget.setObjectName("documentSummaryValue")
         self.summary_output = QLabel("Output: —")
         self.summary_output.setObjectName("documentSummaryValue")
         self.summary_output.setWordWrap(True)
-        for widget in (self.summary_count, self.summary_mode, self.summary_ocr):
+        for widget in (
+            self.summary_count,
+            self.summary_mode,
+            self.summary_ocr,
+            self.summary_budget,
+        ):
             details.addWidget(widget)
         details.addStretch()
         actions = QHBoxLayout()
@@ -405,10 +453,15 @@ class DocumentWorkspace(WorkspaceView):
                 self.open_output_requested.emit(self.last_outputs[0]) if self.last_outputs else None
             )
         )
+        self.report_button = QPushButton("View Context Report")
+        self.report_button.setObjectName("secondary")
+        self.report_button.setVisible(False)
+        self.report_button.clicked.connect(self._open_context_report)
         result_actions = QHBoxLayout()
         result_actions.addWidget(self.result_heading)
         result_actions.addStretch()
         result_actions.addWidget(self.technical_details_button)
+        result_actions.addWidget(self.report_button)
         result_actions.addWidget(self.open_button)
         layout.addLayout(header)
         layout.addWidget(self.state_message)
@@ -570,6 +623,7 @@ class DocumentWorkspace(WorkspaceView):
         raw = self.operation.currentData()
         operation = Operation(raw) if raw is not None else None
         markdown = operation is Operation.TO_MARKDOWN
+        context_pack = operation is Operation.DOCUMENT_CONTEXT_PACK
         enhanced = markdown and self.document_mode.currentData() == "enhanced"
         if markdown and self.operation.currentIndex() >= 0:
             self.operation.setItemText(
@@ -577,7 +631,8 @@ class DocumentWorkspace(WorkspaceView):
             )
         self.document_mode.setVisible(markdown)
         self.split_document.setVisible(enhanced)
-        self.ocr_enabled.setVisible(enhanced)
+        self.ocr_enabled.setVisible(enhanced or context_pack)
+        self.context_budget_panel.setVisible(context_pack)
         self.advanced_toggle.setVisible(enhanced)
         if not enhanced:
             self.advanced_toggle.setChecked(False)
@@ -597,8 +652,15 @@ class DocumentWorkspace(WorkspaceView):
                 "Clean structure, run the existing quality checks, and optionally split long "
                 "content while preserving source information."
             )
+            self.output_hint.setText("Output: existing AI 资料包 format.")
+        elif context_pack:
+            self.operation_description.setText(
+                "Combine one or more documents into traceable upload packs with a deterministic "
+                "Context Budget and an integrity report."
+            )
             self.output_hint.setText(
-                "Output: existing AI 资料包 format. This phase does not add Context Pack."
+                "Output: START_HERE, complete content archive, numbered packs, source packages, "
+                "manifest and Context Report."
             )
         elif markdown:
             self.operation_description.setText(
@@ -621,6 +683,14 @@ class DocumentWorkspace(WorkspaceView):
         self.start_button.setToolTip(reason)
         self.preview_button.setToolTip(reason)
         self._update_summary()
+
+    def _budget_changed(self) -> None:
+        self.custom_budget.setVisible(self.context_budget.currentData() == "custom")
+        self._update_summary()
+
+    def _context_budget_value(self) -> int | None:
+        value = self.context_budget.currentData()
+        return self.custom_budget.value() if value == "custom" else value
 
     def _advanced_toggled(self, checked: bool) -> None:
         self.advanced_panel.setVisible(checked)
@@ -650,6 +720,20 @@ class DocumentWorkspace(WorkspaceView):
         )
         ocr = enhanced and self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
         self.summary_ocr.setText("OCR: On" if ocr else "OCR: Off")
+        context_pack = raw == Operation.DOCUMENT_CONTEXT_PACK.value
+        self.summary_budget.setVisible(context_pack)
+        if context_pack:
+            budget = self._context_budget_value()
+            self.summary_ocr.setText(
+                "OCR: On"
+                if self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                else "OCR: Off"
+            )
+            self.summary_budget.setText(
+                f"Context Budget: {budget:,} estimated tokens"
+                if budget
+                else "Context Budget: No limit"
+            )
         if self.output_path.text().strip():
             output = self.output_path.text().strip()
         elif self.paths:
@@ -659,6 +743,17 @@ class DocumentWorkspace(WorkspaceView):
         self.summary_output.setText(f"Output: {output}")
 
     def _parameters(self) -> dict[str, object]:
+        if self.operation.currentData() == Operation.DOCUMENT_CONTEXT_PACK.value:
+            budget = self._context_budget_value()
+            return {
+                "Sources": len(self.paths),
+                "Context Budget": f"{budget:,} estimated tokens" if budget else "No limit",
+                "Estimated context": "Available after preprocessing",
+                "OCR": "开启"
+                if self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                else "关闭",
+                "Integrity": "No content will be intentionally removed",
+            }
         enhanced = self.document_mode.currentData() == "enhanced"
         return {
             "模式": "AI 增强" if enhanced else "原始转换",
@@ -700,7 +795,24 @@ class DocumentWorkspace(WorkspaceView):
         self.config["document"]["ocr_enabled"] = (
             self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
         )
-        jobs = self.controller.create_jobs(self.paths, option.operation, self.output_for)
+        context_budget = (
+            self._context_budget_value()
+            if option.operation is Operation.DOCUMENT_CONTEXT_PACK
+            else None
+        )
+        if option.operation is Operation.DOCUMENT_CONTEXT_PACK:
+            self.config["document"]["context_pack_default_budget"] = context_budget
+        jobs = self.controller.create_jobs(
+            self.paths,
+            option.operation,
+            self.output_for,
+            context_budget=context_budget,
+            context_ocr_enabled=(
+                self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                if option.operation is Operation.DOCUMENT_CONTEXT_PACK
+                else None
+            ),
+        )
         self.jobs_requested.emit(self.workspace_id.value, jobs)
 
     def set_presentation_state(
@@ -785,30 +897,68 @@ class DocumentWorkspace(WorkspaceView):
         self.set_presentation_state(WorkspacePresentationState.PROCESSING, message)
         self.state_heading.setText(f"Preparing documents · {value}%")
 
-    def set_completed(self, outputs: list[str], errors: list[str]) -> None:
+    def set_completed(
+        self,
+        outputs: list[str],
+        errors: list[str],
+        quality_reports: list[dict] | None = None,
+    ) -> None:
         self.last_outputs = outputs
         self.open_button.setEnabled(bool(outputs))
         self.workspace_progress.setValue(
             100 if outputs and not errors else self.workspace_progress.value()
         )
         self._technical_details = "\n".join(errors)
+        context_report = next(
+            (
+                report
+                for report in (quality_reports or [])
+                if report.get("context_pack_version") == 1
+            ),
+            None,
+        )
+        overflow = int(context_report.get("overflow_packs", 0)) if context_report else 0
+        self.report_button.setVisible(bool(context_report and outputs))
         state = (
             WorkspacePresentationState.WARNING
-            if outputs and errors
+            if outputs and (errors or overflow)
             else WorkspacePresentationState.SUCCESS
             if outputs
             else WorkspacePresentationState.ERROR
         )
-        self.result_heading.setText(
-            f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
-        )
-        self.result_details.setText("\n".join(outputs[:4]) + ("\n…" if len(outputs) > 4 else ""))
+        if context_report:
+            budget = context_report.get("requested_budget")
+            pack_count = int(context_report.get("pack_count", 0))
+            budget_label = f"{int(budget):,} estimated tokens" if budget else "No limit"
+            self.result_heading.setText("Context Pack ready")
+            self.result_details.setText(
+                f"{context_report.get('source_count', 0)} sources · "
+                f"{pack_count} pack{'s' if pack_count != 1 else ''} · "
+                f"~{int(context_report.get('estimated_tokens', 0)):,} estimated tokens\n"
+                f"Context Budget: {budget_label}"
+            )
+        else:
+            self.result_heading.setText(
+                f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
+            )
+            self.result_details.setText(
+                "\n".join(outputs[:4]) + ("\n…" if len(outputs) > 4 else "")
+            )
         self.set_presentation_state(
             state,
-            f"{len(outputs)} completed; {len(errors)} need attention."
+            f"Context Pack created with {overflow} over-budget pack. No content was removed."
+            if overflow
+            else f"{len(outputs)} completed; {len(errors)} need attention."
             if errors
             else f"{len(outputs)} completed. The original files were not changed.",
         )
+
+    def _open_context_report(self) -> None:
+        if not self.last_outputs:
+            return
+        report = Path(self.last_outputs[0]) / "context-report.json"
+        if report.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(report)))
 
     def _show_technical_details(self) -> None:
         if self._technical_details:

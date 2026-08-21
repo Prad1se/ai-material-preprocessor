@@ -101,6 +101,31 @@ def test_history_details_expose_quality_summary_without_document_content(tmp_pat
     assert "cleaned_preview" not in str(details)
 
 
+def test_history_search_indexes_secondary_sources_from_additive_multi_source_metadata(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / "History"
+    sources = tuple(tmp_path / name for name in ("primary.pdf", "第二讲.pptx", "notes.docx"))
+    for source in sources:
+        source.write_bytes(b"source")
+    write_task_manifest(
+        history,
+        [
+            TaskRecord(
+                sources[0],
+                Operation.TO_MARKDOWN,
+                TaskStatus.SUCCESS,
+                sources=sources,
+            )
+        ],
+        task_id="context-multi",
+    )
+    repository = HistoryRepository(history)
+
+    assert repository.all()[0].sources == sources
+    assert [entry.task_id for entry in repository.search(query="第二讲")] == ["context-multi"]
+
+
 def test_deleting_selected_history_never_deletes_sources_outputs_or_other_records(
     tmp_path: Path,
 ) -> None:

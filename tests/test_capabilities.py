@@ -27,12 +27,20 @@ def tools(**available: bool) -> dict[str, ToolStatus]:
 
 def test_docx_exposes_ai_and_pdf_when_engines_exist() -> None:
     result = available_operations("lesson.docx", tools(markitdown=True, winword=True))
-    assert result == [Operation.TO_MARKDOWN, Operation.TO_PDF]
+    assert result == [
+        Operation.TO_MARKDOWN,
+        Operation.TO_PDF,
+        Operation.DOCUMENT_CONTEXT_PACK,
+    ]
 
 
 def test_pdf_only_exposes_markdown() -> None:
     result = available_operations("paper.pdf", tools(markitdown=True))
-    assert result == [Operation.TO_MARKDOWN]
+    assert result == [Operation.TO_MARKDOWN, Operation.DOCUMENT_CONTEXT_PACK]
+
+
+def test_context_pack_requires_markitdown() -> None:
+    assert available_operations("paper.pdf", tools()) == []
 
 
 def test_video_conversion_requires_ffmpeg_but_rename_remains_available() -> None:
@@ -63,7 +71,11 @@ def test_available_operations_can_be_filtered_by_workspace_policy() -> None:
         "lesson.docx",
         detected,
         allowed_operations=DOCUMENT_OPERATIONS,
-    ) == [Operation.TO_MARKDOWN, Operation.TO_PDF]
+    ) == [
+        Operation.TO_MARKDOWN,
+        Operation.TO_PDF,
+        Operation.DOCUMENT_CONTEXT_PACK,
+    ]
     assert available_operations(
         "clip.mp4",
         detected,

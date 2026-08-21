@@ -224,6 +224,22 @@ class HistoryDialog(QDialog):
                 tokens += int(estimated_tokens)
             if isinstance(chunk_count, int | float):
                 chunks += int(chunk_count)
+            if summary.get("context_pack_version") == 1:
+                source_count = summary.get("source_count")
+                pack_count = summary.get("pack_count")
+                budget = summary.get("requested_budget")
+                overflow = summary.get("overflow_packs")
+                context_parts = []
+                if isinstance(source_count, int):
+                    context_parts.append(f"{source_count} sources")
+                if isinstance(pack_count, int):
+                    context_parts.append(f"{pack_count} packs")
+                context_parts.append(
+                    f"Budget {budget:,}" if isinstance(budget, int) else "No limit"
+                )
+                if isinstance(overflow, int) and overflow:
+                    context_parts.append(f"{overflow} over budget")
+                return " · ".join(context_parts)
         parts = []
         if scores:
             parts.append(f"{round(sum(scores) / len(scores))}/100")
