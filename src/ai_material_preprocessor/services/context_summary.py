@@ -1,7 +1,7 @@
 """Context Pack summary derived from the pack's context-report.json.
 
 The report file is the source of truth. This module never rescans packs,
-markdown, or source directories and never embeds UI display strings.
+markdown, or source directories.
 """
 
 from __future__ import annotations
@@ -29,16 +29,35 @@ class ContextPackSummary:
     integrity_ok: bool
     overflow_count: int
     warnings: tuple[dict[str, object], ...]
+    report_available: bool = True
+
+    @property
+    def overflow(self) -> bool:
+        return self.overflow_count > 0
+
+    @property
+    def budget_label(self) -> str:
+        if self.budget_status is BudgetStatus.NO_LIMIT or self.requested_budget is None:
+            return "No limit"
+        if self.requested_budget % 1000 == 0:
+            return f"{self.requested_budget // 1000}K context window"
+        return f"{self.requested_budget:,} estimated tokens"
 
 
 def _coerce_int(value: object) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value
+        return value if value >= 0 else None
     if isinstance(value, str) and value.strip().lstrip("-").isdigit():
-        return int(value)
+        parsed = int(value)
+        return parsed if parsed >= 0 else None
     return None
+
+
+def _coerce_budget(value: object) -> int | None:
+    parsed = _coerce_int(value)
+    return parsed if parsed is not None and parsed > 0 else None
 
 
 def _budget_status(requested_budget: int | None, overflow_count: int) -> BudgetStatus:
@@ -58,6 +77,7 @@ def _empty_summary() -> ContextPackSummary:
         integrity_ok=False,
         overflow_count=0,
         warnings=(),
+        report_available=False,
     )
 
 
@@ -74,8 +94,8 @@ def summarize_context_pack(pack_dir: Path) -> ContextPackSummary:
 
     raw_budget = payload.get("budget")
     budget: dict[str, object] = raw_budget if isinstance(raw_budget, dict) else {}
-    requested_budget = _coerce_int(budget.get("requested_tokens"))
-    soft_target = _coerce_int(budget.get("soft_target_tokens"))
+    requested_budget = _coerce_budget(budget.get("requested_tokens"))
+    soft_target = _coerce_budget(budget.get("soft_target_tokens"))
 
     integrity = payload.get("integrity")
     integrity_ok = isinstance(integrity, dict) and str(integrity.get("status")) == "complete"

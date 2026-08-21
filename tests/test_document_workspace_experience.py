@@ -360,6 +360,45 @@ def test_context_pack_result_panel_renders_no_limit_summary(qtbot, tmp_path: Pat
     assert view.source_map_button.isVisibleTo(view)
 
 
+def test_context_pack_report_warning_uses_warning_presentation(qtbot, tmp_path: Path) -> None:
+    view = workspace(qtbot, markitdown=True)
+    output = tmp_path / "pack"
+    output.mkdir()
+    (output / "context-report.json").write_text(
+        json.dumps(
+            {
+                "context_pack_version": 1,
+                "source_count": 1,
+                "pack_count": 1,
+                "total_estimated_tokens": 751,
+                "budget": {"requested_tokens": None, "soft_target_tokens": None},
+                "packs": [{"index": 1, "status": "within_budget"}],
+                "warnings": [{"code": "source_warning", "reason": "Review this source."}],
+                "integrity": {"status": "complete"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    view.set_completed([str(output)], [], [{"context_pack_version": 1}])
+
+    assert view.presentation_state is WorkspacePresentationState.WARNING
+    assert view.mascot_view.state is DocumentMascotState.WARNING
+    assert "Review this source." in view.result_details.text()
+
+
+def test_context_pack_missing_report_is_not_presented_as_ready(qtbot, tmp_path: Path) -> None:
+    view = workspace(qtbot, markitdown=True)
+    output = tmp_path / "pack-without-report"
+    output.mkdir()
+
+    view.set_completed([str(output)], [], [{"context_pack_version": 1}])
+
+    assert view.presentation_state is WorkspacePresentationState.WARNING
+    assert view.result_heading.text() == "Context Pack needs attention"
+    assert "context-report.json" in view.result_details.text()
+
+
 def test_document_summary_and_mascot_follow_real_presentation_state(qtbot, tmp_path: Path) -> None:
     view = workspace(qtbot, markitdown=True)
     source = tmp_path / "lesson.txt"

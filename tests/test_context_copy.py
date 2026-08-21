@@ -194,3 +194,61 @@ def test_copy_rejects_missing_or_wrong_manifest(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="Context Pack"):
         build_context_copy(wrong)
+
+
+def test_copy_sanitizes_legacy_absolute_source_display_names(tmp_path: Path) -> None:
+    pack = tmp_path / "legacy-private-path"
+    packs_dir = pack / "packs"
+    packs_dir.mkdir(parents=True)
+    (packs_dir / "001-context.md").write_text("Safe content.", encoding="utf-8")
+    private_path = r"C:\Users\Private\Documents\lesson.pdf"
+    (pack / "manifest.json").write_text(
+        json.dumps(
+            {
+                "package_type": "ai_context_pack",
+                "sources": [
+                    {
+                        "source_id": "source-001",
+                        "display_name": private_path,
+                        "format": ".pdf",
+                    }
+                ],
+                "packs": [{"index": 1, "file": "packs/001-context.md"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    text = build_context_copy(pack)
+
+    assert "lesson.pdf" in text
+    assert private_path not in text
+    assert r"C:\Users\Private" not in text
+
+
+@pytest.mark.parametrize(
+    "packs",
+    [
+        [{"index": "not-a-number", "file": "packs/001-context.md"}],
+        [
+            {"index": 1, "file": "packs/001-context.md"},
+            {"index": 1, "file": "packs/001-context.md"},
+        ],
+        [{"index": 1, "file": "content.txt"}],
+    ],
+)
+def test_copy_rejects_malformed_or_ambiguous_pack_entries(
+    tmp_path: Path, packs: list[dict[str, object]]
+) -> None:
+    pack = tmp_path / "malformed"
+    packs_dir = pack / "packs"
+    packs_dir.mkdir(parents=True)
+    (packs_dir / "001-context.md").write_text("Safe content.", encoding="utf-8")
+    (pack / "content.txt").write_text("Wrong upload unit.", encoding="utf-8")
+    (pack / "manifest.json").write_text(
+        json.dumps({"package_type": "ai_context_pack", "sources": [], "packs": packs}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="pack entry|duplicate|Markdown"):
+        build_context_copy(pack)

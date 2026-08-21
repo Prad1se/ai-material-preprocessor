@@ -37,7 +37,7 @@ from ...apps.documents.workspace_controller import (
 )
 from ...models import Operation, ToolStatus
 from ...services.context_copy import build_context_copy
-from ...services.context_summary import BudgetStatus, ContextPackSummary, summarize_context_pack
+from ...services.context_summary import ContextPackSummary, summarize_context_pack
 from ..document_mascot import DocumentMascotState, DocumentMascotView
 from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
@@ -955,16 +955,24 @@ class DocumentWorkspace(WorkspaceView):
             except (OSError, ValueError):
                 summary = None
         overflow = summary.overflow_count if summary is not None else 0
+        report_unavailable = summary is not None and not summary.report_available
+        report_warnings = bool(summary and summary.warnings)
         state = (
             WorkspacePresentationState.WARNING
-            if outputs and (errors or overflow)
+            if outputs and (errors or overflow or report_warnings or report_unavailable)
             else WorkspacePresentationState.SUCCESS
             if outputs
             else WorkspacePresentationState.ERROR
         )
-        if summary is not None:
+        if summary is not None and summary.report_available:
             self.result_heading.setText("AI Context Pack Ready")
             self.result_details.setText(self._format_summary(summary))
+        elif summary is not None:
+            self.result_heading.setText("Context Pack needs attention")
+            self.result_details.setText(
+                "The output was created, but context-report.json is missing or invalid.\n"
+                "Open the pack to inspect the available files."
+            )
         else:
             self.result_heading.setText(
                 f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
@@ -974,8 +982,12 @@ class DocumentWorkspace(WorkspaceView):
             )
         self.set_presentation_state(
             state,
-            f"Context Pack created with {overflow} over-budget pack. No content was removed."
+            "Context Pack output created, but context-report.json could not be verified."
+            if report_unavailable
+            else f"Context Pack created with {overflow} over-budget pack. No content was removed."
             if overflow
+            else f"Context Pack created with {len(summary.warnings)} warning(s). Review the results."
+            if summary is not None and summary.warnings
             else f"{len(outputs)} completed; {len(errors)} need attention."
             if errors
             else f"{len(outputs)} completed. The original files were not changed.",
@@ -1006,12 +1018,7 @@ class DocumentWorkspace(WorkspaceView):
 
     @staticmethod
     def _summary_budget_label(summary: ContextPackSummary) -> str:
-        if summary.budget_status is BudgetStatus.NO_LIMIT or summary.requested_budget is None:
-            return "No limit"
-        budget = summary.requested_budget
-        if budget > 0 and budget % 1000 == 0:
-            return f"{budget // 1000}K context window"
-        return f"{budget:,} estimated tokens"
+        return summary.budget_label
 
     def _open_context_report(self) -> None:
         if not self.last_outputs:

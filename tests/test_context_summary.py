@@ -52,9 +52,12 @@ def test_summary_parses_complete_report(tmp_path: Path) -> None:
     assert summary.estimated_tokens == 90000
     assert summary.requested_budget == 32000
     assert summary.soft_target == 30400
+    assert summary.budget_label == "32K context window"
     assert summary.budget_status is BudgetStatus.OVER_BUDGET
     assert summary.overflow_count == 1
+    assert summary.overflow is True
     assert summary.integrity_ok is True
+    assert summary.report_available is True
     assert len(summary.warnings) == 1
     assert summary.warnings[0]["code"] == "context_pack_over_budget"
 
@@ -68,6 +71,7 @@ def test_summary_missing_report_falls_back_to_empty(tmp_path: Path) -> None:
     assert summary.requested_budget is None
     assert summary.integrity_ok is False
     assert summary.warnings == ()
+    assert summary.report_available is False
 
 
 def test_summary_malformed_report_falls_back_to_empty(tmp_path: Path) -> None:
@@ -171,3 +175,24 @@ def test_summary_falsy_counts_default_to_zero(tmp_path: Path) -> None:
 
     assert summary.source_count == 0
     assert summary.pack_count == 0
+
+
+def test_summary_rejects_negative_statistics_and_budget_values(tmp_path: Path) -> None:
+    _write_report(
+        tmp_path / "pack",
+        {
+            "source_count": -3,
+            "pack_count": "-2",
+            "total_estimated_tokens": -100,
+            "budget": {"requested_tokens": -64000, "soft_target_tokens": -60000},
+        },
+    )
+
+    summary = summarize_context_pack(tmp_path / "pack")
+
+    assert summary.source_count == 0
+    assert summary.pack_count == 0
+    assert summary.estimated_tokens == 0
+    assert summary.requested_budget is None
+    assert summary.soft_target is None
+    assert summary.budget_label == "No limit"
