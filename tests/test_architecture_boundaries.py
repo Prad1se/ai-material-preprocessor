@@ -1,3 +1,6 @@
+import ast
+from pathlib import Path
+
 from ai_material_preprocessor.services.markdown_cleaning import clean_markdown
 from ai_material_preprocessor.services.markdown_quality import check_quality
 from ai_material_preprocessor.services.markdown_splitting import split_markdown
@@ -55,3 +58,44 @@ def test_light_and_dark_themes_keep_lists_and_combo_items_explicitly_readable() 
         assert "QPushButton:disabled" in stylesheet
     assert "background: #ffffff" in light
     assert "background: #202124" in dark
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = PROJECT_ROOT / "src" / "ai_material_preprocessor"
+
+
+def _imports(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    result: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            result.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            result.add(node.module)
+    return result
+
+
+def test_non_ui_application_and_core_modules_do_not_depend_on_qt_or_ui() -> None:
+    roots = (
+        PACKAGE_ROOT / "application",
+        PACKAGE_ROOT / "apps",
+        PACKAGE_ROOT / "converters",
+        PACKAGE_ROOT / "infrastructure",
+        PACKAGE_ROOT / "services",
+    )
+    for path in (path for root in roots for path in root.rglob("*.py")):
+        imports = _imports(path)
+        assert not any(name.startswith("PySide6") for name in imports)
+        assert not any(name == "ui" or name.startswith("ui.") for name in imports)
+
+
+def test_document_and_video_application_modules_are_independent() -> None:
+    document_imports = set().union(
+        *(_imports(path) for path in (PACKAGE_ROOT / "apps" / "documents").glob("*.py"))
+    )
+    video_imports = set().union(
+        *(_imports(path) for path in (PACKAGE_ROOT / "apps" / "video").glob("*.py"))
+    )
+
+    assert not any("apps.video" in name for name in document_imports)
+    assert not any("apps.documents" in name for name in video_imports)

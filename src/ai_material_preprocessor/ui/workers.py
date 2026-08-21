@@ -1,71 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
 
 from PySide6.QtCore import QThread, Signal
 
+from ..application.task_runner import (
+    ApplicationTaskRunner,
+    Executor,
+    HistoryWriter,
+    Preflight,
+)
 from ..errors import explain_error
-from ..models import Job, QueuedTask, TaskStatus, ToolStatus
-from ..services.config import coerce_int
-from ..services.disk_space import DiskSpacePreflight
-from ..services.history_repository import HistoryRepository
-from ..services.job_executor import JobExecutor, TaskExecutionResult
-from ..services.task_center import TaskCenter
-from ..services.task_manifest import TaskRecord, resolve_history_root, write_task_manifest
-from ..services.task_repository import PersistentTaskQueue, resolve_task_queue_path
-
-
-class Executor(Protocol):
-    def execute_one(
-        self,
-        job: Job,
-        index: int,
-        *,
-        cancellation=None,
-        on_progress=None,
-    ) -> TaskExecutionResult: ...
-
-
-class Preflight(Protocol):
-    def check(self, jobs: list[Job], *, safety_margin_bytes: int): ...
-
-
-HistoryWriter = Callable[[Path, list[TaskRecord]], object]
-
-
-def _quality_summary(reports: tuple[dict, ...]) -> dict[str, object]:
-    if not reports:
-        return {}
-    report = reports[0]
-    summary: dict[str, object] = {
-        key: report[key]
-        for key in ("score", "estimated_tokens", "heading_count", "image_count")
-        if key in report
-    }
-    summary["chunk_count"] = len(report.get("chunks") or [])
-    summary["ocr_pages"] = [
-        {
-            "label": item.get("label"),
-            "confidence": item.get("confidence"),
-            "low_confidence": bool(item.get("low_confidence")),
-        }
-        for item in report.get("ocr_pages") or []
-    ]
-    summary["issues"] = [
-        {
-            "code": item.get("code"),
-            "level": item.get("level") or item.get("severity"),
-            "message": item.get("message"),
-        }
-        for item in (report.get("risks") or report.get("issues") or [])
-    ]
-    return summary
+from ..models import Job, QueuedTask, ToolStatus
+from ..services.task_manifest import write_task_manifest
+from ..services.task_repository import PersistentTaskQueue
 
 
 class Worker(QThread):
-    """Run the persistent task center and translate updates into Qt signals."""
+    """Adapt the Qt-independent application runner to Qt thread signals."""
 
     progress = Signal(int, str)
     task_changed = Signal(str, str, int, str)
@@ -85,34 +37,33 @@ class Worker(QThread):
         history_writer: HistoryWriter = write_task_manifest,
     ) -> None:
         super().__init__()
-        self.config = config
-        self.tools = tools
-        self.executor = executor or JobExecutor(tools=tools, config=config)
-        self.task_repository = task_repository or PersistentTaskQueue(
-            resolve_task_queue_path(config)
-        )
-        self.disk_preflight = disk_preflight or DiskSpacePreflight()
-        self.history_root = history_root or resolve_history_root(config)
-        self.history_writer = history_writer
-        self.batch_ids: set[str] = set()
-        self.center = TaskCenter(
-            self.task_repository,
-            self.executor,
+        self.runner = ApplicationTaskRunner(
+            jobs,
+            tools,
+            config,
+            executor=executor,
+            task_repository=task_repository,
+            disk_preflight=disk_preflight,
+            history_root=history_root,
+            history_writer=history_writer,
             on_task_changed=self._on_task_changed,
-            on_overall_progress=self._on_overall_progress,
+            on_progress=self.progress.emit,
         )
-        recovered_tasks = {
-            task.task_id
-            for task in self.center.tasks
-            if task.status in {TaskStatus.WAITING, TaskStatus.INTERRUPTED}
-        }
-        additions = self.center.enqueue(jobs)
-        self.tracked_ids = recovered_tasks | {task.task_id for task in additions}
-        self.batch_ids.update(task.task_id for task in additions)
+        # Compatibility aliases keep the v2.0 GUI and tests stable while orchestration lives outside Qt.
+        self.config = self.runner.config
+        self.tools = self.runner.tools
+        self.executor = self.runner.executor
+        self.task_repository = self.runner.task_repository
+        self.disk_preflight = self.runner.disk_preflight
+        self.history_root = self.runner.history_root
+        self.history_writer = self.runner.history_writer
+        self.center = self.runner.center
+        self.tracked_ids = self.runner.tracked_ids
+        self.batch_ids = self.runner.batch_ids
 
     @property
     def tasks(self) -> list[QueuedTask]:
-        return self.center.tasks
+        return self.runner.tasks
 
     def _on_task_changed(self, task: QueuedTask) -> None:
         self.task_changed.emit(
@@ -122,167 +73,19 @@ class Worker(QThread):
             task.message or task.error,
         )
 
-    def _on_overall_progress(self, _percent: int) -> None:
-        batch = [task for task in self.center.tasks if task.task_id in self.batch_ids]
-        if not batch:
-            return
-        percent = round(
-            sum(100 if task.status.is_terminal else task.progress for task in batch) / len(batch)
-        )
-        active = next(
-            (task for task in batch if task.status is TaskStatus.RUNNING),
-            None,
-        )
-        message = active.message if active else "任务队列已更新"
-        self.progress.emit(percent, message)
-
     def cancel_task(self, task_id: str) -> bool:
-        return self.center.cancel(task_id)
+        return self.runner.cancel_task(task_id)
 
     def retry_tasks(self, task_ids: list[str]) -> list[QueuedTask]:
-        waiting = [
-            task
-            for task in self.center.tasks
-            if task.task_id in task_ids and task.status is TaskStatus.WAITING
-        ]
-        retried = [*waiting, *self.center.retry(task_ids)]
-        self.tracked_ids.update(task.task_id for task in retried)
-        self.batch_ids.update(task.task_id for task in retried)
-        return retried
-
-    def _tracked_tasks(self) -> list[QueuedTask]:
-        return [task for task in self.center.tasks if task.task_id in self.tracked_ids]
-
-    def _batch_tasks(self) -> list[QueuedTask]:
-        return [task for task in self.center.tasks if task.task_id in self.batch_ids]
-
-    def _parameters_for(self, task: QueuedTask) -> dict[str, object]:
-        if task.job.operation.name == "TO_MARKDOWN":
-            document = self.config.get("document", {})
-            return {
-                key: document.get(key)
-                for key in (
-                    "mode",
-                    "split_enabled",
-                    "target_tokens",
-                    "max_tokens",
-                    "ocr_enabled",
-                )
-            }
-        if task.job.operation.name == "TO_PDF":
-            return {"output_type": "pdf"}
-        video = self.config.get("video", {})
-        keys_by_operation = {
-            "COMPRESS_VIDEO": ("compression_crf", "compression_preset"),
-            "EXTRACT_AUDIO": ("audio_format", "audio_bitrate"),
-            "STANDARDIZE_MP4": (),
-            "KEYFRAMES_CONTACT_SHEET": (
-                "scene_threshold",
-                "max_keyframes",
-                "contact_sheet_columns",
-            ),
-            "RENAME_VIDEO": ("rename_template", "project_name"),
-            "ORGANIZE_VIDEO": ("rename_template", "project_name", "organize_mode"),
-        }
-        parameters = {
-            key: video.get(key) for key in keys_by_operation.get(task.job.operation.name, ())
-        }
-        if task.job.location:
-            parameters["location_override"] = task.job.location
-        if task.job.project:
-            parameters["project_name"] = task.job.project
-        return parameters
-
-    def _tool_versions_for(self, task: QueuedTask) -> dict[str, str]:
-        relevant = (
-            ("markitdown", "rapidocr")
-            if task.job.operation.name == "TO_MARKDOWN"
-            else ("libreoffice", "winword", "powerpoint")
-            if task.job.operation.name == "TO_PDF"
-            else ("ffmpeg", "ffprobe", "exiftool")
-        )
-        return {
-            name: status.version
-            for name in relevant
-            if (status := self.tools.get(name)) is not None and status.version
-        }
+        return self.runner.retry_tasks(task_ids)
 
     def run(self) -> None:
         try:
-            for task in self._tracked_tasks():
-                self._on_task_changed(task)
-            waiting = [
-                task.job
-                for task in self.center.tasks
-                if task.task_id in self.batch_ids and task.status is TaskStatus.WAITING
-            ]
-            safety_mb = coerce_int(
-                self.config.get("task_center", {}).get("disk_space_safety_mb"),
-                512,
-                minimum=0,
-            )
-            if waiting:
-                self.disk_preflight.check(
-                    waiting,
-                    safety_margin_bytes=max(0, safety_mb) * 1024 * 1024,
-                )
-            self.center.run(self.batch_ids)
-            tasks = self._batch_tasks()
-            records = [
-                TaskRecord(
-                    task.job.source,
-                    task.job.operation,
-                    task.status,
-                    output=task.output,
-                    error=task.error,
-                    attempts=task.attempts,
-                    started_at=task.started_at,
-                    finished_at=task.finished_at,
-                    parameters=self._parameters_for(task),
-                    tool_versions=self._tool_versions_for(task),
-                    quality_summary=_quality_summary(self.center.quality_reports_for(task.task_id)),
-                )
-                for task in tasks
-                if task.status.is_terminal
-            ]
-            errors = [
-                f"{task.job.source.name}：{task.error}"
-                for task in tasks
-                if task.status in {TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.INTERRUPTED}
-            ]
-            outputs = [str(task.output) for task in tasks if task.output is not None]
-            if records:
-                try:
-                    self.history_writer(self.history_root, records)
-                except OSError as exc:
-                    errors.append(f"历史记录：{explain_error(exc, action='保存历史记录')}")
-                history_config = self.config.get("history", {})
-                try:
-                    HistoryRepository(self.history_root).cleanup(
-                        retention_days=coerce_int(
-                            history_config.get("retention_days"),
-                            90,
-                            minimum=0,
-                        ),
-                        max_bytes=coerce_int(
-                            history_config.get("max_size_mb"),
-                            512,
-                            minimum=0,
-                        )
-                        * 1024
-                        * 1024,
-                    )
-                except OSError as exc:
-                    errors.append(f"历史清理：{explain_error(exc, action='清理历史记录')}")
-            reports = self.center.quality_reports(self.batch_ids)
-            self.completed.emit(outputs, errors, reports)
-            self.task_repository.save(
-                [
-                    task
-                    for task in self.center.tasks
-                    if task.status
-                    in {TaskStatus.WAITING, TaskStatus.RUNNING, TaskStatus.INTERRUPTED}
-                ]
+            result = self.runner.run()
+            self.completed.emit(
+                [str(path) for path in result.outputs],
+                list(result.errors),
+                list(result.quality_reports),
             )
         except Exception as exc:
             self.failed.emit(str(explain_error(exc, action="执行任务")))

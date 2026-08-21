@@ -162,3 +162,11 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
         result[name] = status
 
     return result
+
+
+def select_tools(
+    tools: dict[str, ToolStatus],
+    names: set[str] | frozenset[str],
+) -> dict[str, ToolStatus]:
+    """Return the detected tool view relevant to one application boundary."""
+    return {name: tools[name] for name in names if name in tools}
