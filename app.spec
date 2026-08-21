@@ -6,6 +6,13 @@ datas = [
     ("assets/mouse/mouse-grin.png", "assets/mouse"),
     ("assets/mouse/mouse-strong.png", "assets/mouse"),
     ("assets/mouse/mouse-thinking.png", "assets/mouse"),
+    ("assets/doro/orange.png", "assets/doro"),
+    ("assets/doro/ready.png", "assets/doro"),
+    ("assets/doro/processing.gif", "assets/doro"),
+    ("assets/doro/carrying.jpg", "assets/doro"),
+    ("assets/doro/cheering.webp", "assets/doro"),
+    ("assets/doro/wave.gif", "assets/doro"),
+    ("assets/doro/resting.gif", "assets/doro"),
 ]
 binaries = []
 hiddenimports = []

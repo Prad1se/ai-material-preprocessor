@@ -894,9 +894,11 @@ class DocumentWorkspace(WorkspaceView):
         self.state_panel.style().unpolish(self.state_panel)
         self.state_panel.style().polish(self.state_panel)
         mascot_state = {
-            WorkspacePresentationState.EMPTY: DocumentMascotState.EMPTY,
+            WorkspacePresentationState.EMPTY: (
+                DocumentMascotState.COMPLETED if self.last_outputs else DocumentMascotState.EMPTY
+            ),
             WorkspacePresentationState.INPUTS_SELECTED: DocumentMascotState.READY,
-            WorkspacePresentationState.PREVIEW: DocumentMascotState.READY,
+            WorkspacePresentationState.PREVIEW: DocumentMascotState.PREVIEW,
             WorkspacePresentationState.PROCESSING: DocumentMascotState.PROCESSING,
             WorkspacePresentationState.SUCCESS: DocumentMascotState.SUCCESS,
             WorkspacePresentationState.WARNING: DocumentMascotState.WARNING,

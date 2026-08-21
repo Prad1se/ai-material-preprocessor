@@ -3,6 +3,7 @@
 build/
 dist/
 work/
+assets/doro/local/
 tools/
 release/
 .pytest_cache/

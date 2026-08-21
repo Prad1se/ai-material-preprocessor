@@ -33,8 +33,11 @@ QFrame#documentDropPanel {
 QFrame#documentSummary { border-left: 5px solid #527463; }
 QFrame#documentStateWarning { background: #fff5f2; border: 2px solid #c44e63; }
 QFrame#documentStateError { background: #fff0f1; border: 2px solid #d70015; }
-QFrame#documentMascot {
+QWidget#documentMascot {
     background: #fffdfb; border: 1px solid #d8cfca; border-radius: 18px;
+}
+QLabel#documentMascotArtwork {
+    background: rgb(255, 253, 251); border: 0; border-radius: 10px;
 }
 QLabel#documentMascotSymbol { color: #527463; font-size: 28px; font-weight: 900; border: 0; }
 QLabel#documentMascotCaption { color: #5e5552; font-size: 11px; font-weight: 650; border: 0; }

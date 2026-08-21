@@ -4,6 +4,15 @@ AI Material Preprocessor is MIT-licensed application code. It uses and, in the W
 
 The release includes applicable license texts under `third_party_licenses/`. Python package metadata retained under `_internal/*dist-info/` may contain additional copyright and license notices.
 
+## Mascot artwork
+
+The selected Doro artwork under `assets/doro/` is included for **non-commercial use only**, based
+on confirmation from the project maintainer. These image files are not licensed under the
+repository's MIT license. Copyright, character, and trademark interests remain with their
+respective owners and creators. Commercial distributions must remove or replace the Doro artwork,
+or obtain separate permission. Source records and the asset-specific usage notice are documented
+in `assets/doro/README.md`.
+
 ## Runtime components
 
 | Component | Version used by v2.0.0 | License | Purpose |
