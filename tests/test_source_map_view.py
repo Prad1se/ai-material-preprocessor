@@ -4,6 +4,8 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
+from PySide6.QtWidgets import QApplication
+
 from ai_material_preprocessor.application.default_preview_registry import (
     build_default_preview_registry,
 )
@@ -224,6 +226,34 @@ def test_document_workspace_hides_source_map_button_without_context_pack(
 
     assert not view.source_map_button.isVisibleTo(view)
     assert view._source_map_pack_dir is None
+
+
+def test_document_workspace_copy_for_ai_copies_pack_text(qtbot, tmp_path: Path) -> None:
+    from ai_material_preprocessor.services.context_copy import build_context_copy
+
+    result = _build_pack(tmp_path, [_pdf_page()])
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+    view.set_completed([str(result.output_dir)], [], [_context_report()])
+
+    assert view.copy_for_ai_button.isVisibleTo(view)
+    view.copy_for_ai_button.click()
+
+    assert QApplication.clipboard().text() == build_context_copy(result.output_dir)
+    assert view.copy_for_ai_button.text() == "Copied ✓"
+
+
+def test_document_workspace_copy_for_ai_hidden_without_context_pack(qtbot, tmp_path: Path) -> None:
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+
+    view.set_completed([str(tmp_path / "result.md")], [], [])
+
+    assert not view.copy_for_ai_button.isVisibleTo(view)
 
 
 def test_document_workspace_clears_stale_source_map_for_next_result(qtbot, tmp_path: Path) -> None:

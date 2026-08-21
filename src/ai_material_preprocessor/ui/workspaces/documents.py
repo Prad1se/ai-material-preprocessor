@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -35,6 +36,7 @@ from ...apps.documents.workspace_controller import (
     DocumentWorkspaceController,
 )
 from ...models import Operation, ToolStatus
+from ...services.context_copy import build_context_copy
 from ...services.context_summary import BudgetStatus, ContextPackSummary, summarize_context_pack
 from ..document_mascot import DocumentMascotState, DocumentMascotView
 from ..source_map_view import SourceMapView
@@ -470,12 +472,17 @@ class DocumentWorkspace(WorkspaceView):
         self.source_map_button.setObjectName("secondary")
         self.source_map_button.setVisible(False)
         self.source_map_button.clicked.connect(self._open_source_map)
+        self.copy_for_ai_button = QPushButton("Copy for AI")
+        self.copy_for_ai_button.setObjectName("secondary")
+        self.copy_for_ai_button.setVisible(False)
+        self.copy_for_ai_button.clicked.connect(self._copy_for_ai)
         result_actions = QHBoxLayout()
         result_actions.addWidget(self.result_heading)
         result_actions.addStretch()
         result_actions.addWidget(self.technical_details_button)
         result_actions.addWidget(self.report_button)
         result_actions.addWidget(self.source_map_button)
+        result_actions.addWidget(self.copy_for_ai_button)
         result_actions.addWidget(self.open_button)
         layout.addLayout(header)
         layout.addWidget(self.state_message)
@@ -936,6 +943,7 @@ class DocumentWorkspace(WorkspaceView):
         self._source_map_pack_dir = Path(outputs[0]) if (context_report and outputs) else None
         self.report_button.setVisible(self._source_map_pack_dir is not None)
         self.source_map_button.setVisible(self._source_map_pack_dir is not None)
+        self.copy_for_ai_button.setVisible(self._source_map_pack_dir is not None)
         summary: ContextPackSummary | None = None
         if self._source_map_pack_dir is not None:
             try:
@@ -1023,11 +1031,25 @@ class DocumentWorkspace(WorkspaceView):
     def _reset_source_map(self) -> None:
         self._source_map_pack_dir = None
         self.source_map_button.setVisible(False)
+        self.copy_for_ai_button.setVisible(False)
+        self.copy_for_ai_button.setText("Copy for AI")
         self.source_map_view.set_source_map(None)
         self.content_stack.setCurrentIndex(0)
 
     def _close_source_map(self) -> None:
         self.content_stack.setCurrentIndex(0)
+
+    def _copy_for_ai(self) -> None:
+        if self._source_map_pack_dir is None:
+            return
+        try:
+            text = build_context_copy(self._source_map_pack_dir)
+        except (OSError, ValueError) as exc:
+            QMessageBox.critical(self, "Copy for AI unavailable", str(exc))
+            return
+        QApplication.clipboard().setText(text)
+        self.copy_for_ai_button.setText("Copied ✓")
+        QTimer.singleShot(2000, lambda: self.copy_for_ai_button.setText("Copy for AI"))
 
     def _show_technical_details(self) -> None:
         if self._technical_details:
