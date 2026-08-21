@@ -273,3 +273,36 @@ def test_document_workspace_clears_stale_source_map_for_next_result(qtbot, tmp_p
     assert view.source_map_view.content_edit.toPlainText() == ""
     assert not view.source_map_button.isVisibleTo(view)
     assert view._source_map_pack_dir is None
+
+
+def test_document_workspace_context_pack_experience_actions_integration(
+    qtbot, tmp_path: Path
+) -> None:
+    from ai_material_preprocessor.services.context_copy import build_context_copy
+
+    result = _build_pack(tmp_path, [_pdf_page()])
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+    view.set_completed([str(result.output_dir)], [], [_context_report()])
+
+    assert view.result_heading.text() == "AI Context Pack Ready"
+    assert view.copy_for_ai_button.isVisibleTo(view)
+    assert view.source_map_button.isVisibleTo(view)
+    assert view.open_button.isEnabled()
+
+    view.source_map_button.click()
+    assert view.content_stack.currentWidget() is view.source_map_view
+    assert view.source_map_view.blocks_table.rowCount() >= 1
+    view.source_map_view.back_button.click()
+    assert view.content_stack.currentIndex() == 0
+
+    view.copy_for_ai_button.click()
+    assert QApplication.clipboard().text() == build_context_copy(result.output_dir)
+    assert view.copy_for_ai_button.text() == "Copied ✓"
+
+    view.set_completed([str(tmp_path / "result.md")], [], [])
+    assert not view.copy_for_ai_button.isVisibleTo(view)
+    assert not view.source_map_button.isVisibleTo(view)
+    assert view.source_map_view.blocks_table.rowCount() == 0
