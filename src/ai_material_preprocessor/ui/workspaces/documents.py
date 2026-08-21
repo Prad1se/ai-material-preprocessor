@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from ...application.preview_registry import PreviewRequest
 from ...application.workspaces import WorkspaceId
+from ...apps.documents.presets import DOCUMENT_PRESETS, PRESET_BY_ID
 from ...apps.documents.workspace_controller import (
     DocumentOperationAvailability,
     DocumentWorkspaceController,
@@ -121,6 +122,7 @@ class DocumentWorkspace(WorkspaceView):
     input_accessible_description = "只接受文档格式；视频会建议转交 Video Workspace"
 
     def __init__(self, config: dict, tools: dict[str, ToolStatus], preview_registry) -> None:
+        self._applying_preset = False
         self._pending_context_source_paths: tuple[Path, ...] = ()
         self._source_map_source_paths: tuple[Path, ...] = ()
         super().__init__(config, tools, DocumentWorkspaceController(tools), preview_registry)
@@ -255,12 +257,30 @@ class DocumentWorkspace(WorkspaceView):
         layout.addWidget(title)
         layout.addWidget(description)
 
+        preset_row = QHBoxLayout()
+        preset_label = QLabel("Prepare for")
+        preset_label.setObjectName("fieldLabel")
+        self.document_preset = QComboBox()
+        self.document_preset.setMinimumWidth(220)
+        self.document_preset.addItem("Custom / current settings", None)
+        for preset in DOCUMENT_PRESETS:
+            self.document_preset.addItem(preset.label, preset.preset_id)
+        self.document_preset.currentIndexChanged.connect(self._preset_changed)
+        preset_row.addWidget(preset_label)
+        preset_row.addWidget(self.document_preset, 1)
+        layout.addLayout(preset_row)
+        self.preset_note = QLabel("Use the current settings for this job.")
+        self.preset_note.setObjectName("documentModeDescription")
+        self.preset_note.setWordWrap(True)
+        layout.addWidget(self.preset_note)
+
         mode_row = QHBoxLayout()
         mode_label = QLabel("Processing mode")
         mode_label.setObjectName("fieldLabel")
         self.operation = QComboBox()
         self.operation.setMinimumWidth(280)
         self.operation.currentIndexChanged.connect(self._operation_changed)
+        self.operation.currentIndexChanged.connect(self._mark_preset_custom)
         mode_row.addWidget(mode_label)
         mode_row.addWidget(self.operation, 1)
         layout.addLayout(mode_row)
@@ -299,12 +319,15 @@ class DocumentWorkspace(WorkspaceView):
             1 if str(self.config["document"]["mode"]) == "raw" else 0
         )
         self.document_mode.currentIndexChanged.connect(self._operation_changed)
+        self.document_mode.currentIndexChanged.connect(self._mark_preset_custom)
         self.split_document = QCheckBox("Split long content into manageable sections")
         self.split_document.setChecked(bool(self.config["document"]["split_enabled"]))
         self.split_document.stateChanged.connect(self._split_changed)
+        self.split_document.stateChanged.connect(self._mark_preset_custom)
         self.ocr_enabled = QCheckBox("Use local OCR for scanned pages and embedded images")
         self.ocr_enabled.setChecked(bool(self.config["document"]["ocr_enabled"]))
         self.ocr_enabled.stateChanged.connect(self._update_summary)
+        self.ocr_enabled.stateChanged.connect(self._mark_preset_custom)
         self.context_budget_panel = QFrame()
         self.context_budget_panel.setObjectName("contextBudgetPanel")
         budget_layout = QVBoxLayout(self.context_budget_panel)
@@ -324,6 +347,7 @@ class DocumentWorkspace(WorkspaceView):
         self.context_budget.addItem("128K", 128000)
         self.context_budget.addItem("Custom", "custom")
         self.context_budget.currentIndexChanged.connect(self._budget_changed)
+        self.context_budget.currentIndexChanged.connect(self._mark_preset_custom)
         self.custom_budget = QSpinBox()
         self.custom_budget.setRange(1000, 10000000)
         self.custom_budget.setSingleStep(1000)
@@ -339,6 +363,7 @@ class DocumentWorkspace(WorkspaceView):
         else:
             self.custom_budget.setValue(100000)
         self.custom_budget.valueChanged.connect(self._update_summary)
+        self.custom_budget.valueChanged.connect(self._mark_preset_custom)
         budget_layout.addWidget(budget_label)
         budget_layout.addWidget(self.context_budget)
         budget_layout.addWidget(self.custom_budget)
@@ -381,6 +406,7 @@ class DocumentWorkspace(WorkspaceView):
         self.target_tokens.setSingleStep(500)
         self.target_tokens.setSuffix(" estimated tokens / section")
         self.target_tokens.setValue(int(self.config["document"]["target_tokens"]))
+        self.target_tokens.valueChanged.connect(self._mark_preset_custom)
         technical_note = QLabel(
             "Token values are estimates. Content is not silently removed to meet this length."
         )
@@ -625,7 +651,69 @@ class DocumentWorkspace(WorkspaceView):
             if index >= 0:
                 self.operation.setCurrentIndex(index)
         self.operation.blockSignals(False)
+        self._refresh_preset_availability(availability)
         self._operation_changed()
+
+    def _refresh_preset_availability(
+        self, availability: list[DocumentOperationAvailability]
+    ) -> None:
+        available_by_operation = {option.operation: option for option in availability}
+        model = self.document_preset.model()
+        assert isinstance(model, QStandardItemModel)
+        for preset in DOCUMENT_PRESETS:
+            index = self.document_preset.findData(preset.preset_id)
+            item = model.item(index)
+            option = available_by_operation.get(preset.operation)
+            enabled = option is not None and option.available
+            item.setEnabled(enabled)
+            item.setToolTip(
+                ""
+                if enabled
+                else option.reason
+                if option is not None and option.reason
+                else "Add compatible documents to use this preset."
+            )
+        current_id = self.document_preset.currentData()
+        if current_id is not None:
+            current_item = model.item(self.document_preset.currentIndex())
+            if not current_item.isEnabled():
+                self.document_preset.setCurrentIndex(0)
+
+    def _preset_changed(self) -> None:
+        preset_id = self.document_preset.currentData()
+        if preset_id is None:
+            self.preset_note.setText("Use the current settings for this job.")
+            return
+        preset = PRESET_BY_ID[str(preset_id)]
+        operation_index = self.operation.findData(preset.operation.value)
+        operation_model = self.operation.model()
+        assert isinstance(operation_model, QStandardItemModel)
+        if operation_index < 0 or not operation_model.item(operation_index).isEnabled():
+            self.preset_note.setText(
+                "This preset is unavailable for the selected documents or installed tools."
+            )
+            return
+        self._applying_preset = True
+        try:
+            self.operation.setCurrentIndex(operation_index)
+            budget_index = self.context_budget.findData(preset.context_budget)
+            if budget_index >= 0:
+                self.context_budget.setCurrentIndex(budget_index)
+            ocr_available = self.tools.get("rapidocr", ToolStatus("rapidocr", None)).available
+            self.ocr_enabled.setChecked(preset.ocr_enabled and ocr_available)
+        finally:
+            self._applying_preset = False
+        note = preset.description
+        if preset.ocr_enabled and not self.ocr_enabled.isChecked():
+            note += " Local OCR is unavailable; this job will continue without OCR."
+        self.preset_note.setText(note)
+        self._update_summary()
+
+    def _mark_preset_custom(self) -> None:
+        if self._applying_preset or not hasattr(self, "document_preset"):
+            return
+        if self.document_preset.currentData() is not None:
+            self.document_preset.setCurrentIndex(0)
 
     def _selected_availability(self) -> DocumentOperationAvailability | None:
         raw = self.operation.currentData()
