@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Set
 from pathlib import Path
 
 from ..converters.markdown import SUPPORTED_EXTENSIONS as MARKDOWN_EXTENSIONS
@@ -12,8 +12,20 @@ SUPPORTED_INPUT_EXTENSIONS = frozenset(
 )
 
 
-def discover_input_files(paths: Iterable[str | Path]) -> list[Path]:
+def discover_input_files(
+    paths: Iterable[str | Path],
+    *,
+    supported_extensions: Set[str] | None = None,
+) -> list[Path]:
     """Expand dropped files and folders into a deterministic, de-duplicated input list."""
+    allowed = (
+        SUPPORTED_INPUT_EXTENSIONS
+        if supported_extensions is None
+        else frozenset(
+            extension.lower() if extension.startswith(".") else f".{extension.lower()}"
+            for extension in supported_extensions
+        )
+    )
     discovered: dict[str, Path] = {}
     for raw_path in paths:
         path = Path(raw_path).expanduser().resolve()
@@ -31,7 +43,7 @@ def discover_input_files(paths: Iterable[str | Path]) -> list[Path]:
         else:
             continue
         for candidate in candidates:
-            if candidate.suffix.lower() not in SUPPORTED_INPUT_EXTENSIONS:
+            if candidate.suffix.lower() not in allowed:
                 continue
             resolved = candidate.resolve()
             discovered.setdefault(str(resolved).casefold(), resolved)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Set
 from pathlib import Path
 
 from .converters.markdown import SUPPORTED_EXTENSIONS as MARKDOWN_EXTENSIONS
@@ -12,7 +13,12 @@ def _available(tools: dict[str, ToolStatus], name: str) -> bool:
     return bool(tools.get(name) and tools[name].available)
 
 
-def available_operations(filename: str | Path, tools: dict[str, ToolStatus]) -> list[Operation]:
+def available_operations(
+    filename: str | Path,
+    tools: dict[str, ToolStatus],
+    *,
+    allowed_operations: Set[Operation] | None = None,
+) -> list[Operation]:
     suffix = Path(filename).suffix.lower()
     operations: list[Operation] = []
 
@@ -40,4 +46,6 @@ def available_operations(filename: str | Path, tools: dict[str, ToolStatus]) -> 
         operations.append(Operation.RENAME_VIDEO)
         operations.append(Operation.ORGANIZE_VIDEO)
 
-    return operations
+    if allowed_operations is None:
+        return operations
+    return [operation for operation in operations if operation in allowed_operations]

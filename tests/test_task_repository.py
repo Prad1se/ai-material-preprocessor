@@ -66,3 +66,25 @@ def test_corrupt_queue_is_quarantined_and_does_not_block_startup(tmp_path: Path)
     assert repository.load() == []
     assert not path.exists()
     assert list(tmp_path.glob("tasks.corrupt-*.json"))
+
+
+def test_v2_queue_operation_member_names_remain_compatible(tmp_path: Path) -> None:
+    repository = PersistentTaskQueue(tmp_path / "tasks.json")
+    expected_names = [operation.name for operation in Operation]
+    tasks = [
+        _task(tmp_path).with_changes(
+            task_id=f"task-{index}",
+            job=Job(
+                tmp_path / f"source-{index}.dat",
+                operation,
+                tmp_path / "outputs",
+            ),
+        )
+        for index, operation in enumerate(Operation, start=1)
+    ]
+
+    repository.save(tasks)
+    payload = json.loads(repository.path.read_text(encoding="utf-8"))
+
+    assert [item["operation"] for item in payload["tasks"]] == expected_names
+    assert [task.job.operation for task in repository.load()] == list(Operation)
