@@ -27,6 +27,7 @@ class HistoryEntry:
     sources: tuple[Path, ...]
     outputs: tuple[Path, ...]
     cache_paths: tuple[Path, ...]
+    quality_summaries: tuple[dict[str, object], ...]
     total_bytes: int
 
 
@@ -74,6 +75,11 @@ class HistoryRepository:
             cache_paths = tuple(
                 Path(str(cache)) for item in items for cache in item.get("cache_paths", []) if cache
             )
+            quality_summaries = tuple(
+                summary
+                for item in items
+                if isinstance((summary := item.get("quality_summary")), dict) and summary
+            )
             return HistoryEntry(
                 task_id=str(payload["task_id"]),
                 created_at=self._parse_time(payload["created_at"]),
@@ -83,6 +89,7 @@ class HistoryRepository:
                 sources=sources,
                 outputs=outputs,
                 cache_paths=cache_paths,
+                quality_summaries=quality_summaries,
                 total_bytes=_directory_size(manifest.parent),
             )
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):

@@ -177,6 +177,7 @@ class MainWindow(QMainWindow):
             workspace.handoff_requested.connect(self._handoff_requested)
             workspace.history_requested.connect(lambda raw: self._open_history(WorkspaceId(raw)))
             workspace.open_output_requested.connect(self._open_output)
+            workspace.settings_requested.connect(self._open_workspace_settings)
 
     @staticmethod
     def _nav_button(text: str, *, checkable: bool = True) -> QPushButton:
@@ -433,8 +434,19 @@ class MainWindow(QMainWindow):
         HistoryDialog(repository, self, workspace=workspace).exec()
 
     def _open_settings(self) -> None:
+        self._show_settings(None)
+
+    def _open_workspace_settings(self, raw_workspace: str) -> None:
+        self._show_settings(WorkspaceId(raw_workspace))
+
+    def _show_settings(self, workspace: WorkspaceId | None) -> None:
         detected = detect_tools_with_versions(self.config)
-        dialog = SettingsDialog(self.config, detected, self)
+        dialog = SettingsDialog(
+            self.config,
+            detected,
+            self,
+            initial_tab=workspace.value if workspace is not None else None,
+        )
         dialog.settings_saved.connect(self._settings_applied)
         dialog.exec()
 

@@ -134,7 +134,9 @@ class HistoryDialog(QDialog):
         root.addLayout(filters)
 
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["时间", "源文件", "操作", "状态", "输出", "任务编号"])
+        self.table.setHorizontalHeaderLabels(
+            ["时间", "来源", "准备方式", "结果", "输出位置", "质量摘要"]
+        )
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -205,6 +207,32 @@ class HistoryDialog(QDialog):
     def _joined_status(entry: HistoryEntry) -> str:
         return "、".join(STATUS_LABELS[status] for status in TaskStatus if status in entry.statuses)
 
+    @staticmethod
+    def _quality_summary(entry: HistoryEntry) -> str:
+        if not entry.quality_summaries:
+            return "—"
+        scores: list[int] = []
+        tokens = 0
+        chunks = 0
+        for summary in entry.quality_summaries:
+            score = summary.get("score")
+            estimated_tokens = summary.get("estimated_tokens")
+            chunk_count = summary.get("chunk_count")
+            if isinstance(score, int | float):
+                scores.append(int(score))
+            if isinstance(estimated_tokens, int | float):
+                tokens += int(estimated_tokens)
+            if isinstance(chunk_count, int | float):
+                chunks += int(chunk_count)
+        parts = []
+        if scores:
+            parts.append(f"{round(sum(scores) / len(scores))}/100")
+        if tokens:
+            parts.append(f"~{tokens:,} tokens")
+        if chunks:
+            parts.append(f"{chunks} sections")
+        return " · ".join(parts) or "Available in Details"
+
     def refresh(self) -> None:
         raw_status = self.status_filter.currentData()
         raw_operation = self.operation_filter.currentData()
@@ -232,7 +260,7 @@ class HistoryDialog(QDialog):
                 operations,
                 self._joined_status(entry),
                 outputs,
-                entry.task_id,
+                self._quality_summary(entry),
             ]
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)

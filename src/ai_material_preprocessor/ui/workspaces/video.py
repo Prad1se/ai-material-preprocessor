@@ -293,6 +293,7 @@ class VideoWorkspace(WorkspaceView):
             "preview": "thinking",
             "processing": "working",
             "success": "success",
+            "warning": "thinking",
             "error": "error",
         }.get(state_name, "idle")
         if hasattr(self, "mouse_mascot"):
