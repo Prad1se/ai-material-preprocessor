@@ -1,11 +1,11 @@
 # Roadmap
 
-## 2.0 RC 后续维护
+## 2.0.0 发布维护 — 已完成
 
 - [x] 缺失工具的一键补充、来源/许可确认、SHA-256 校验和自定义 D 盘目录
 - [x] ExifTool 便携安装与 LibreOffice / FFmpeg WinGet 安装后自动重新检测
 
-## 2.0.0 RC — 进行中
+## 2.0.0 — 已发布
 
 - [x] M0：统一领域状态、错误类型、外部进程适配器和服务边界
 - [x] M0：拆分 Qt Worker 与 Markdown 清洗 / 质量 / 拆分模块
@@ -15,7 +15,7 @@
 - [x] M3：来源映射、精简 manifest v2 与结构感知资料包
 - [x] M4：视频元数据、地点、命名、整理和重复检测
 - [x] M5：首次启动、设置、工具检测、主题与 DPI 体验
-- [x] M6：安装程序、可复现发布、干净 Windows 验证和 2.0 RC
+- [x] M6：安装程序、可复现发布、干净 Windows 验证和 2.0.0 正式版
 
 基线审计和逐项差距见 [`docs/BASELINE_2.0.md`](docs/BASELINE_2.0.md)，每个里程碑的
 分支、提交和 Draft PR 见 [`docs/PROJECT_PROGRESS.md`](docs/PROJECT_PROGRESS.md)。
