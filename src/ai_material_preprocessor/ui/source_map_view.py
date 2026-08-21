@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -17,6 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from ..services.source_map import SourceMap, SourceMapEntry, SourceMapSource
+from ..services.source_open import (
+    SourceOpenCapability,
+    SourceOpenTarget,
+    resolve_source_open_target,
+)
 
 EMPTY_MESSAGE = "No Source Map available"
 DEGRADED_CONTENT = "(processed content unavailable; manifest-only record)"
@@ -24,12 +31,15 @@ DEGRADED_CONTENT = "(processed content unavailable; manifest-only record)"
 
 class SourceMapView(QWidget):
     back_requested = Signal()
+    open_source_requested = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("sourceMapPage")
         self._entries: list[SourceMapEntry] = []
         self._sources: dict[str, SourceMapSource] = {}
+        self._source_paths: dict[str, Path] = {}
+        self._active_target: SourceOpenTarget | None = None
         root = QVBoxLayout(self)
         root.setContentsMargins(30, 24, 34, 32)
         root.setSpacing(16)
@@ -166,6 +176,7 @@ class SourceMapView(QWidget):
         self.card_format_value = self._card_row(layout, "Format")
         self.card_source_id_value = self._card_row(layout, "Source ID")
         self.card_location_value = self._card_row(layout, "Location")
+        self.card_capability_value = self._card_row(layout, "Open capability")
         self.card_fallback_note = QLabel(
             "Document-level fallback: no reliable page, slide, or sheet location."
         )
@@ -173,6 +184,15 @@ class SourceMapView(QWidget):
         self.card_fallback_note.setWordWrap(True)
         self.card_fallback_note.setVisible(False)
         layout.addWidget(self.card_fallback_note)
+        self.open_source_note = QLabel()
+        self.open_source_note.setObjectName("sectionDescription")
+        self.open_source_note.setWordWrap(True)
+        self.open_source_button = QPushButton("Open source location")
+        self.open_source_button.setObjectName("secondary")
+        self.open_source_button.setEnabled(False)
+        self.open_source_button.clicked.connect(self._request_source_open)
+        layout.addWidget(self.open_source_note)
+        layout.addWidget(self.open_source_button)
         layout.addStretch()
         return panel
 
@@ -196,7 +216,9 @@ class SourceMapView(QWidget):
     ) -> None:
         self._render_entry(current_row)
 
-    def set_source_map(self, source_map: SourceMap | None) -> None:
+    def set_source_map(
+        self, source_map: SourceMap | None, source_paths: dict[str, Path] | None = None
+    ) -> None:
         self.blocks_table.setRowCount(0)
         self.block_count.clear()
         self.heading_label.clear()
@@ -206,6 +228,10 @@ class SourceMapView(QWidget):
         self.card_format_value.clear()
         self.card_source_id_value.clear()
         self.card_location_value.clear()
+        self.card_capability_value.clear()
+        self.open_source_note.clear()
+        self.open_source_button.setEnabled(False)
+        self._active_target = None
         self.card_fallback_note.setVisible(False)
         self.integrity_notice.setVisible(bool(source_map and source_map.degraded))
         self._entries = list(source_map.entries) if source_map is not None else []
@@ -214,6 +240,7 @@ class SourceMapView(QWidget):
             if source_map is not None
             else {}
         )
+        self._source_paths = dict(source_paths or {})
         if not self._entries:
             self._stack.setCurrentWidget(self._empty_page)
             return
@@ -246,3 +273,23 @@ class SourceMapView(QWidget):
         self.card_location_value.setText(entry.effective_display)
         fallback = entry.primary_location is None or entry.primary_location.fallback
         self.card_fallback_note.setVisible(fallback)
+        if source is None:
+            self.card_capability_value.setText("Unavailable")
+            self.open_source_note.setText("Source metadata is unavailable.")
+            self.open_source_button.setEnabled(False)
+            self._active_target = None
+            return
+        target = resolve_source_open_target(source, entry, self._source_paths.get(source.source_id))
+        self._active_target = target
+        labels = {
+            SourceOpenCapability.PAGE_LEVEL: "Page-level (viewer permitting)",
+            SourceOpenCapability.DOCUMENT_LEVEL: "Document-level",
+            SourceOpenCapability.UNAVAILABLE: "Unavailable",
+        }
+        self.card_capability_value.setText(labels[target.capability])
+        self.open_source_note.setText(target.reason)
+        self.open_source_button.setEnabled(target.available)
+
+    def _request_source_open(self) -> None:
+        if self._active_target is not None and self._active_target.available:
+            self.open_source_requested.emit(self._active_target)

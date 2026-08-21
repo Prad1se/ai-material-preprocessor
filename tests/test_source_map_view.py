@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
 
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication
 
 from ai_material_preprocessor.application.default_preview_registry import (
@@ -14,6 +16,10 @@ from ai_material_preprocessor.services.config import DEFAULT_CONFIG
 from ai_material_preprocessor.services.context_pack import ContextBudget, create_context_pack
 from ai_material_preprocessor.services.document_provenance import ProvenanceKind, SourceSpan
 from ai_material_preprocessor.services.source_map import load_source_map
+from ai_material_preprocessor.services.source_open import (
+    SourceOpenCapability,
+    SourceOpenTarget,
+)
 from ai_material_preprocessor.ui.source_map_view import DEGRADED_CONTENT, SourceMapView
 from ai_material_preprocessor.ui.workspaces.documents import DocumentWorkspace
 
@@ -140,6 +146,42 @@ def test_source_map_view_renders_document_level_fallback(qtbot, tmp_path: Path) 
     assert view.card_fallback_note.isVisibleTo(view)
 
 
+def test_source_map_view_shows_open_capability_and_emits_runtime_target(
+    qtbot, tmp_path: Path
+) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    source_path = tmp_path / "inputs" / "lecture.pdf"
+    manifest = json.loads(result.manifest.read_text(encoding="utf-8"))
+    manifest["sources"][0]["sha256"] = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    result.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    source_map = load_source_map(result.output_dir)
+    view = SourceMapView()
+    qtbot.addWidget(view)
+    emitted: list[SourceOpenTarget] = []
+    view.open_source_requested.connect(emitted.append)
+
+    view.set_source_map(source_map, {"source-001": source_path})
+
+    assert view.card_capability_value.text() == "Page-level (viewer permitting)"
+    assert view.open_source_button.isEnabled()
+    view.open_source_button.click()
+    assert emitted[0].capability is SourceOpenCapability.PAGE_LEVEL
+    assert emitted[0].path == source_path
+    assert emitted[0].page == 37
+
+
+def test_source_map_view_disables_open_when_runtime_path_is_missing(qtbot, tmp_path: Path) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    view = SourceMapView()
+    qtbot.addWidget(view)
+
+    view.set_source_map(load_source_map(result.output_dir))
+
+    assert view.card_capability_value.text() == "Unavailable"
+    assert not view.open_source_button.isEnabled()
+    assert "unavailable" in view.open_source_note.text().casefold()
+
+
 def test_source_map_view_selection_syncs_content_and_source_card(qtbot, tmp_path: Path) -> None:
     result = _build_pack(
         tmp_path,
@@ -198,6 +240,30 @@ def test_document_workspace_opens_source_map_page_from_context_pack_result(
     assert view.content_stack.currentWidget() is view.source_map_view
     assert view.source_map_view.blocks_table.rowCount() >= 1
     assert view.source_map_view.card_location_value.text() == "PDF page 37"
+
+
+def test_document_workspace_keeps_verified_source_open_target_after_inputs_clear(
+    qtbot, tmp_path: Path
+) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    source_path = tmp_path / "inputs" / "lecture.pdf"
+    manifest = json.loads(result.manifest.read_text(encoding="utf-8"))
+    manifest["sources"][0]["sha256"] = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    result.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+    view.add_inputs([str(source_path)])
+    view.operation.setCurrentIndex(view.operation.findData("document_context_pack"))
+    view._request_jobs()
+    view.set_completed([str(result.output_dir)], [], [_context_report()])
+    view.clear_inputs()
+
+    view.source_map_button.click()
+
+    assert view.source_map_view.card_capability_value.text() == "Page-level (viewer permitting)"
+    assert view.source_map_view.open_source_button.isEnabled()
 
 
 def test_document_workspace_back_button_returns_to_flow(qtbot, tmp_path: Path) -> None:
@@ -306,3 +372,61 @@ def test_document_workspace_context_pack_experience_actions_integration(
     assert not view.copy_for_ai_button.isVisibleTo(view)
     assert not view.source_map_button.isVisibleTo(view)
     assert view.source_map_view.blocks_table.rowCount() == 0
+
+
+def test_document_workspace_opens_pdf_page_then_falls_back_to_document(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+    path = tmp_path / "paper.pdf"
+    path.write_bytes(b"pdf")
+    target = SourceOpenTarget(
+        source_id="source-001",
+        path=path,
+        capability=SourceOpenCapability.PAGE_LEVEL,
+        page=37,
+        reason="Page-level location (viewer permitting).",
+    )
+    opened = []
+
+    def open_url(url):
+        opened.append(url)
+        return len(opened) == 2
+
+    monkeypatch.setattr(QDesktopServices, "openUrl", open_url)
+
+    view._open_source_target(target)
+
+    assert len(opened) == 2
+    assert opened[0].fragment() == "page=37"
+    assert opened[1].fragment() == ""
+    assert Path(opened[1].toLocalFile()) == path
+
+
+def test_document_workspace_document_level_open_does_not_fake_fragment(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+    path = tmp_path / "notes.docx"
+    path.write_bytes(b"docx")
+    target = SourceOpenTarget(
+        source_id="source-001",
+        path=path,
+        capability=SourceOpenCapability.DOCUMENT_LEVEL,
+        page=None,
+        reason="Document-level location.",
+    )
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url) or True)
+
+    view._open_source_target(target)
+
+    assert len(opened) == 1
+    assert opened[0].fragment() == ""
+    assert Path(opened[0].toLocalFile()) == path

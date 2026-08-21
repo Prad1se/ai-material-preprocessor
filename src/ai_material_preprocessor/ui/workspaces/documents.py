@@ -38,6 +38,11 @@ from ...apps.documents.workspace_controller import (
 from ...models import Operation, ToolStatus
 from ...services.context_copy import build_context_copy
 from ...services.context_summary import ContextPackSummary, summarize_context_pack
+from ...services.source_open import (
+    SourceOpenCapability,
+    SourceOpenTarget,
+    source_paths_by_id,
+)
 from ..document_mascot import DocumentMascotState, DocumentMascotView
 from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
@@ -116,7 +121,10 @@ class DocumentWorkspace(WorkspaceView):
     input_accessible_description = "只接受文档格式；视频会建议转交 Video Workspace"
 
     def __init__(self, config: dict, tools: dict[str, ToolStatus], preview_registry) -> None:
+        self._pending_context_source_paths: tuple[Path, ...] = ()
+        self._source_map_source_paths: tuple[Path, ...] = ()
         super().__init__(config, tools, DocumentWorkspaceController(tools), preview_registry)
+        self.source_map_view.open_source_requested.connect(self._open_source_target)
 
     def _build_ui(self) -> None:
         page = QWidget()
@@ -836,6 +844,11 @@ class DocumentWorkspace(WorkspaceView):
                 else None
             ),
         )
+        self._pending_context_source_paths = (
+            tuple(jobs[0].input_sources)
+            if jobs and option.operation is Operation.DOCUMENT_CONTEXT_PACK
+            else ()
+        )
         self._reset_source_map()
         self.jobs_requested.emit(self.workspace_id.value, jobs)
 
@@ -945,6 +958,11 @@ class DocumentWorkspace(WorkspaceView):
             None,
         )
         self._source_map_pack_dir = Path(outputs[0]) if (context_report and outputs) else None
+        if self._source_map_pack_dir is not None:
+            self._source_map_source_paths = self._pending_context_source_paths or tuple(self.paths)
+        else:
+            self._source_map_source_paths = ()
+        self._pending_context_source_paths = ()
         self.report_button.setVisible(self._source_map_pack_dir is not None)
         self.source_map_button.setVisible(self._source_map_pack_dir is not None)
         self.copy_for_ai_button.setVisible(self._source_map_pack_dir is not None)
@@ -1036,11 +1054,32 @@ class DocumentWorkspace(WorkspaceView):
             self.source_map_view.set_source_map(None)
             QMessageBox.critical(self, "Source Map unavailable", str(exc))
             return
-        self.source_map_view.set_source_map(source_map)
+        self.source_map_view.set_source_map(
+            source_map,
+            source_paths_by_id(source_map.sources, self._source_map_source_paths),
+        )
         self.content_stack.setCurrentWidget(self.source_map_view)
+
+    def _open_source_target(self, target: SourceOpenTarget) -> None:
+        if not target.available or target.path is None:
+            QMessageBox.information(self, "Source unavailable", target.reason)
+            return
+        url = QUrl.fromLocalFile(str(target.path))
+        if target.capability is SourceOpenCapability.PAGE_LEVEL and target.page is not None:
+            url.setFragment(f"page={target.page}")
+            if QDesktopServices.openUrl(url):
+                return
+            url = QUrl.fromLocalFile(str(target.path))
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(
+                self,
+                "Unable to open source",
+                "Windows could not open the source with its associated application.",
+            )
 
     def _reset_source_map(self) -> None:
         self._source_map_pack_dir = None
+        self._source_map_source_paths = ()
         self.source_map_button.setVisible(False)
         self.copy_for_ai_button.setVisible(False)
         self.copy_for_ai_button.setText("Copy for AI")
