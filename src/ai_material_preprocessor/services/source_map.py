@@ -146,6 +146,16 @@ def _derived_content_blocks(content: str) -> list[str]:
     return blocks
 
 
+def _source_content_path(pack_dir: Path, source_id: str) -> Path | None:
+    """Resolve source content without allowing a manifest path to escape the pack."""
+    try:
+        sources_root = (pack_dir / "sources").resolve()
+        candidate = (sources_root / source_id / "content.md").resolve()
+    except (OSError, RuntimeError):
+        return None
+    return candidate if source_id and candidate.is_relative_to(sources_root) else None
+
+
 def _source_from_manifest(payload: dict[str, object]) -> SourceMapSource:
     raw_sha = payload.get("sha256")
     raw_order = payload.get("order")
@@ -166,10 +176,10 @@ def _entries_from_manifest(
 ) -> tuple[SourceMapEntry, ...]:
     derived: dict[str, list[str]] = {}
     for source_id in source_by_id:
-        content_path = pack_dir / "sources" / source_id / "content.md"
+        content_path = _source_content_path(pack_dir, source_id)
         derived[source_id] = (
             _derived_content_blocks(content_path.read_text(encoding="utf-8"))
-            if content_path.is_file()
+            if content_path is not None and content_path.is_file()
             else []
         )
     entries: list[SourceMapEntry] = []
@@ -216,6 +226,42 @@ def _entries_from_manifest(
     return tuple(entries)
 
 
+def _integrity_is_complete(
+    payload: dict[str, object],
+    raw_blocks: list[object],
+    entries: tuple[SourceMapEntry, ...],
+    source_by_id: dict[str, SourceMapSource],
+) -> bool:
+    if not entries or len(entries) != len(raw_blocks):
+        return False
+    block_ids = [entry.block_id for entry in entries]
+    if any(not block_id for block_id in block_ids) or len(block_ids) != len(set(block_ids)):
+        return False
+    expected_order: dict[str, int] = {}
+    for entry in entries:
+        if entry.source_id not in source_by_id or not entry.content_verified:
+            return False
+        expected_order[entry.source_id] = expected_order.get(entry.source_id, 0) + 1
+        if entry.block_order != expected_order[entry.source_id]:
+            return False
+
+    recorded = payload.get("integrity")
+    if not isinstance(recorded, dict):
+        return True
+    status = recorded.get("status")
+    if status is not None and status != "complete":
+        return False
+    order_preserved = recorded.get("order_preserved")
+    if order_preserved is not None and order_preserved is not True:
+        return False
+    for field in ("missing_blocks", "duplicate_blocks"):
+        value = recorded.get(field)
+        if value is not None and value != 0:
+            return False
+    input_blocks = recorded.get("input_blocks")
+    return input_blocks is None or input_blocks == len(entries)
+
+
 def load_source_map(pack_dir: Path) -> SourceMap:
     manifest_path = pack_dir / "manifest.json"
     if not manifest_path.is_file():
@@ -225,19 +271,23 @@ def load_source_map(pack_dir: Path) -> SourceMap:
         raise ValueError("Context Pack manifest is invalid.")
     if payload.get("package_type") != "ai_context_pack":
         raise ValueError("Not an AI Context Pack.")
-    try:
-        version = int(payload.get("context_pack_version") or 1)
-    except (TypeError, ValueError):
-        version = 1
-    sources = tuple(
-        _source_from_manifest(item)
-        for item in payload.get("sources") or []
-        if isinstance(item, dict)
+    raw_sources = payload.get("sources")
+    sources = (
+        tuple(_source_from_manifest(item) for item in raw_sources if isinstance(item, dict))
+        if isinstance(raw_sources, list)
+        else ()
     )
     source_by_id = {source.source_id: source for source in sources}
-    entries = _entries_from_manifest(pack_dir, list(payload.get("blocks") or []), source_by_id)
-    integrity_ok = bool(entries) and all(entry.content_verified for entry in entries)
-    return SourceMap(version=version, sources=sources, entries=entries, integrity_ok=integrity_ok)
+    raw_blocks_value = payload.get("blocks")
+    raw_blocks = raw_blocks_value if isinstance(raw_blocks_value, list) else []
+    entries = _entries_from_manifest(pack_dir, raw_blocks, source_by_id)
+    integrity_ok = _integrity_is_complete(payload, raw_blocks, entries, source_by_id)
+    return SourceMap(
+        version=SOURCE_MAP_VERSION,
+        sources=sources,
+        entries=entries,
+        integrity_ok=integrity_ok,
+    )
 
 
 def source_map_to_dict(source_map: SourceMap) -> dict[str, object]:

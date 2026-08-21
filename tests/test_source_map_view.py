@@ -177,6 +177,7 @@ def test_source_map_view_shows_degraded_content_without_fake_data(qtbot, tmp_pat
 
     assert view.content_edit.toPlainText() == DEGRADED_CONTENT
     assert view.card_location_value.text() == "PDF page 37"
+    assert view.integrity_notice.isVisibleTo(view)
 
 
 def test_document_workspace_opens_source_map_page_from_context_pack_result(
@@ -221,5 +222,24 @@ def test_document_workspace_hides_source_map_button_without_context_pack(
 
     view.set_completed([str(tmp_path / "result.md")], [], [])
 
+    assert not view.source_map_button.isVisibleTo(view)
+    assert view._source_map_pack_dir is None
+
+
+def test_document_workspace_clears_stale_source_map_for_next_result(qtbot, tmp_path: Path) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    view = DocumentWorkspace(
+        deepcopy(DEFAULT_CONFIG), toolset(markitdown=True), build_default_preview_registry()
+    )
+    qtbot.addWidget(view)
+    view.set_completed([str(result.output_dir)], [], [_context_report()])
+    view.source_map_button.click()
+    assert view.source_map_view.blocks_table.rowCount() >= 1
+
+    view.set_completed([str(tmp_path / "result.md")], [], [])
+
+    assert view.content_stack.currentIndex() == 0
+    assert view.source_map_view.blocks_table.rowCount() == 0
+    assert view.source_map_view.content_edit.toPlainText() == ""
     assert not view.source_map_button.isVisibleTo(view)
     assert view._source_map_pack_dir is None

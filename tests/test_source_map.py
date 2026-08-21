@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -334,4 +336,73 @@ def test_source_map_without_blocks_degrades_without_crashing(tmp_path: Path) -> 
     source_map = load_source_map(result.output_dir)
 
     assert source_map.entries == ()
+    assert source_map.integrity_ok is False
+
+
+def test_source_map_version_is_independent_from_context_pack_version(tmp_path: Path) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    manifest_path = result.output_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["context_pack_version"] = 7
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    source_map = load_source_map(result.output_dir)
+
+    assert source_map.version == 1
+
+
+def test_source_map_does_not_read_content_outside_pack_sources(tmp_path: Path) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    outside_dir = tmp_path / "private"
+    outside_dir.mkdir()
+    outside_content = "private material must not be loaded"
+    (outside_dir / "content.md").write_text(outside_content, encoding="utf-8")
+    escaped_source_id = os.path.relpath(outside_dir, result.output_dir / "sources")
+
+    manifest_path = result.output_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sources"][0]["source_id"] = escaped_source_id
+    manifest["blocks"][0]["source_id"] = escaped_source_id
+    manifest["blocks"][0]["content_sha256"] = hashlib.sha256(
+        outside_content.encode("utf-8")
+    ).hexdigest()
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    source_map = load_source_map(result.output_dir)
+
+    assert source_map.integrity_ok is False
+    assert all(entry.content == "" for entry in source_map.entries)
+    assert all(not entry.content_verified for entry in source_map.entries)
+
+
+def test_source_map_duplicate_manifest_blocks_degrade_integrity(tmp_path: Path) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    manifest_path = result.output_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["blocks"].append(dict(manifest["blocks"][0]))
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    source_map = load_source_map(result.output_dir)
+
+    assert source_map.integrity_ok is False
+
+
+def test_source_map_malformed_integrity_fields_degrade_without_crashing(tmp_path: Path) -> None:
+    result = _build_pack(tmp_path, [_pdf_page()])
+    manifest_path = result.output_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["integrity"]["status"] = []
+    manifest["integrity"]["missing_blocks"] = []
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    source_map = load_source_map(result.output_dir)
+
     assert source_map.integrity_ok is False

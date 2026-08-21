@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from PySide6.QtGui import QColor, QImage, QPalette
-from PySide6.QtWidgets import QApplication, QFrame, QTableWidget
+from PySide6.QtWidgets import QApplication, QFrame, QTableWidget, QTabWidget
 
 from ai_material_preprocessor.gui import (
     MOUSE_STATE_ASSETS,
@@ -14,6 +14,12 @@ from ai_material_preprocessor.gui import (
 from ai_material_preprocessor.models import Job, Operation, QueuedTask, TaskStatus, ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
 from ai_material_preprocessor.services.history_repository import HistoryRepository
+from ai_material_preprocessor.services.source_map import (
+    SourceLocation,
+    SourceMap,
+    SourceMapEntry,
+    SourceMapSource,
+)
 from ai_material_preprocessor.services.task_manifest import TaskRecord, write_task_manifest
 from ai_material_preprocessor.services.task_repository import PersistentTaskQueue
 
@@ -40,6 +46,53 @@ def combo_operations(workspace) -> list[Operation]:
         Operation(workspace.operation.itemData(index))
         for index in range(workspace.operation.count())
     ]
+
+
+def _manual_source_map() -> SourceMap:
+    location = SourceLocation(
+        kind="page",
+        label="第 37 页",
+        display="PDF page 37",
+        ordinal=37,
+        confidence=None,
+        fallback=False,
+    )
+    source = SourceMapSource(
+        source_id="source-001",
+        source_order=1,
+        display_name="lecture.pdf",
+        source_format=".pdf",
+        provenance_level="page",
+        sha256="a" * 64,
+    )
+    entry = SourceMapEntry(
+        block_id="block-001",
+        source_id="source-001",
+        source_order=1,
+        block_order=1,
+        heading_context=("第一章",),
+        estimated_tokens=1200,
+        atomic=True,
+        content="PDF paragraph.",
+        content_sha256="b" * 64,
+        content_verified=True,
+        locations=(location,),
+        primary_location=location,
+    )
+    return SourceMap(version=1, sources=(source,), entries=(entry,), integrity_ok=True)
+
+
+def _context_report() -> dict[str, object]:
+    return {
+        "context_pack_version": 1,
+        "source_count": 1,
+        "pack_count": 1,
+        "estimated_tokens": 1200,
+        "requested_budget": 32000,
+        "overflow_packs": 0,
+        "integrity": "complete",
+        "warnings": [],
+    }
 
 
 def test_mouse_assets_are_packaged_transparent_images() -> None:
@@ -472,3 +525,52 @@ def test_open_output_opens_pack_directory_but_parent_for_files(
     window._open_output(str(file_output))
 
     assert opened == [str(pack), str(tmp_path)]
+
+
+def test_context_pack_completion_opens_report_dialog_with_source_map(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    pack_dir = tmp_path / "Context-Pack"
+    pack_dir.mkdir()
+    shown: list[object] = []
+    loaded_paths: list[Path] = []
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.DocumentReportDialog.exec",
+        lambda self: shown.append(self) or 0,
+    )
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.load_source_map",
+        lambda path: loaded_paths.append(path) or _manual_source_map(),
+    )
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+
+    window._on_completed([str(pack_dir)], [], [_context_report()])
+
+    assert loaded_paths == [pack_dir]
+    assert len(shown) == 1
+    assert shown[0].source_map_view.blocks_table.rowCount() == 1
+    assert shown[0].source_map_view.card_location_value.text() == "PDF page 37"
+
+
+def test_document_completion_opens_report_dialog_without_source_map_tab(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    shown: list[object] = []
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.DocumentReportDialog.exec",
+        lambda self: shown.append(self) or 0,
+    )
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+    output = tmp_path / "result.md"
+    output.touch()
+
+    window._on_completed([str(output)], [], [{"source": "result.md", "score": 90}])
+
+    assert len(shown) == 1
+    dialog = shown[0]
+    tab_widget = dialog.findChild(QTabWidget)
+    assert tab_widget is not None
+    labels = [tab_widget.tabText(index) for index in range(tab_widget.count())]
+    assert "Source Map" not in labels

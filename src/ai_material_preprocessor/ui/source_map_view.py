@@ -120,7 +120,14 @@ class SourceMapView(QWidget):
         self.blocks_table.setMinimumWidth(280)
         self.blocks_table.currentCellChanged.connect(self._on_current_cell_changed)
         self.blocks_table.setAccessibleName("Source Map blocks")
+        self.integrity_notice = QLabel(
+            "Integrity check incomplete. Some block content may be unavailable or inconsistent."
+        )
+        self.integrity_notice.setObjectName("sectionDescription")
+        self.integrity_notice.setWordWrap(True)
+        self.integrity_notice.setVisible(False)
         layout.addLayout(header)
+        layout.addWidget(self.integrity_notice)
         layout.addWidget(self.blocks_table, 1)
         return panel
 
@@ -190,6 +197,17 @@ class SourceMapView(QWidget):
         self._render_entry(current_row)
 
     def set_source_map(self, source_map: SourceMap | None) -> None:
+        self.blocks_table.setRowCount(0)
+        self.block_count.clear()
+        self.heading_label.clear()
+        self.token_label.clear()
+        self.content_edit.clear()
+        self.card_file_value.clear()
+        self.card_format_value.clear()
+        self.card_source_id_value.clear()
+        self.card_location_value.clear()
+        self.card_fallback_note.setVisible(False)
+        self.integrity_notice.setVisible(bool(source_map and source_map.degraded))
         self._entries = list(source_map.entries) if source_map is not None else []
         self._sources = (
             {source.source_id: source for source in source_map.sources}
@@ -199,7 +217,6 @@ class SourceMapView(QWidget):
         if not self._entries:
             self._stack.setCurrentWidget(self._empty_page)
             return
-        self.blocks_table.setRowCount(0)
         for entry in self._entries:
             source = self._sources.get(entry.source_id)
             source_name = source.display_name if source is not None else entry.source_id

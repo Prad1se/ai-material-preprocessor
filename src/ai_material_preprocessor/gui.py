@@ -32,6 +32,7 @@ from .services.config import load_config, save_config
 from .services.environment import detect_tools
 from .services.history_repository import HistoryRepository, default_cache_root
 from .services.preview import completed_contact_sheet
+from .services.source_map import load_source_map
 from .services.task_manifest import resolve_history_root
 from .services.task_repository import PersistentTaskQueue
 from .services.tool_versions import detect_tools_with_versions
@@ -376,6 +377,13 @@ class MainWindow(QMainWindow):
             if errors:
                 QMessageBox.warning(self, "部分任务未完成", "\n".join(errors[:6]))
         elif context_pack_reports:
+            source_map = None
+            if outputs:
+                try:
+                    source_map = load_source_map(Path(outputs[0]))
+                except (OSError, ValueError):
+                    source_map = None
+            DocumentReportDialog(context_pack_reports, outputs, self, source_map=source_map).exec()
             if errors:
                 QMessageBox.warning(self, "Context Pack 完成但需要检查", "\n".join(errors[:6]))
         elif errors:

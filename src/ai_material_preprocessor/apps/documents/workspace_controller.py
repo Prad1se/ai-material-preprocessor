@@ -11,6 +11,8 @@ from ...converters.markdown import SUPPORTED_EXTENSIONS as MARKDOWN_EXTENSIONS
 from ...converters.office_pdf import POWERPOINT_EXTENSIONS, WORD_EXTENSIONS
 from ...converters.video import VIDEO_EXTENSIONS
 from ...models import Job, Operation, ToolStatus
+from ...services.source_map import SourceMap
+from ...services.source_map import load_source_map as load_context_pack_source_map
 from .policy import DOCUMENT_INPUT_EXTENSIONS, DOCUMENT_OPERATIONS
 
 
@@ -30,6 +32,10 @@ class DocumentWorkspaceController:
 
     def update_tools(self, tools: dict[str, ToolStatus]) -> None:
         self.tools = tools
+
+    @staticmethod
+    def load_source_map(pack_dir: Path) -> SourceMap:
+        return load_context_pack_source_map(pack_dir)
 
     def classify_inputs(self, paths: list[str]) -> WorkspaceInputSelection:
         return classify_workspace_inputs(

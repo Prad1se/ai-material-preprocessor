@@ -35,7 +35,6 @@ from ...apps.documents.workspace_controller import (
     DocumentWorkspaceController,
 )
 from ...models import Operation, ToolStatus
-from ...services.source_map import load_source_map
 from ..document_mascot import DocumentMascotState, DocumentMascotView
 from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
@@ -827,6 +826,7 @@ class DocumentWorkspace(WorkspaceView):
                 else None
             ),
         )
+        self._reset_source_map()
         self.jobs_requested.emit(self.workspace_id.value, jobs)
 
     def set_presentation_state(
@@ -917,6 +917,7 @@ class DocumentWorkspace(WorkspaceView):
         errors: list[str],
         quality_reports: list[dict] | None = None,
     ) -> None:
+        self._reset_source_map()
         self.last_outputs = outputs
         self.open_button.setEnabled(bool(outputs))
         self.workspace_progress.setValue(
@@ -980,13 +981,19 @@ class DocumentWorkspace(WorkspaceView):
         if self._source_map_pack_dir is None:
             return
         try:
-            source_map = load_source_map(self._source_map_pack_dir)
+            source_map = self.controller.load_source_map(self._source_map_pack_dir)
         except (OSError, ValueError) as exc:
             self.source_map_view.set_source_map(None)
             QMessageBox.critical(self, "Source Map unavailable", str(exc))
             return
         self.source_map_view.set_source_map(source_map)
         self.content_stack.setCurrentWidget(self.source_map_view)
+
+    def _reset_source_map(self) -> None:
+        self._source_map_pack_dir = None
+        self.source_map_button.setVisible(False)
+        self.source_map_view.set_source_map(None)
+        self.content_stack.setCurrentIndex(0)
 
     def _close_source_map(self) -> None:
         self.content_stack.setCurrentIndex(0)
