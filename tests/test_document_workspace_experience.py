@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -165,23 +166,69 @@ def test_context_pack_completion_distinguishes_overflow_warning(qtbot, tmp_path:
     view = workspace(qtbot, markitdown=True)
     output = tmp_path / "pack"
     output.mkdir()
-    (output / "context-report.json").write_text("{}", encoding="utf-8")
-    report = {
+    report_file = {
         "context_pack_version": 1,
         "source_count": 3,
         "pack_count": 2,
-        "estimated_tokens": 90000,
-        "requested_budget": 32000,
-        "overflow_packs": 1,
+        "total_estimated_tokens": 90000,
+        "budget": {"requested_tokens": 32000, "soft_target_tokens": 30400},
+        "packs": [
+            {"index": 1, "status": "over_budget"},
+            {"index": 2, "status": "within_budget"},
+        ],
+        "warnings": [
+            {"code": "context_pack_over_budget", "reason": "Rendered pack exceeds the budget."}
+        ],
+        "integrity": {"status": "complete"},
     }
+    (output / "context-report.json").write_text(
+        json.dumps(report_file, ensure_ascii=False), encoding="utf-8"
+    )
 
-    view.set_completed([str(output)], [], [report])
+    view.set_completed([str(output)], [], [{"context_pack_version": 1}])
 
     assert view.presentation_state is WorkspacePresentationState.WARNING
-    assert view.result_heading.text() == "Context Pack ready"
+    assert view.result_heading.text() == "AI Context Pack Ready"
     assert "3 sources" in view.result_details.text()
+    assert "2 context packs" in view.result_details.text()
+    assert "~90,000 estimated tokens" in view.result_details.text()
+    assert "32K context window" in view.result_details.text()
+    assert "All content blocks preserved" in view.result_details.text()
+    assert "Rendered pack exceeds the budget." in view.result_details.text()
     assert "over-budget" in view.state_message.text()
     assert view.report_button.isVisibleTo(view)
+    assert view.source_map_button.isVisibleTo(view)
+
+
+def test_context_pack_result_panel_renders_no_limit_summary(qtbot, tmp_path: Path) -> None:
+    view = workspace(qtbot, markitdown=True)
+    output = tmp_path / "pack"
+    output.mkdir()
+    report_file = {
+        "context_pack_version": 1,
+        "source_count": 1,
+        "pack_count": 1,
+        "total_estimated_tokens": 751,
+        "budget": {"requested_tokens": None, "soft_target_tokens": None},
+        "packs": [{"index": 1, "status": "within_budget"}],
+        "warnings": [],
+        "integrity": {"status": "complete"},
+    }
+    (output / "context-report.json").write_text(
+        json.dumps(report_file, ensure_ascii=False), encoding="utf-8"
+    )
+
+    view.set_completed([str(output)], [], [{"context_pack_version": 1}])
+
+    assert view.presentation_state is WorkspacePresentationState.SUCCESS
+    assert view.result_heading.text() == "AI Context Pack Ready"
+    assert "1 source" in view.result_details.text()
+    assert "1 context pack" in view.result_details.text()
+    assert "~751 estimated tokens" in view.result_details.text()
+    assert "Budget: No limit" in view.result_details.text()
+    assert "All content blocks preserved" in view.result_details.text()
+    assert "Warnings:" not in view.result_details.text()
+    assert view.source_map_button.isVisibleTo(view)
 
 
 def test_document_summary_and_mascot_follow_real_presentation_state(qtbot, tmp_path: Path) -> None:

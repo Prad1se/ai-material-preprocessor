@@ -35,6 +35,7 @@ from ...apps.documents.workspace_controller import (
     DocumentWorkspaceController,
 )
 from ...models import Operation, ToolStatus
+from ...services.context_summary import BudgetStatus, ContextPackSummary, summarize_context_pack
 from ..document_mascot import DocumentMascotState, DocumentMascotView
 from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
@@ -932,10 +933,16 @@ class DocumentWorkspace(WorkspaceView):
             ),
             None,
         )
-        overflow = int(context_report.get("overflow_packs", 0)) if context_report else 0
-        self.report_button.setVisible(bool(context_report and outputs))
         self._source_map_pack_dir = Path(outputs[0]) if (context_report and outputs) else None
+        self.report_button.setVisible(self._source_map_pack_dir is not None)
         self.source_map_button.setVisible(self._source_map_pack_dir is not None)
+        summary: ContextPackSummary | None = None
+        if self._source_map_pack_dir is not None:
+            try:
+                summary = summarize_context_pack(self._source_map_pack_dir)
+            except (OSError, ValueError):
+                summary = None
+        overflow = summary.overflow_count if summary is not None else 0
         state = (
             WorkspacePresentationState.WARNING
             if outputs and (errors or overflow)
@@ -943,17 +950,9 @@ class DocumentWorkspace(WorkspaceView):
             if outputs
             else WorkspacePresentationState.ERROR
         )
-        if context_report:
-            budget = context_report.get("requested_budget")
-            pack_count = int(context_report.get("pack_count", 0))
-            budget_label = f"{int(budget):,} estimated tokens" if budget else "No limit"
-            self.result_heading.setText("Context Pack ready")
-            self.result_details.setText(
-                f"{context_report.get('source_count', 0)} sources · "
-                f"{pack_count} pack{'s' if pack_count != 1 else ''} · "
-                f"~{int(context_report.get('estimated_tokens', 0)):,} estimated tokens\n"
-                f"Context Budget: {budget_label}"
-            )
+        if summary is not None:
+            self.result_heading.setText("AI Context Pack Ready")
+            self.result_details.setText(self._format_summary(summary))
         else:
             self.result_heading.setText(
                 f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
@@ -969,6 +968,38 @@ class DocumentWorkspace(WorkspaceView):
             if errors
             else f"{len(outputs)} completed. The original files were not changed.",
         )
+
+    def _format_summary(self, summary: ContextPackSummary) -> str:
+        lines = [
+            f"{summary.source_count} source{'s' if summary.source_count != 1 else ''}",
+            f"{summary.pack_count} context pack{'s' if summary.pack_count != 1 else ''}",
+            f"~{summary.estimated_tokens:,} estimated tokens",
+            "",
+            f"Budget: {self._summary_budget_label(summary)}",
+            "",
+            f"Integrity: "
+            f"{'✓ All content blocks preserved' if summary.integrity_ok else 'Incomplete: some content blocks are missing or unverified'}",
+        ]
+        if summary.warnings:
+            lines.extend(("", "Warnings:"))
+            for warning in summary.warnings:
+                detail = (
+                    warning.get("reason")
+                    or warning.get("message")
+                    or warning.get("code")
+                    or "unknown warning"
+                )
+                lines.append(f"- {detail}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _summary_budget_label(summary: ContextPackSummary) -> str:
+        if summary.budget_status is BudgetStatus.NO_LIMIT or summary.requested_budget is None:
+            return "No limit"
+        budget = summary.requested_budget
+        if budget > 0 and budget % 1000 == 0:
+            return f"{budget // 1000}K context window"
+        return f"{budget:,} estimated tokens"
 
     def _open_context_report(self) -> None:
         if not self.last_outputs:
