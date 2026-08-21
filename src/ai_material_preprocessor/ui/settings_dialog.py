@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..apps.documents.policy import DOCUMENT_TOOL_NAMES
+from ..apps.video.policy import VIDEO_TOOL_NAMES
 from ..models import ToolStatus
 from ..services.config import save_config
 from ..services.tool_capabilities import TOOL_DESCRIPTORS, build_tool_capabilities
@@ -54,6 +56,8 @@ class SettingsDialog(QDialog):
         self.save_callback = save_callback
         self.detector = detector
         self.tool_path_inputs: dict[str, QLineEdit] = {}
+        self.document_tool_paths: dict[str, QLineEdit] = {}
+        self.video_tool_paths: dict[str, QLineEdit] = {}
         self.setWindowTitle("设置")
         self.resize(900, 680)
         self.setMinimumSize(760, 580)
@@ -65,7 +69,8 @@ class SettingsDialog(QDialog):
             detector=self.detector,
             changed_callback=self._tools_changed,
         )
-        self.tool_table.install_requested.connect(self._request_tool_install)
+        self.document_tool_table.install_requested.connect(self._request_tool_install)
+        self.video_tool_table.install_requested.connect(self._request_tool_install)
         self._render_tools()
         self.setStyleSheet(stylesheet_for_theme(self.config["app"].get("theme", "system")))
 
@@ -78,6 +83,7 @@ class SettingsDialog(QDialog):
         root.addWidget(title)
         root.addWidget(subtitle)
         tabs = QTabWidget()
+        tabs.setObjectName("settingsTabs")
 
         general = QWidget()
         general_form = QFormLayout(general)
@@ -108,18 +114,6 @@ class SettingsDialog(QDialog):
         general_form.addRow("历史保留期限", self.retention_days)
         general_form.addRow("历史容量上限", self.history_size_mb)
         general_form.addRow("联网更新检查", self.update_check_enabled)
-        tabs.addTab(general, "常规")
-
-        tools_page = QWidget()
-        tools_layout = QVBoxLayout(tools_page)
-        hint = QLabel("可用能力会自动检测；自定义路径优先于随程序提供和系统 PATH。")
-        hint.setObjectName("sectionDescription")
-        hint.setWordWrap(True)
-        tools_layout.addWidget(hint)
-        self.tool_table = ToolStatusTable()
-        tools_layout.addWidget(self.tool_table)
-        paths_widget = QWidget()
-        path_form = QFormLayout(paths_widget)
         install_row = QHBoxLayout()
         self.tool_install_directory = QLineEdit(
             str(self.config.get("tool_management", {}).get("install_directory", ""))
@@ -131,29 +125,25 @@ class SettingsDialog(QDialog):
         install_browse.clicked.connect(self._browse_install_directory)
         install_row.addWidget(self.tool_install_directory, 1)
         install_row.addWidget(install_browse)
-        path_form.addRow("工具补充目录", install_row)
-        for key, descriptor in TOOL_DESCRIPTORS.items():
-            if not descriptor.custom_path_supported:
-                continue
-            row = QHBoxLayout()
-            field = QLineEdit(str(self.config["tools"].get(key, "")))
-            field.setPlaceholderText("自动检测")
-            browse = QPushButton("选择…")
-            browse.clicked.connect(lambda _checked=False, name=key: self._browse_tool(name))
-            row.addWidget(field, 1)
-            row.addWidget(browse)
-            path_form.addRow(descriptor.display_name, row)
-            self.tool_path_inputs[key] = field
-        self.tool_path_scroll = QScrollArea()
-        self.tool_path_scroll.setWidgetResizable(True)
-        self.tool_path_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.tool_path_scroll.setMinimumHeight(180)
-        self.tool_path_scroll.setWidget(paths_widget)
-        tools_layout.addWidget(self.tool_path_scroll, 1)
-        self.redetect_button = QPushButton("重新检测")
-        self.redetect_button.clicked.connect(self._redetect)
-        tools_layout.addWidget(self.redetect_button)
-        tabs.addTab(tools_page, "本机能力")
+        general_form.addRow("工具补充目录", install_row)
+        tabs.addTab(general, "常规")
+
+        documents_page, self.document_tool_table, document_scroll = self._tool_page(
+            DOCUMENT_TOOL_NAMES, self.document_tool_paths
+        )
+        video_page, self.video_tool_table, video_scroll = self._tool_page(
+            VIDEO_TOOL_NAMES, self.video_tool_paths
+        )
+        documents_page.layout().insertWidget(0, self._document_defaults())
+        video_page.layout().insertWidget(0, self._video_defaults())
+        self.tool_path_inputs.update(self.document_tool_paths)
+        self.tool_path_inputs.update(self.video_tool_paths)
+        # Compatibility aliases for callers that only need a table/scroll widget.
+        self.tool_table = self.document_tool_table
+        self.tool_path_scroll = document_scroll
+        self.video_tool_path_scroll = video_scroll
+        tabs.addTab(documents_page, "Documents")
+        tabs.addTab(video_page, "Video")
         root.addWidget(tabs, 1)
 
         actions = QHBoxLayout()
@@ -167,6 +157,93 @@ class SettingsDialog(QDialog):
         actions.addWidget(save)
         root.addLayout(actions)
 
+    def _tool_page(
+        self,
+        tool_names: frozenset[str],
+        path_inputs: dict[str, QLineEdit],
+    ) -> tuple[QWidget, ToolStatusTable, QScrollArea]:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        hint = QLabel("可用能力会自动检测；自定义路径优先于随程序提供和系统 PATH。")
+        hint.setObjectName("sectionDescription")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        table = ToolStatusTable()
+        layout.addWidget(table)
+        paths_widget = QWidget()
+        path_form = QFormLayout(paths_widget)
+        for key, descriptor in TOOL_DESCRIPTORS.items():
+            if key not in tool_names or not descriptor.custom_path_supported:
+                continue
+            row = QHBoxLayout()
+            field = QLineEdit(str(self.config["tools"].get(key, "")))
+            field.setPlaceholderText("自动检测")
+            browse = QPushButton("选择…")
+            browse.clicked.connect(lambda _checked=False, name=key: self._browse_tool(name))
+            row.addWidget(field, 1)
+            row.addWidget(browse)
+            path_form.addRow(descriptor.display_name, row)
+            path_inputs[key] = field
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setMinimumHeight(150)
+        scroll.setWidget(paths_widget)
+        layout.addWidget(scroll, 1)
+        redetect = QPushButton("重新检测")
+        redetect.clicked.connect(self._redetect)
+        layout.addWidget(redetect)
+        return page, table, scroll
+
+    def _document_defaults(self) -> QWidget:
+        panel = QFrame()
+        panel.setObjectName("settingsGroup")
+        form = QFormLayout(panel)
+        self.document_mode = QComboBox()
+        self.document_mode.addItem("AI 增强", "enhanced")
+        self.document_mode.addItem("原始转换", "raw")
+        self.document_mode.setCurrentIndex(
+            max(0, self.document_mode.findData(str(self.config["document"]["mode"])))
+        )
+        self.document_split = QCheckBox("按 AI 易读长度自动拆分")
+        self.document_split.setChecked(bool(self.config["document"]["split_enabled"]))
+        self.document_target_tokens = QSpinBox()
+        self.document_target_tokens.setRange(500, 100000)
+        self.document_target_tokens.setSingleStep(500)
+        self.document_target_tokens.setValue(int(self.config["document"]["target_tokens"]))
+        self.document_target_tokens.setSuffix(" 估算 tokens / 段")
+        self.document_ocr = QCheckBox("默认启用本地 OCR")
+        self.document_ocr.setChecked(bool(self.config["document"]["ocr_enabled"]))
+        form.addRow("处理模式", self.document_mode)
+        form.addRow("自动拆分", self.document_split)
+        form.addRow("目标长度", self.document_target_tokens)
+        form.addRow("OCR", self.document_ocr)
+        return panel
+
+    def _video_defaults(self) -> QWidget:
+        panel = QFrame()
+        panel.setObjectName("settingsGroup")
+        form = QFormLayout(panel)
+        self.video_crf = QSpinBox()
+        self.video_crf.setRange(0, 51)
+        self.video_crf.setValue(int(self.config["video"]["compression_crf"]))
+        self.video_audio_format = QComboBox()
+        self.video_audio_format.addItem("MP3", "mp3")
+        self.video_audio_format.addItem("WAV", "wav")
+        self.video_audio_format.setCurrentIndex(
+            max(
+                0,
+                self.video_audio_format.findData(str(self.config["video"]["audio_format"])),
+            )
+        )
+        self.video_rename_template = QLineEdit(str(self.config["video"]["rename_template"]))
+        self.video_project_name = QLineEdit(str(self.config["video"].get("project_name", "")))
+        form.addRow("压缩 CRF", self.video_crf)
+        form.addRow("音频格式", self.video_audio_format)
+        form.addRow("命名模板", self.video_rename_template)
+        form.addRow("默认项目", self.video_project_name)
+        return panel
+
     def _config_from_fields(self) -> dict:
         result = copy.deepcopy(self.config)
         result["app"]["theme"] = str(self.theme_combo.currentData())
@@ -175,6 +252,23 @@ class SettingsDialog(QDialog):
         result["history"]["retention_days"] = self.retention_days.value()
         result["history"]["max_size_mb"] = self.history_size_mb.value()
         result["tool_management"]["install_directory"] = self.tool_install_directory.text().strip()
+        result["document"].update(
+            {
+                "mode": str(self.document_mode.currentData()),
+                "split_enabled": self.document_split.isChecked(),
+                "target_tokens": self.document_target_tokens.value(),
+                "ocr_enabled": self.document_ocr.isChecked(),
+            }
+        )
+        result["video"].update(
+            {
+                "compression_crf": self.video_crf.value(),
+                "audio_format": str(self.video_audio_format.currentData()),
+                "rename_template": self.video_rename_template.text().strip()
+                or "{date}_{time}_{location}_{index}",
+                "project_name": self.video_project_name.text().strip(),
+            }
+        )
         for key, field in self.tool_path_inputs.items():
             result["tools"][key] = field.text().strip()
         return result
@@ -200,7 +294,13 @@ class SettingsDialog(QDialog):
             self.tool_install_directory.setText(selected)
 
     def _render_tools(self) -> None:
-        self.tool_table.set_capabilities(build_tool_capabilities(self.tools))
+        capabilities = build_tool_capabilities(self.tools)
+        self.document_tool_table.set_capabilities(
+            tuple(item for item in capabilities if item.key in DOCUMENT_TOOL_NAMES)
+        )
+        self.video_tool_table.set_capabilities(
+            tuple(item for item in capabilities if item.key in VIDEO_TOOL_NAMES)
+        )
 
     def _redetect(self) -> None:
         candidate = self._config_from_fields()

@@ -33,6 +33,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "theme": "system",
         "update_check_enabled": False,
     },
+    "ui": {
+        "last_workspace": "documents",
+    },
     "output_folder_name": "AI素材处理结果",
     "history_directory": "",
     "tools": {

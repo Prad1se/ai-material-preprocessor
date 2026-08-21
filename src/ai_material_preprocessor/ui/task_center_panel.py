@@ -51,8 +51,8 @@ class TaskCenterPanel(QFrame):
         header.addWidget(self.cancel_button)
         header.addWidget(self.retry_button)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["文件", "操作", "状态", "进度", "详情"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Workspace", "文件", "操作", "状态", "进度", "详情"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -60,11 +60,12 @@ class TaskCenterPanel(QFrame):
         self.table.setMinimumHeight(170)
         self.table.verticalHeader().setVisible(False)
         for column, mode in (
-            (0, QHeaderView.ResizeMode.Stretch),
-            (1, QHeaderView.ResizeMode.ResizeToContents),
+            (0, QHeaderView.ResizeMode.ResizeToContents),
+            (1, QHeaderView.ResizeMode.Stretch),
             (2, QHeaderView.ResizeMode.ResizeToContents),
             (3, QHeaderView.ResizeMode.ResizeToContents),
-            (4, QHeaderView.ResizeMode.Stretch),
+            (4, QHeaderView.ResizeMode.ResizeToContents),
+            (5, QHeaderView.ResizeMode.Stretch),
         ):
             self.table.horizontalHeader().setSectionResizeMode(column, mode)
         self.table.itemSelectionChanged.connect(self.selection_changed.emit)
@@ -75,6 +76,7 @@ class TaskCenterPanel(QFrame):
     def upsert(
         self,
         task_id: str,
+        workspace_label: str,
         source_name: str,
         operation_label: str,
         status: TaskStatus,
@@ -85,22 +87,23 @@ class TaskCenterPanel(QFrame):
         if row is None:
             row = self.table.rowCount()
             self.table.insertRow(row)
+            self.table.setItem(row, 0, QTableWidgetItem(workspace_label))
             source_item = QTableWidgetItem(source_name)
             source_item.setData(Qt.ItemDataRole.UserRole, task_id)
-            self.table.setItem(row, 0, source_item)
-            self.table.setItem(row, 1, QTableWidgetItem(operation_label))
+            self.table.setItem(row, 1, source_item)
+            self.table.setItem(row, 2, QTableWidgetItem(operation_label))
             self.rows[task_id] = row
-        self.table.setItem(row, 2, QTableWidgetItem(STATUS_LABELS[status]))
-        self.table.setItem(row, 3, QTableWidgetItem(f"{progress}%"))
-        self.table.setItem(row, 4, QTableWidgetItem(message))
-        self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole + 1, status.value)
+        self.table.setItem(row, 3, QTableWidgetItem(STATUS_LABELS[status]))
+        self.table.setItem(row, 4, QTableWidgetItem(f"{progress}%"))
+        self.table.setItem(row, 5, QTableWidgetItem(message))
+        self.table.item(row, 1).setData(Qt.ItemDataRole.UserRole + 1, status.value)
 
     def selected_task_ids(self) -> list[str]:
         rows = sorted({index.row() for index in self.table.selectedIndexes()})
         return [
-            str(self.table.item(row, 0).data(Qt.ItemDataRole.UserRole))
+            str(self.table.item(row, 1).data(Qt.ItemDataRole.UserRole))
             for row in rows
-            if self.table.item(row, 0) is not None
+            if self.table.item(row, 1) is not None
         ]
 
     def update_actions(

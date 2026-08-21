@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..application.workspaces import WorkspaceId, operations_for_workspace
 from ..models import Operation, TaskStatus
 from ..services.history_repository import HistoryEntry, HistoryRepository
 from .theme import APP_STYLESHEET
@@ -91,7 +92,13 @@ class HistoryDetailsDialog(QDialog):
 class HistoryDialog(QDialog):
     """Searchable history UI; record and cache deletion stay separate."""
 
-    def __init__(self, repository: HistoryRepository, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        repository: HistoryRepository,
+        parent: QWidget | None = None,
+        *,
+        workspace: WorkspaceId | None = None,
+    ) -> None:
         super().__init__(parent)
         self.repository = repository
         self.setWindowTitle("处理历史")
@@ -106,6 +113,12 @@ class HistoryDialog(QDialog):
         filters = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("搜索文件名、输出路径或任务编号")
+        self.workspace_filter = QComboBox()
+        self.workspace_filter.addItem("全部 Workspace", None)
+        self.workspace_filter.addItem("Documents", WorkspaceId.DOCUMENTS.value)
+        self.workspace_filter.addItem("Video", WorkspaceId.VIDEO.value)
+        if workspace is not None:
+            self.workspace_filter.setCurrentIndex(self.workspace_filter.findData(workspace.value))
         self.status_filter = QComboBox()
         self.status_filter.addItem("全部状态", None)
         for status, label in STATUS_LABELS.items():
@@ -115,6 +128,7 @@ class HistoryDialog(QDialog):
         for operation in Operation:
             self.operation_filter.addItem(operation.value, operation.name)
         filters.addWidget(self.search_input, 2)
+        filters.addWidget(self.workspace_filter, 1)
         filters.addWidget(self.status_filter, 1)
         filters.addWidget(self.operation_filter, 1)
         root.addLayout(filters)
@@ -156,6 +170,7 @@ class HistoryDialog(QDialog):
         root.addLayout(close_row)
 
         self.search_input.textChanged.connect(self.refresh)
+        self.workspace_filter.currentIndexChanged.connect(self._workspace_changed)
         self.status_filter.currentIndexChanged.connect(self.refresh)
         self.operation_filter.currentIndexChanged.connect(self.refresh)
         self.table.itemSelectionChanged.connect(self._update_actions)
@@ -165,6 +180,25 @@ class HistoryDialog(QDialog):
         self.delete_records_button.clicked.connect(self._delete_selected_records)
         self.delete_caches_button.clicked.connect(self._delete_selected_caches)
         self.clear_all_button.clicked.connect(self._clear_all)
+        self.refresh()
+
+    def _workspace_changed(self) -> None:
+        selected_operation = self.operation_filter.currentData()
+        raw_workspace = self.workspace_filter.currentData()
+        allowed = (
+            operations_for_workspace(WorkspaceId(raw_workspace))
+            if raw_workspace
+            else frozenset(Operation)
+        )
+        self.operation_filter.blockSignals(True)
+        self.operation_filter.clear()
+        self.operation_filter.addItem("全部操作", None)
+        for operation in Operation:
+            if operation in allowed:
+                self.operation_filter.addItem(operation.value, operation.name)
+        restored = self.operation_filter.findData(selected_operation)
+        self.operation_filter.setCurrentIndex(max(0, restored))
+        self.operation_filter.blockSignals(False)
         self.refresh()
 
     @staticmethod
@@ -179,6 +213,10 @@ class HistoryDialog(QDialog):
             status=TaskStatus(raw_status) if raw_status else None,
             operation=Operation[raw_operation] if raw_operation else None,
         )
+        raw_workspace = self.workspace_filter.currentData()
+        if raw_workspace:
+            allowed = operations_for_workspace(WorkspaceId(raw_workspace))
+            entries = [entry for entry in entries if entry.operations & allowed]
         self.table.setRowCount(0)
         for entry in entries:
             row = self.table.rowCount()

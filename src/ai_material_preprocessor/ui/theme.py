@@ -8,6 +8,45 @@ APP_STYLESHEET = r"""
 QMainWindow, QDialog, QScrollArea { background: #f5efe9; }
 QWidget { color: #171717; font-family: "Microsoft YaHei UI"; }
 QWidget#page { background: #f5efe9; color: #171717; }
+QWidget#shell, QWidget#workspacePage, QWidget#tasksPage { background: #f5efe9; }
+QFrame#workspaceNavigation { background: #191b20; border: 0; }
+QLabel#shellBrand { color: #f8f9fc; font-size: 20px; font-weight: 800; border: 0; }
+QLabel#navHint { color: #aeb4c0; font-size: 11px; border: 0; }
+QFrame#navSeparator { color: #40444d; }
+QPushButton#workspaceNavButton {
+    color: #e8eaf0; background: transparent; border: 0; border-radius: 10px;
+    padding: 11px 12px; text-align: left; font-weight: 650;
+}
+QPushButton#workspaceNavButton:hover { background: #30343d; }
+QPushButton#workspaceNavButton:checked { color: #f8f9fc; background: #3d4350; }
+QFrame#documentHero {
+    background: #f4f8f2; border: 2px solid #243c31; border-radius: 24px;
+    padding: 18px;
+}
+QLabel#documentEyebrow { color: #527463; font-size: 11px; font-weight: 800; border: 0; }
+QLabel#documentIdentity {
+    color: #f7fbf6; background: #527463; border: 0; border-radius: 32px;
+    min-width: 64px; min-height: 64px; max-width: 64px; max-height: 64px;
+    font-size: 29px; font-weight: 900;
+}
+QPushButton#documentPrimary {
+    color: #f8f9fc; background: #527463; border: 2px solid #243c31;
+    border-radius: 12px; padding: 13px 20px; font-weight: 800;
+}
+QPushButton#documentPrimary:hover { background: #638776; }
+QFrame#videoHero {
+    background: #fff4f1; border: 2px solid #552f34; border-radius: 24px;
+    padding: 18px;
+}
+QLabel#videoEyebrow { color: #c44e63; font-size: 11px; font-weight: 800; border: 0; }
+QPushButton#videoPrimary {
+    color: #171717; background: #ef6f82; border: 2px solid #552f34;
+    border-radius: 12px; padding: 13px 20px; font-weight: 800;
+}
+QPushButton#videoPrimary:hover { background: #f38293; }
+QFrame#workspaceRecent, QFrame#settingsGroup {
+    background: #fffdfb; border: 1px solid #d8cfca; border-radius: 14px;
+}
 QFrame#hero { background: #fff8f3; border: 2px solid #171717; border-radius: 26px; }
 QLabel#mouseMascot { background: transparent; border: 0; }
 QLabel#eyebrow { color: #df5268; font-size: 11px; font-weight: 800; letter-spacing: 1px; border: 0; }
@@ -138,6 +177,21 @@ _DARK_COLORS = {
     "#bdb4b0": "#5b5c61",
     "#c7c7cc": "#68696f",
     "#3f3735": "#efedef",
+    "#191b20": "#111216",
+    "#aeb4c0": "#b9bec8",
+    "#40444d": "#3f4249",
+    "#e8eaf0": "#e8eaf0",
+    "#30343d": "#292c34",
+    "#3d4350": "#383e4a",
+    "#f4f8f2": "#202925",
+    "#243c31": "#789785",
+    "#527463": "#8db59f",
+    "#f7fbf6": "#17211c",
+    "#638776": "#9bc4ad",
+    "#fff4f1": "#2c2325",
+    "#552f34": "#a96772",
+    "#c44e63": "#ff9aaa",
+    "#d8cfca": "#4d4e53",
 }
 _DARK_PATTERN = re.compile("|".join(re.escape(color) for color in _DARK_COLORS), re.I)
 DARK_STYLESHEET = _DARK_PATTERN.sub(
