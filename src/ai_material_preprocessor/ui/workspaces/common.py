@@ -33,6 +33,7 @@ class WorkspacePresentationState(StrEnum):
     PREVIEW = "preview"
     PROCESSING = "processing"
     SUCCESS = "success"
+    WARNING = "warning"
     ERROR = "error"
 
 
@@ -72,6 +73,7 @@ class WorkspaceView(QWidget):
     handoff_requested = Signal(str, str, object)
     history_requested = Signal(str)
     open_output_requested = Signal(str)
+    settings_requested = Signal(str)
 
     workspace_id: WorkspaceId
     input_title = "选择素材"
@@ -245,17 +247,20 @@ class WorkspaceView(QWidget):
             self.paths.append(resolved)
             known.add(str(resolved).casefold())
         self.paths.sort(key=lambda item: str(item).casefold())
-        self.file_list.clear()
-        self.file_list.addItems([str(path) for path in self.paths])
+        self._render_input_paths()
         self.refresh_operations()
         if self.paths:
             self.set_presentation_state(WorkspacePresentationState.INPUTS_SELECTED)
 
     def clear_inputs(self) -> None:
         self.paths.clear()
-        self.file_list.clear()
+        self._render_input_paths()
         self.refresh_operations()
         self.set_presentation_state(WorkspacePresentationState.EMPTY)
+
+    def _render_input_paths(self) -> None:
+        self.file_list.clear()
+        self.file_list.addItems([str(path) for path in self.paths])
 
     def output_for(self, source: Path) -> Path:
         explicit = self.output_path.text().strip()
@@ -289,6 +294,7 @@ class WorkspaceView(QWidget):
             WorkspacePresentationState.PREVIEW: "已生成处理预览，尚未开始任务",
             WorkspacePresentationState.PROCESSING: "正在处理，切换 Workspace 不会取消任务",
             WorkspacePresentationState.SUCCESS: "处理完成，原文件未改动",
+            WorkspacePresentationState.WARNING: "处理完成，但有需要检查的项目",
             WorkspacePresentationState.ERROR: "处理未完成，原文件未改动",
         }
         self.state_label.setText(message or defaults[state])
@@ -305,7 +311,11 @@ class WorkspaceView(QWidget):
             100 if outputs and not errors else self.workspace_progress.value()
         )
         self.set_presentation_state(
-            WorkspacePresentationState.SUCCESS if outputs else WorkspacePresentationState.ERROR,
+            WorkspacePresentationState.WARNING
+            if outputs and errors
+            else WorkspacePresentationState.SUCCESS
+            if outputs
+            else WorkspacePresentationState.ERROR,
             f"已生成 {len(outputs)} 项" if outputs else "没有生成输出",
         )
 

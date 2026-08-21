@@ -190,6 +190,35 @@ def test_history_dialog_filters_by_derived_workspace(qtbot, tmp_path: Path) -> N
     assert dialog.table.item(0, 1).text() == "clip.mp4"
 
 
+def test_document_history_surfaces_existing_quality_summary(qtbot, tmp_path: Path) -> None:
+    history = tmp_path / "History"
+    document = tmp_path / "lesson.docx"
+    document.touch()
+    write_task_manifest(
+        history,
+        [
+            TaskRecord(
+                document,
+                Operation.TO_MARKDOWN,
+                "success",
+                quality_summary={
+                    "score": 88,
+                    "estimated_tokens": 2400,
+                    "chunk_count": 3,
+                },
+            )
+        ],
+        created_at=datetime(2026, 8, 21, tzinfo=UTC),
+        task_id="quality-document-task",
+    )
+
+    dialog = HistoryDialog(HistoryRepository(history), workspace=WorkspaceId.DOCUMENTS)
+    qtbot.addWidget(dialog)
+
+    assert dialog.table.horizontalHeaderItem(5).text() == "质量摘要"
+    assert dialog.table.item(0, 5).text() == "88/100 · ~2,400 tokens · 3 sections"
+
+
 def test_settings_are_partitioned_into_general_documents_and_video(qtbot) -> None:
     dialog = SettingsDialog(
         deepcopy(DEFAULT_CONFIG),

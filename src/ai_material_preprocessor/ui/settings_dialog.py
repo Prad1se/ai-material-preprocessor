@@ -49,6 +49,7 @@ class SettingsDialog(QDialog):
         *,
         save_callback: ConfigSaver = save_config,
         detector: ToolDetector = detect_tools_with_versions,
+        initial_tab: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.config = copy.deepcopy(config)
@@ -62,6 +63,10 @@ class SettingsDialog(QDialog):
         self.resize(900, 680)
         self.setMinimumSize(760, 580)
         self._build_ui()
+        if initial_tab:
+            tab_index = {"documents": 1, "video": 2}.get(initial_tab)
+            if tab_index is not None:
+                self.settings_tabs.setCurrentIndex(tab_index)
         self.tool_installation = ToolInstallationCoordinator(
             self,
             self.config,
@@ -84,6 +89,7 @@ class SettingsDialog(QDialog):
         root.addWidget(subtitle)
         tabs = QTabWidget()
         tabs.setObjectName("settingsTabs")
+        self.settings_tabs = tabs
 
         general = QWidget()
         general_form = QFormLayout(general)
@@ -129,10 +135,10 @@ class SettingsDialog(QDialog):
         tabs.addTab(general, "常规")
 
         documents_page, self.document_tool_table, document_scroll = self._tool_page(
-            DOCUMENT_TOOL_NAMES, self.document_tool_paths
+            DOCUMENT_TOOL_NAMES, self.document_tool_paths, "Document tools"
         )
         video_page, self.video_tool_table, video_scroll = self._tool_page(
-            VIDEO_TOOL_NAMES, self.video_tool_paths
+            VIDEO_TOOL_NAMES, self.video_tool_paths, "Video tools"
         )
         documents_page.layout().insertWidget(0, self._document_defaults())
         video_page.layout().insertWidget(0, self._video_defaults())
@@ -161,12 +167,16 @@ class SettingsDialog(QDialog):
         self,
         tool_names: frozenset[str],
         path_inputs: dict[str, QLineEdit],
+        title: str,
     ) -> tuple[QWidget, ToolStatusTable, QScrollArea]:
         page = QWidget()
         layout = QVBoxLayout(page)
+        section_title = QLabel(title)
+        section_title.setObjectName("sectionTitle")
         hint = QLabel("可用能力会自动检测；自定义路径优先于随程序提供和系统 PATH。")
         hint.setObjectName("sectionDescription")
         hint.setWordWrap(True)
+        layout.addWidget(section_title)
         layout.addWidget(hint)
         table = ToolStatusTable()
         layout.addWidget(table)
@@ -199,6 +209,15 @@ class SettingsDialog(QDialog):
         panel = QFrame()
         panel.setObjectName("settingsGroup")
         form = QFormLayout(panel)
+        defaults_title = QLabel("Processing defaults")
+        defaults_title.setObjectName("sectionTitle")
+        defaults_description = QLabel(
+            "These values start each new document job; the workspace can override them."
+        )
+        defaults_description.setObjectName("sectionDescription")
+        defaults_description.setWordWrap(True)
+        form.addRow(defaults_title)
+        form.addRow(defaults_description)
         self.document_mode = QComboBox()
         self.document_mode.addItem("AI 增强", "enhanced")
         self.document_mode.addItem("原始转换", "raw")
