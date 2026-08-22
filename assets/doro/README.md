@@ -15,7 +15,7 @@ with their respective owners and creators. Inclusion does not imply endorsement.
 |---|---|---|---|
 | `orange.png` | Initial empty state | User-provided project asset | Maintainer-confirmed non-commercial use |
 | `ready.png` | Documents selected | User-provided project asset | Maintainer-confirmed non-commercial use |
-| `carrying.jpg` | Preview ready | `https://booth.pximg.net/c/620x620/fc645990-f4c4-4128-8779-59388e9ce037/i/5867617/c768e70e-6a2c-4897-8cc1-c09f3553ccba_base_resized.jpg` | Maintainer-confirmed non-commercial use |
+| `carrying.jpg` | Preview ready | User-provided still from `https://v.douyin.com/6ADvfDOi1TA/` | Maintainer-confirmed non-commercial use and redistribution |
 | `processing.gif` | Processing | `https://media1.tenor.com/m/qDqG7n_EV6YAAAAC/doro.gif` | Maintainer-confirmed non-commercial use |
 | `cheering.webp` | Success | `https://gengtu.tos-accelerate.volces.com/memes/49/eb/5d/63/49eb5d635abfadf07224b3606638b016.jpeg` | Maintainer-confirmed non-commercial use |
 | `wave.gif` | Warning | `https://media4.giphy.com/media/2SJUQVZxSQJoSTrim5/giphy.gif` | Maintainer-confirmed non-commercial use |
