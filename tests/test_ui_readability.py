@@ -84,6 +84,15 @@ def test_dark_primary_color_is_dark_enough_for_light_foreground() -> None:
     assert "color: #17211c" in dark
 
 
+def test_dark_button_hover_replaces_light_pink_background() -> None:
+    light = stylesheet_for_theme("light")
+    dark = stylesheet_for_theme("dark")
+
+    assert "QPushButton:hover { background: #ffe4e8; }" in light
+    assert "#ffe4e8" not in dark
+    assert "QPushButton:hover { background: #3b292e; }" in dark
+
+
 def test_shell_compacts_navigation_for_small_windows(qtbot) -> None:
     window = MainWindow(
         config=deepcopy(DEFAULT_CONFIG),
