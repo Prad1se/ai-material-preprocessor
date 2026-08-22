@@ -1,154 +1,143 @@
-> [English](README.md) | [中文](README.md)
+<div align="center">
 
 # AI Material Preprocessor
 
-> Turn documents and videos into clean, AI-ready materials — locally on your Windows PC.
+### Prepare documents and videos for AI — locally on Windows
+
+**English** · [简体中文](README.md)
 
 [![Tests](https://github.com/Prad1se/ai-material-preprocessor/actions/workflows/tests.yml/badge.svg)](https://github.com/Prad1se/ai-material-preprocessor/actions/workflows/tests.yml)
-[![Release](https://img.shields.io/github/v/release/Prad1se/ai-material-preprocessor)](https://github.com/Prad1se/ai-material-preprocessor/releases/latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Prad1se/ai-material-preprocessor?label=release)](https://github.com/Prad1se/ai-material-preprocessor/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows)](https://github.com/Prad1se/ai-material-preprocessor/releases/latest)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/code-MIT-yellow.svg)](LICENSE)
 
-A local Windows desktop app that turns raw documents (PDF, Word, PowerPoint, Excel, HTML, and more) and video files into structured, AI-friendly materials. It is not just a format converter: it **converts, cleans, structures, traces sources, and produces AI-ready output**.
+**[Download stable release](https://github.com/Prad1se/ai-material-preprocessor/releases/latest)** · **[Explore examples](examples/)** · **[Report an issue](https://github.com/Prad1se/ai-material-preprocessor/issues)**
 
-- Documents → clean Markdown packages with cleaning, quality checks, structural splitting, source tracing, and optional local OCR
-- Video → standardized, named, deduplicated creative assets with keyframe contact sheets
-- Local-first: processing happens on your machine, and source files are never overwritten
+</div>
 
-**Status**: public stable release **2.0.0**.
+AI Material Preprocessor is a local Windows desktop app that turns PDFs, Word documents, PowerPoint decks, spreadsheets, web content, text, and videos into structured, traceable materials for AI or downstream creative work.
+
+- **Doro Documents**: conversion, cleaning, OCR, splitting, provenance, AI Context Packs, and Context Budgets.
+- **Mouse Video Workshop**: compression, normalization, audio extraction, metadata naming, deduplication, organization, and keyframe contact sheets.
+- **Local first**: files are not uploaded by default, and source material is never overwritten, moved, or deleted.
+
+> **Release status:** the latest stable release is **v2.0.0**. The repository currently contains **v2.1 development work**, including the dual-workspace UI, AI Context Packs, and Source Map experience. Use the Releases page when you need the stable packaged application.
 
 <!-- release-version: 2.0.0 -->
 
-<!-- TODO: screenshot at assets/gallery/welcome.png — first-run welcome -->
+## Two focused workspaces
 
-## Try it in 30 seconds
+| Doro Documents | Mouse Video Workshop |
+|---|---|
+| Reading, knowledge organization, and AI context preparation | Batch media processing and material organization |
+| PDF, DOCX, PPTX, XLSX, HTML, TXT, and more | MP4, MOV, MKV, AVI, WebM, and more |
+| Markdown, AI-ready document packages, AI Context Packs | Compressed video, normalized MP4, audio, keyframe packages |
+| Provenance labels, quality warnings, Source Map | Metadata, place naming, duplicate detection, contact sheets |
 
-1. **Drop documents**: drag PDF, Word, PowerPoint, Excel, or note files into the Document Workspace.
-2. **Generate an AI Context Pack**: choose *AI Context Pack* (or a preset such as *Research Paper* / *Course Notes*), set a Context Budget, and generate.
-3. **Copy for AI**: after generation, click **Copy for AI** and paste the context, with source references, straight into an AI chat.
-4. **Trace sources**: click **View Source Map** to trace any block back to its source file, PDF page, or slide.
+Both workspaces share one task center, history repository, settings system, and local execution Core. Switching workspaces does not cancel running tasks.
 
-Want to try it without preparing data? The repository ships synthetic examples in [examples/](examples/):
+<table>
+  <tr>
+    <td width="50%"><strong>Doro Documents</strong></td>
+    <td width="50%"><strong>Mouse Video Workshop</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/github/documents-workspace.png" alt="Chinese Doro Documents workspace"></td>
+    <td><img src="docs/images/github/video-workspace.png" alt="Chinese Mouse Video workspace"></td>
+  </tr>
+</table>
 
-- **Research paper**: synthetic PDF → Context Pack with **PDF page-level provenance**
-- **Course material**: synthetic DOCX → **Document-level fallback** (no fabricated page numbers)
+## Get started in 30 seconds
 
-Every `sample-context-pack/` is a real output of the app's own pipeline and includes `START_HERE.md`, `content.md`, `context-report.json`, `packs/`, and `sources/`.
+1. Download the installer or portable package from [Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest).
+2. Open the **Documents** or **Video** workspace and drop in your files, or use the file picker.
+3. Choose a preparation mode and review the options for the current job.
+4. Select **Prepare documents** or the relevant video action.
+5. Open the result. AI Context Packs also provide **Copy for AI** and **View Source Map** actions.
 
-<!-- TODO: hero image at assets/gallery/hero.png — Before (messy raw files) → After (a clean AI-ready package) -->
+The repository includes synthetic inputs and real pipeline-generated Context Pack outputs under [examples/](examples/), with no private material:
 
-## Why
+- [Research paper example](examples/research-paper/): PDF page-level provenance.
+- [Course material example](examples/course-material/): honest document-level fallback for DOCX, without fabricated page numbers.
 
-Dropping raw files directly into an AI often goes wrong:
+## Document capabilities
 
-- A PDF is a layout, not text: scanned pages have no text layer, so the AI cannot "read" them.
-- Repeated headers, footers, and PowerPoint template text pollute the context.
-- Long documents exceed the context window, and the AI loses track.
-- Tables, code blocks, and formulas get mangled or lost during conversion.
-- Sources cannot be traced, so there is no way to verify where a claim came from.
+### Conversion and cleaning
 
-Converting alone is not enough. An AI needs **clean, well-structured, chunked text with traceable sources**. This project handles the preprocessing step before AI consumption — it does not replace the AI itself.
+- Convert PDF, DOCX, PPTX, XLSX, HTML, CSV, JSON, XML, TXT, EPUB, and more to Markdown.
+- Remove repeated headers, footers, and PowerPoint template text; repair heading levels; normalize code fences and formula markers.
+- Preserve tables, fenced code, block formulas, slide boundaries, and worksheet boundaries.
+- Optional local OCR supplements extracted text and never replaces it.
+- Convert Word and PowerPoint files to PDF through Microsoft Office, with a LibreOffice fallback.
 
-## Demo / Use Cases
+### AI Context Packs (v2.1 development)
 
-### Course materials
+An AI Context Pack is more than a renamed Markdown package. It combines multiple documents into a deterministic, inspectable context set:
 
-<!-- TODO: GIF at assets/gallery/demo-course.gif -->
+- **Context Budget** presets for 32K, 64K, 128K, custom values, or no limit.
+- Safe splitting at document, section, and paragraph boundaries without silently deleting content to meet a budget.
+- Stable `source-001` and block IDs with real page, slide, worksheet, OCR-page, or document-level provenance when available.
+- `context-report.json` records estimated tokens, integrity, pack allocation, and overflow warnings.
+- **Copy for AI** produces deterministic text without summarizing, rewriting, absolute paths, or binary assets.
+- **Source Map v1** traces pack content to available evidence. It offers page-level opening only when supported and otherwise clearly falls back to opening the source document.
 
-- **Input**: a set of PDF / PPTX course decks
-- **Process**: convert to Markdown → remove repeated headers, footers, and template text → fix heading structure → quality check → structural chunking → (optional) local OCR
-- **Output**: an AI study package (`content.md` + `chunks/` + `assets/` + `manifest.json`), where each chunk is tagged with its source page or slide
-- **Value**: hand an entire course to an AI for Q&A, summarization, or review — with clean and traceable content
-
-### Research materials
-
-<!-- TODO: screenshot at assets/gallery/demo-paper.png -->
-
-- **Input**: PDF papers
-- **Process**: convert → quality checks (table integrity, formula/image risks) → source mapping
-- **Output**: Markdown with localized risk warnings, per-chunk source labels, and a slim manifest (source hash, tool versions)
-- **Value**: build a verifiable research library where the AI's claims can be traced back to specific pages
-
-### Video assets
-
-<!-- TODO: GIF at assets/gallery/demo-video.gif -->
-
-- **Input**: raw video files with inconsistent names and formats
-- **Process**: read metadata → name by time/location → deduplicate → compress or standardize → extract keyframes
-- **Output**: an organized library (by year/date/location) plus a keyframe contact-sheet overview
-- **Value**: hundreds of clips become a browsable, searchable, reusable library in minutes — originals untouched
-
-## Features
-
-### Make documents easier for AI to read
-
-- One-click conversion to Markdown: PDF, DOCX, PPTX, XLSX, HTML, CSV, JSON, XML, TXT, EPUB
-- Automatic cleaning: removes repeated headers, footers, and PowerPoint template text; fixes skipped heading levels; unifies code fences and inline/block formula markers
-- Structure preservation: adds clear separators for slides and worksheet headings, keeping tables, fenced code, and block formulas intact
-
-### Preserve structure and source information
-
-- Structure-aware splitting: splits by headings and target length (about 4000 tokens per segment by default, adjustable); `chunks/` is generated only when content actually exceeds one segment
-- Source tracing: every chunk and every warning maps to a line number and its source page, slide, worksheet, or OCR page
-- Quality checks: table corruption, possible formula loss, missing images, skipped heading levels, and more
-- Slim manifest: records source hash, tool versions, provenance, chunk order, and warning summaries — no absolute paths, document bodies, or full reports
-- Optional local OCR: reads images, PDF pages, and images embedded in Office files; off by default; added as supplementary text, never replacing extracted content
-
-### Prepare reusable material packages
-
-- Raw conversion mode outputs a single MarkItDown Markdown file; AI-enhanced mode (default) produces a complete package: `README.md` + `raw.md` + `content.md` + `chunks/` + `assets/` + `manifest.json`
-- Word / PowerPoint → PDF conversion for DOC/DOCX/PPT/PPTX, using Microsoft Office when available with a LibreOffice fallback
-
-### Organize creative video assets
-
-- Standardization: compression (high quality / balanced / smallest size), audio extraction (MP3 / lossless WAV), standardized MP4
-- Metadata-based naming: by capture time, location, device, and more; GPS coordinates are mapped to readable place names locally and never uploaded
-- Deduplication and organization: SHA-256 + duration + resolution duplicate detection; organized copies by year/date/location — originals are never moved or renamed
-- Keyframe contact sheets: scene-change keyframes exported as a JPEG overview labeled with source filenames and timestamps, with a first-frame fallback when no scene change is detected
-
-### Reliable batch processing and task management
-
-- Batch processing with per-file failure isolation
-- Task center with waiting / running / success / failed / cancelled / interrupted states, independent retry, and recovery after an abnormal exit
-- Per-item and overall progress, conservative output-size estimates, and a disk-space preflight that refuses to start when space is insufficient
-- Unified processing history with search, filters, and cleanup; 90-day / 512 MB retention by default; history never stores document body content
-
-**What you get** (default output layout):
+Typical output:
 
 ```text
-your chosen output folder\
-├── course.pdf                # plain conversion: a single PDF file
-├── notes.md                  # raw Markdown: a single file
-├── video_compressed.mp4      # plain media processing: a single file
-├── course_AI package\        # created only in AI-enhanced mode
-│   ├── README.md             # package entry point
-│   ├── raw.md                # raw MarkItDown output
-│   ├── content.md            # cleaned body text
-│   ├── manifest.json         # compact manifest
-│   ├── assets\               # only when image resources exist
-│   └── chunks\               # only when content is split into multiple segments
-└── video_keyframes\          # created only by keyframe analysis
-    ├── contact-sheet.jpg
-    ├── manifest.json
-    └── frames\
+AI-Context-Pack\
+├── START_HERE.md              # usage order, budget, and warnings
+├── content.md                 # complete archive; not a budget-constrained unit
+├── manifest.json              # Context Pack v1 manifest
+├── context-report.json        # budget, pack, and integrity report
+├── packs\
+│   ├── 001-context.md         # budget-aware AI upload unit
+│   └── 002-context.md
+└── sources\
+    └── source-001\
+        ├── content.md
+        └── source-manifest.json
 ```
 
-## Privacy & Safety
+Token values are always labeled **Estimated tokens**. They are deterministic, model-independent estimates—not exact ChatGPT, Claude, or other model tokenizer counts.
 
-- **Local-first**: conversion, cleaning, OCR, metadata reading, and history all run on your machine; no files are uploaded by default.
-- **Source files are safe**: they are never overwritten, deleted, moved, or renamed in place; colliding results get `_2`, `_3` suffixes.
-- **Network access requires consent**: update checking is off by default and only contacts the GitHub Releases API after you enable it in Settings and click manually. Supplementing a missing tool (ExifTool pinned archive with SHA-256; LibreOffice / FFmpeg via WinGet) shows its source, version, license, and destination before anything is downloaded. Microsoft Office is never downloaded.
-- **History stays separate**: processing history lives in the app data directory, away from exported results; deleting history and clearing the cache are separate, confirmed actions, and neither deletes source files.
+## Video capabilities
+
+- Compress video with high-quality, balanced, and smallest-size presets.
+- Normalize to MP4 and extract MP3 or lossless WAV audio.
+- Build readable names from capture time, location, and device metadata; GPS-to-place mapping stays local.
+- Use SHA-256, duration, and resolution to assist duplicate detection.
+- Create organized copies by year, date, or location without moving or renaming original videos.
+- Extract scene-change keyframes and generate JPEG contact sheets labeled with filenames and timestamps.
+
+## Tasks, history, and reliability
+
+- Batch execution with per-file failure isolation.
+- Waiting, running, success, failed, cancelled, interrupted, and retry states, with queue recovery after abnormal exit.
+- Conservative disk-space preflight before processing starts.
+- Searchable, filterable history with 90-day / 512 MB retention by default; document bodies are not stored in history.
+- Colliding outputs receive `_2`, `_3`, and later suffixes instead of overwriting existing results.
+
+## Privacy and safety
+
+- Conversion, cleaning, OCR, media processing, and history are local by default.
+- Original files are never overwritten, deleted, moved, or renamed in place.
+- Update checks are disabled by default and only contact the GitHub Releases API after user opt-in and a manual action.
+- Missing-tool setup shows the source, version, license, and destination before installation; Microsoft Office is never downloaded by the app.
+- Exported results can contain source filenames and document content. Review them before sharing.
 
 ## Installation
 
-Download from [GitHub Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest):
+### Windows installer or portable package
 
-- **Portable ZIP**: extract the whole archive and run `AI-Material-Preprocessor.exe`. Keep `_internal`, `tools`, and the third-party license folders together with the EXE.
-- **Installer EXE**: installs for the current user and provides an uninstall entry.
+Open [GitHub Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest):
 
-Requirements: Windows x64. By default results are written to an "AI素材处理结果" (AI Material Processing Results) folder next to the source; the name can be changed in Settings. The current release is not commercially code-signed, so Windows SmartScreen may warn about an "unknown publisher"; verify the SHA-256 checksum before continuing.
+- **Installer EXE**: per-user installation with an uninstall entry.
+- **Portable ZIP**: extract the entire archive and run `AI-Material-Preprocessor.exe`. Keep `_internal`, `tools`, and license folders beside the executable.
 
-Run from source:
+Windows x64 is required. The current stable release is not commercially code-signed, so Windows SmartScreen may show an “unknown publisher” warning. Verify the published SHA-256 before continuing.
+
+### Run from source
 
 ```powershell
 git clone https://github.com/Prad1se/ai-material-preprocessor.git
@@ -156,33 +145,29 @@ cd ai-material-preprocessor
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run.ps1
 ```
 
-## Developer Information
+## Development and contribution
 
-Tech stack: Python 3.11+ / PySide6 / MarkItDown / FFmpeg / RapidOCR / ONNX Runtime / PyInstaller.
+Stack: Python 3.11+, PySide6 Widgets, MarkItDown, FFmpeg, RapidOCR, ONNX Runtime, and PyInstaller.
 
 ```powershell
-# Run all tests
-.\.venv\Scripts\python.exe -m pytest
-
-# Full quality gate (format, lint, types, tests)
+# Full quality gate: formatting, lint, types, and tests
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\check_quality.ps1
 
-# Build and verify a release
+# Build and verify release packages
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_release.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\package_release.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_release.ps1 -Version 2.0.0
 ```
 
-- User configuration lives at `%LOCALAPPDATA%\AI Material Preprocessor\config.json` with versioned, backward-compatible migration; see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-- Architecture and key decisions: [docs/adr/](docs/adr/), [docs/BASELINE_2.0.md](docs/BASELINE_2.0.md).
-- Milestone trace: [docs/PROJECT_PROGRESS.md](docs/PROJECT_PROGRESS.md).
-- Release notes: [docs/releases/](docs/releases/).
-- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md); security reports: [SECURITY.md](SECURITY.md).
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Architecture decisions](docs/adr/)
+- [v2.0 baseline](docs/BASELINE_2.0.md)
+- [Release notes](docs/releases/)
 
-## License
+## License and artwork
 
-Application source code is under the [MIT License](LICENSE). Third-party components (MarkItDown, PySide6, RapidOCR, ONNX Runtime, pypdfium2, FFmpeg, and others) remain under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `third_party_licenses/`.
+Project-authored source code is licensed under the [MIT License](LICENSE). MarkItDown, PySide6, RapidOCR, ONNX Runtime, pypdfium2, FFmpeg, and other third-party components remain under their respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `third_party_licenses/`.
 
-The bundled FFmpeg 8.1.2 (Gyan Essentials build) is GPLv3; the corresponding source archive is published alongside the Windows ZIP in each GitHub Release.
-
-The mouse illustrations used in the UI were provided directly by the maintainer; the source materials and processing versions are documented in [`assets/mouse/README.md`](assets/mouse/README.md).
+> Doro and mouse artwork is not covered by the MIT code license. Doro artwork is distributed under the non-commercial-use basis confirmed by the project maintainer; commercial distributions must remove or replace it, or obtain separate permission. See the [Doro asset notice](assets/doro/README.md) and [mouse asset notice](assets/mouse/README.md) for provenance, purpose, and replacement instructions. This notice does not claim ownership of the characters or original artwork.

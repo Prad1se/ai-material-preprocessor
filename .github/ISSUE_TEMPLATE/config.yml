@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Private security report
+  - name: 私密安全报告 / Private security report
     url: https://github.com/Prad1se/ai-material-preprocessor/security/advisories/new
-    about: Report vulnerabilities privately instead of opening a public issue.
+    about: 请私密报告安全漏洞，不要创建公开 Issue。Report vulnerabilities privately instead of opening a public issue.

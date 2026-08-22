@@ -1,25 +1,25 @@
-name: Feature request
-description: Suggest an in-scope local document or media workflow improvement.
+name: 功能建议 / Feature request
+description: 建议本地文档或媒体工作流改进。Suggest a local document or media workflow improvement.
 title: "[Feature]: "
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem to solve
+      label: 希望解决的问题 / Problem to solve
     validations:
       required: true
   - type: textarea
     id: workflow
     attributes:
-      label: Desired local workflow
-      description: Explain inputs, outputs, and why existing tools are insufficient.
+      label: 期望的本地工作流 / Desired local workflow
+      description: 请说明输入、输出及现有工具不足之处。Explain inputs, outputs, and why existing tools are insufficient.
     validations:
       required: true
   - type: checkboxes
     id: scope
     attributes:
-      label: Scope confirmation
+      label: 范围确认 / Scope confirmation
       options:
-        - label: This request does not require uploading user files by default.
+        - label: 此建议不要求默认上传用户文件。This request does not require uploading user files by default.
           required: true
