@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QBoxLayout, QLabel, QScrollArea, QSplitter
 
+from ai_material_preprocessor.application.workspaces import WorkspaceId
 from ai_material_preprocessor.gui import MainWindow
 from ai_material_preprocessor.models import ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
@@ -183,3 +185,24 @@ def test_dialog_size_is_bounded_by_small_parent_window(qtbot) -> None:
 
     assert dialog.width() == 728
     assert dialog.height() == 568
+
+
+def test_stale_workspace_strings_do_not_break_shell(qtbot, monkeypatch) -> None:
+    """旧配置或异常来源可能给出无法识别的工作区字符串，外壳必须兜底而不是崩溃。"""
+
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=_tools(),
+        config_saver=lambda _: None,
+    )
+    qtbot.addWidget(window)
+    assert window.current_workspace is WorkspaceId.DOCUMENTS
+
+    window.switch_workspace("stale-value")
+    assert window.current_workspace is WorkspaceId.DOCUMENTS
+
+    opened: list[WorkspaceId | None] = []
+    monkeypatch.setattr(window, "_open_history", opened.append)
+    window.document_workspace.history_requested.emit("stale-value")
+    window.video_workspace.history_requested.emit("video")
+    assert opened == [None, WorkspaceId.VIDEO]

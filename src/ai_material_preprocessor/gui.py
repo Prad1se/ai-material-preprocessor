@@ -180,7 +180,7 @@ class MainWindow(QMainWindow):
             workspace.jobs_requested.connect(self._start_jobs)
             workspace.preview_ready.connect(self._present_preview)
             workspace.handoff_requested.connect(self._handoff_requested)
-            workspace.history_requested.connect(lambda raw: self._open_history(WorkspaceId(raw)))
+            workspace.history_requested.connect(self._open_workspace_history)
             workspace.open_output_requested.connect(self._open_output)
             workspace.settings_requested.connect(self._open_workspace_settings)
 
@@ -247,7 +247,21 @@ class MainWindow(QMainWindow):
         return page
 
     def switch_workspace(self, workspace: WorkspaceId | str) -> None:
-        self._show_workspace(WorkspaceId(workspace), persist=True)
+        try:
+            resolved = WorkspaceId(workspace)
+        except ValueError:
+            # 无法识别的工作区字符串（如旧配置残留）直接忽略，保持当前工作区不变。
+            return
+        self._show_workspace(resolved, persist=True)
+
+    def _open_workspace_history(self, raw_workspace: str) -> None:
+        """按工作区打开历史；无法识别的值回退为显示全部历史。"""
+
+        try:
+            workspace: WorkspaceId | None = WorkspaceId(raw_workspace)
+        except ValueError:
+            workspace = None
+        self._open_history(workspace)
 
     def _show_workspace(self, workspace: WorkspaceId, *, persist: bool) -> None:
         self._current_workspace = workspace
