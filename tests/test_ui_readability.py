@@ -206,3 +206,37 @@ def test_stale_workspace_strings_do_not_break_shell(qtbot, monkeypatch) -> None:
     window.document_workspace.history_requested.emit("stale-value")
     window.video_workspace.history_requested.emit("video")
     assert opened == [None, WorkspaceId.VIDEO]
+
+
+def test_open_output_survives_startfile_failure(qtbot, monkeypatch, tmp_path) -> None:
+    """系统拒绝打开文件夹时必须给出可见反馈，槽函数不允许向外抛异常。"""
+
+    from ai_material_preprocessor.services.history_repository import HistoryRepository
+    from ai_material_preprocessor.ui.history_dialog import HistoryDialog
+
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=_tools(),
+        config_saver=lambda _: None,
+    )
+    qtbot.addWidget(window)
+    dialog = HistoryDialog(HistoryRepository(tmp_path / "History"))
+    qtbot.addWidget(dialog)
+
+    warnings: list[tuple[str, str]] = []
+
+    def fake_warning(parent, title, text, *args, **kwargs):
+        warnings.append((title, text))
+        return None
+
+    def exploding_startfile(path):
+        raise OSError("shell refused")
+
+    monkeypatch.setattr("ai_material_preprocessor.gui.os.startfile", exploding_startfile)
+    monkeypatch.setattr("ai_material_preprocessor.gui.QMessageBox.warning", fake_warning)
+
+    window._open_output("Z:/不存在/结果.md")
+    dialog._open_folder()
+
+    assert len(warnings) == 2
+    assert all("无法打开" in title for title, _text in warnings)

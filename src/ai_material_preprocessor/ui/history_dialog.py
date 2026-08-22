@@ -309,7 +309,15 @@ class HistoryDialog(QDialog):
     def _open_folder(self) -> None:
         self.repository.root.mkdir(parents=True, exist_ok=True)
         if os.name == "nt":
-            os.startfile(str(self.repository.root))
+            try:
+                os.startfile(str(self.repository.root))
+            except OSError:
+                # 打开历史目录失败（目录被占用或权限不足）时给出可见反馈而不是崩溃。
+                QMessageBox.warning(
+                    self,
+                    "无法打开文件夹",
+                    f"系统无法打开：\n{self.repository.root}",
+                )
 
     def _show_details(self) -> None:
         task_ids = self._selected_task_ids()

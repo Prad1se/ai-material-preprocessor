@@ -482,7 +482,11 @@ class MainWindow(QMainWindow):
         output = Path(raw_output)
         folder = str(output if output.is_dir() else output.parent)
         if os.name == "nt":
-            os.startfile(folder)
+            try:
+                os.startfile(folder)
+            except OSError:
+                # 资源管理器拒绝打开（路径失效或权限不足）时给出可见反馈而不是崩溃。
+                QMessageBox.warning(self, "无法打开文件夹", f"系统无法打开：\n{folder}")
 
     def _open_history(self, workspace: WorkspaceId | None) -> None:
         repository = HistoryRepository(
