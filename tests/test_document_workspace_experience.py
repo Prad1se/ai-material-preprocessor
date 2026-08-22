@@ -4,17 +4,20 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QImage
 
 from ai_material_preprocessor.application.default_preview_registry import (
     build_default_preview_registry,
 )
 from ai_material_preprocessor.models import Operation, ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
+from ai_material_preprocessor.ui import document_mascot as document_mascot_module
 from ai_material_preprocessor.ui.document_mascot import (
     DORO_STATE_ASSETS,
     DocumentMascotState,
     DocumentMascotView,
+    transparentize_edge_background,
 )
 from ai_material_preprocessor.ui.settings_dialog import SettingsDialog
 from ai_material_preprocessor.ui.theme import stylesheet_for_theme
@@ -50,7 +53,7 @@ def test_document_empty_state_prioritizes_input_over_options(qtbot) -> None:
     assert view.mascot_view.state is DocumentMascotState.EMPTY
     assert view.empty_guidance.isVisibleTo(view)
     assert not view.preparation_panel.isVisibleTo(view)
-    assert view.start_button.text() == "Prepare documents"
+    assert view.start_button.text() == "准备文档"
     assert not view.start_button.isEnabled()
     assert "PDF" in view.input_description_label.text()
 
@@ -91,20 +94,54 @@ def test_bundled_doro_assets_use_supported_static_and_animated_formats() -> None
             assert QMovie(str(path)).isValid(), filename
 
 
+def test_doro_edge_background_is_transparent_but_enclosed_white_is_preserved() -> None:
+    from PySide6.QtGui import QColor
+
+    image = QImage(9, 9, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#00ff00"))
+    for x in range(2, 7):
+        image.setPixelColor(x, 2, QColor("black"))
+        image.setPixelColor(x, 6, QColor("black"))
+    for y in range(2, 7):
+        image.setPixelColor(2, y, QColor("black"))
+        image.setPixelColor(6, y, QColor("black"))
+    image.setPixelColor(4, 4, QColor("white"))
+
+    rendered = transparentize_edge_background(image)
+
+    assert rendered.pixelColor(0, 0).alpha() == 0
+    assert rendered.pixelColor(4, 4).alpha() == 255
+    assert rendered.pixelColor(2, 4).alpha() == 255
+
+
 def test_document_mascot_loads_static_and_animated_local_overrides(
     qtbot, tmp_path: Path, monkeypatch
 ) -> None:
-    from PySide6.QtGui import QColor, QPixmap
+    from PySide6.QtGui import QColor
 
-    static = QPixmap(24, 24)
-    static.fill(QColor("#f2a6c5"))
-    assert static.save(str(tmp_path / "orange.png"))
+    static_image = QImage(24, 24, QImage.Format.Format_ARGB32)
+    static_image.fill(QColor("white"))
+    static_image.setPixelColor(12, 12, QColor("#f2a6c5"))
+    assert static_image.save(str(tmp_path / "orange.png"))
     # A valid single-frame GIF is sufficient to exercise QMovie ownership/lifecycle.
     (tmp_path / "resting.gif").write_bytes(
         b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04"
         b"\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
     )
     monkeypatch.setenv("AI_MATERIAL_DORO_ASSET_DIR", str(tmp_path))
+    calls = 0
+    original_transparentize = document_mascot_module.transparentize_edge_background
+
+    def counted_transparentize(image):
+        nonlocal calls
+        calls += 1
+        return original_transparentize(image)
+
+    monkeypatch.setattr(
+        document_mascot_module,
+        "transparentize_edge_background",
+        counted_transparentize,
+    )
     mascot = DocumentMascotView()
     qtbot.addWidget(mascot)
 
@@ -115,20 +152,30 @@ def test_document_mascot_loads_static_and_animated_local_overrides(
     mascot.set_state(DocumentMascotState.EMPTY)
     assert mascot.artwork.pixmap() is not None
     assert not mascot.artwork.pixmap().isNull()
+    rendered = mascot.artwork.pixmap().toImage()
+    assert rendered.pixelColor(0, 0).alpha() == 0
+    assert rendered.pixelColor(rendered.width() // 2, rendered.height() // 2).alpha() > 0
     assert mascot.movie is None
     assert not mascot.symbol.isVisibleTo(mascot)
 
     mascot.set_state(DocumentMascotState.COMPLETED)
     assert mascot.movie is not None
     assert Path(mascot.movie.fileName()) == tmp_path / "resting.gif"
-    assert mascot.artwork.movie() is mascot.movie
+    assert mascot.artwork.movie() is None
+    qtbot.waitUntil(lambda: mascot.artwork.pixmap() is not None)
     active_movie = mascot.movie
+    qtbot.waitUntil(lambda: mascot.movie is not None and mascot.movie.currentFrameNumber() >= 0)
+    frame = active_movie.currentFrameNumber()
+    calls_after_first_render = calls
+    mascot._render_movie_frame(frame)
+    assert calls == calls_after_first_render
     mascot.set_state(DocumentMascotState.COMPLETED)
     assert mascot.movie is active_movie
 
     mascot.set_state(DocumentMascotState.EMPTY)
     assert active_movie.state().name == "NotRunning"
     assert mascot.movie is None
+    assert mascot._movie_frame_cache == {}
 
 
 def test_document_mascot_pauses_animation_while_workspace_is_hidden(qtbot, monkeypatch) -> None:
@@ -160,7 +207,7 @@ def test_document_mascot_keeps_accessible_fallback_when_asset_is_missing(
     assert not mascot.artwork.isVisibleTo(mascot)
     assert mascot.symbol.text() == "!"
     assert mascot.symbol.isVisibleTo(mascot)
-    assert mascot.accessibleDescription() == "Ready with warnings"
+    assert mascot.accessibleDescription() == "已完成，但有提醒"
 
 
 def test_doro_assets_are_release_assets_with_separate_noncommercial_terms() -> None:
@@ -192,11 +239,11 @@ def test_document_input_is_rendered_as_compact_rows_with_type_size_and_path(
     view.add_inputs([str(first), str(second)])
 
     assert view.document_list.topLevelItemCount() == 2
-    assert view.document_list.headerItem().text(0) == "Document"
-    assert view.document_list.headerItem().text(1) == "Type"
-    assert view.document_list.headerItem().text(2) == "Size"
+    assert view.document_list.headerItem().text(0) == "文档"
+    assert view.document_list.headerItem().text(1) == "类型"
+    assert view.document_list.headerItem().text(2) == "大小"
     assert view.document_list.topLevelItem(0).toolTip(0)
-    assert view.selected_count.text() == "2 documents selected"
+    assert view.selected_count.text() == "已选择 2 个文档"
     assert view.preparation_panel.isVisibleTo(view)
     assert view.mascot_view.state is DocumentMascotState.READY
 
@@ -210,9 +257,9 @@ def test_document_processing_mode_uses_product_labels_without_changing_operation
     view.add_inputs([str(source)])
 
     assert view.operation.currentData() == Operation.TO_MARKDOWN.value
-    assert view.operation.currentText() == "AI-ready Markdown"
-    assert "structure" in view.operation_description.text().lower()
-    assert view.start_button.text() == "Prepare documents"
+    assert view.operation.currentText() == "AI 就绪 Markdown"
+    assert "结构" in view.operation_description.text()
+    assert view.start_button.text() == "准备文档"
 
 
 def test_document_advanced_options_are_progressively_disclosed(qtbot, tmp_path: Path) -> None:
@@ -255,9 +302,9 @@ def test_context_pack_budget_is_only_visible_for_context_pack_mode(qtbot, tmp_pa
     view.operation.setCurrentIndex(index)
 
     assert view.context_budget_panel.isVisibleTo(view)
-    assert view.context_budget.currentText() == "No limit"
+    assert view.context_budget.currentText() == "不限"
     assert not view.custom_budget.isVisibleTo(view)
-    assert "Available after preprocessing" in str(view._parameters()["Estimated context"])
+    assert "预处理后可用" in str(view._parameters()["预计上下文"])
 
     view.context_budget.setCurrentIndex(view.context_budget.findData(64000))
     assert view._context_budget_value() == 64000
@@ -317,14 +364,14 @@ def test_context_pack_completion_distinguishes_overflow_warning(qtbot, tmp_path:
     view.set_completed([str(output)], [], [{"context_pack_version": 1}])
 
     assert view.presentation_state is WorkspacePresentationState.WARNING
-    assert view.result_heading.text() == "AI Context Pack Ready"
-    assert "3 sources" in view.result_details.text()
-    assert "2 context packs" in view.result_details.text()
-    assert "~90,000 estimated tokens" in view.result_details.text()
-    assert "32K context window" in view.result_details.text()
-    assert "All content blocks preserved" in view.result_details.text()
-    assert "Rendered pack exceeds the budget." in view.result_details.text()
-    assert "over-budget" in view.state_message.text()
+    assert view.result_heading.text() == "AI 上下文包已准备好"
+    assert "来源：3 个" in view.result_details.text()
+    assert "上下文包：2 个" in view.result_details.text()
+    assert "估算令牌：约 90,000 个" in view.result_details.text()
+    assert "32K 上下文窗口" in view.result_details.text()
+    assert "所有内容块均已保留" in view.result_details.text()
+    assert "对应分包超出预算" in view.result_details.text()
+    assert "超过预算" in view.state_message.text()
     assert view.report_button.isVisibleTo(view)
     assert view.source_map_button.isVisibleTo(view)
 
@@ -350,13 +397,13 @@ def test_context_pack_result_panel_renders_no_limit_summary(qtbot, tmp_path: Pat
     view.set_completed([str(output)], [], [{"context_pack_version": 1}])
 
     assert view.presentation_state is WorkspacePresentationState.SUCCESS
-    assert view.result_heading.text() == "AI Context Pack Ready"
-    assert "1 source" in view.result_details.text()
-    assert "1 context pack" in view.result_details.text()
-    assert "~751 estimated tokens" in view.result_details.text()
-    assert "Budget: No limit" in view.result_details.text()
-    assert "All content blocks preserved" in view.result_details.text()
-    assert "Warnings:" not in view.result_details.text()
+    assert view.result_heading.text() == "AI 上下文包已准备好"
+    assert "来源：1 个" in view.result_details.text()
+    assert "上下文包：1 个" in view.result_details.text()
+    assert "估算令牌：约 751 个" in view.result_details.text()
+    assert "预算：不限" in view.result_details.text()
+    assert "所有内容块均已保留" in view.result_details.text()
+    assert "提醒：" not in view.result_details.text()
     assert view.source_map_button.isVisibleTo(view)
 
 
@@ -395,7 +442,7 @@ def test_context_pack_missing_report_is_not_presented_as_ready(qtbot, tmp_path: 
     view.set_completed([str(output)], [], [{"context_pack_version": 1}])
 
     assert view.presentation_state is WorkspacePresentationState.WARNING
-    assert view.result_heading.text() == "Context Pack needs attention"
+    assert view.result_heading.text() == "AI 上下文包需要检查"
     assert "context-report.json" in view.result_details.text()
 
 
@@ -405,8 +452,8 @@ def test_document_summary_and_mascot_follow_real_presentation_state(qtbot, tmp_p
     source.touch()
     view.add_inputs([str(source)])
 
-    assert "1 document" in view.summary_count.text()
-    assert "AI-ready Markdown" in view.summary_mode.text()
+    assert "1 个文档" in view.summary_count.text()
+    assert "AI 就绪 Markdown" in view.summary_mode.text()
 
     view.set_progress(40, "正在转换 lesson.txt")
     assert view.mascot_view.state is DocumentMascotState.PROCESSING
@@ -438,7 +485,7 @@ def test_document_mascot_completes_after_finished_inputs_are_cleared(qtbot, tmp_
 
     assert view.presentation_state is WorkspacePresentationState.EMPTY
     assert view.mascot_view.state is DocumentMascotState.COMPLETED
-    assert view.mascot_view.caption.text() == "Doro is resting"
+    assert view.mascot_view.caption.text() == "Doro 正在休息"
 
 
 def test_document_theme_has_explicit_light_and_dark_accessible_states() -> None:
@@ -474,6 +521,36 @@ def test_document_selection_can_remove_only_selected_rows(qtbot, tmp_path: Path)
     assert view.document_list.topLevelItemCount() == 1
 
 
+def test_document_actions_remain_reachable_at_narrow_width(qtbot, tmp_path: Path) -> None:
+    view = workspace(qtbot, markitdown=True)
+    view.resize(760, 900)
+    view.show()
+    source = tmp_path / "lesson.txt"
+    source.write_text("notes", encoding="utf-8")
+    view.add_inputs([str(source)])
+    view.set_completed([str(tmp_path / "result.md")], [], [])
+
+    scroll = view.content_stack.widget(0)
+    assert scroll.horizontalScrollBar().maximum() == 0
+    visible_actions = (
+        view.add_button,
+        view.folder_button,
+        view.remove_button,
+        view.reveal_button,
+        view.clear_button,
+        view.preview_button,
+        view.start_button,
+        view.open_button,
+    )
+    for widget in visible_actions:
+        if not widget.isVisibleTo(view):
+            continue
+        top_left = widget.mapTo(view, QPoint(0, 0))
+        bottom_right = widget.mapTo(view, widget.rect().bottomRight())
+        assert top_left.x() >= 0
+        assert bottom_right.x() <= view.width()
+
+
 def test_documents_settings_open_on_processing_defaults_and_document_tools(qtbot) -> None:
     dialog = SettingsDialog(
         deepcopy(DEFAULT_CONFIG),
@@ -485,5 +562,5 @@ def test_documents_settings_open_on_processing_defaults_and_document_tools(qtbot
     qtbot.addWidget(dialog)
 
     assert dialog.settings_tabs.currentIndex() == 1
-    assert dialog.settings_tabs.tabText(1) == "Documents"
+    assert dialog.settings_tabs.tabText(1) == "文档"
     assert dialog.document_mode.currentData() in {"enhanced", "raw"}

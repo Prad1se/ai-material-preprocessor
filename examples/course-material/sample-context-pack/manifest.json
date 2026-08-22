@@ -1,0 +1,179 @@
+{
+  "package_type": "ai_context_pack",
+  "context_pack_version": 1,
+  "created_at": "2026-08-22T12:50:11+08:00",
+  "main_markdown": "content.md",
+  "start_here": "START_HERE.md",
+  "context_report": "context-report.json",
+  "estimator": {
+    "name": "model-independent-heuristic",
+    "version": 1
+  },
+  "rendering": {
+    "asset_links": "rebased_per_output_location"
+  },
+  "budget": {
+    "requested_tokens": null,
+    "soft_target_tokens": null,
+    "unit": "estimated_tokens"
+  },
+  "sources": [
+    {
+      "source_id": "source-001",
+      "order": 1,
+      "display_name": "sample-lecture.docx",
+      "format": ".docx",
+      "estimated_tokens": 53,
+      "processing_result": "success",
+      "provenance_level": "document",
+      "sha256": null,
+      "warnings": [],
+      "content": "sources/source-001/content.md"
+    }
+  ],
+  "packs": [
+    {
+      "index": 1,
+      "file": "packs/001-context.md",
+      "estimated_tokens": 133,
+      "source_ids": [
+        "source-001"
+      ],
+      "block_ids": [
+        "source-001-block-0001",
+        "source-001-block-0002",
+        "source-001-block-0003",
+        "source-001-block-0004",
+        "source-001-block-0005"
+      ],
+      "status": "within_budget",
+      "overflow_reason": null
+    }
+  ],
+  "blocks": [
+    {
+      "block_id": "source-001-block-0001",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 1,
+      "heading_context": [
+        "Chapter One: Local AI Material Preparation"
+      ],
+      "estimated_tokens": 7,
+      "atomic": false,
+      "content_sha256": "912c913ddaefdccfcb7928d09e3d832c37e552afc1f8c9569f7fbb448736d9e9",
+      "provenance": [
+        {
+          "source_type": "document",
+          "label": "Word 文档",
+          "ordinal": null,
+          "start_line": 1,
+          "end_line": 8,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0002",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 2,
+      "heading_context": [
+        "Chapter One: Local AI Material Preparation"
+      ],
+      "estimated_tokens": 20,
+      "atomic": false,
+      "content_sha256": "4d8039d9d5b1ac054d54bc05b132966f8f44c151036916739787eceb09aed6df",
+      "provenance": [
+        {
+          "source_type": "document",
+          "label": "Word 文档",
+          "ordinal": null,
+          "start_line": 1,
+          "end_line": 8,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0003",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 3,
+      "heading_context": [
+        "Chapter One: Local AI Material Preparation",
+        "Learning goals"
+      ],
+      "estimated_tokens": 3,
+      "atomic": false,
+      "content_sha256": "aac68e0f61ec4345f8a57c6ebdb2fc34a8f272354071c2abae2600b1db8f35e5",
+      "provenance": [
+        {
+          "source_type": "document",
+          "label": "Word 文档",
+          "ordinal": null,
+          "start_line": 1,
+          "end_line": 8,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0004",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 4,
+      "heading_context": [
+        "Chapter One: Local AI Material Preparation",
+        "Learning goals"
+      ],
+      "estimated_tokens": 11,
+      "atomic": false,
+      "content_sha256": "4d0cd7e0e5b6e30c609452cf4b55c648428e5410a5c2bd12edb10a12957d73aa",
+      "provenance": [
+        {
+          "source_type": "document",
+          "label": "Word 文档",
+          "ordinal": null,
+          "start_line": 1,
+          "end_line": 8,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0005",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 5,
+      "heading_context": [
+        "Chapter One: Local AI Material Preparation",
+        "Learning goals"
+      ],
+      "estimated_tokens": 14,
+      "atomic": false,
+      "content_sha256": "47784e94bf4513e15f0342990ee822bb1d10554529fbd7e566f26fdf00aea572",
+      "provenance": [
+        {
+          "source_type": "document",
+          "label": "Word 文档",
+          "ordinal": null,
+          "start_line": 1,
+          "end_line": 8,
+          "confidence": null
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "integrity": {
+    "input_blocks": 5,
+    "packed_blocks": 5,
+    "missing_blocks": 0,
+    "missing_block_ids": [],
+    "duplicate_blocks": 0,
+    "duplicate_block_ids": [],
+    "order_preserved": true,
+    "status": "complete"
+  }
+}

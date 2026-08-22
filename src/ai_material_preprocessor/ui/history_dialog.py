@@ -25,6 +25,7 @@ from ..application.workspaces import WorkspaceId, operations_for_workspace
 from ..models import Operation, TaskStatus
 from ..services.history_repository import HistoryEntry, HistoryRepository
 from .theme import APP_STYLESHEET
+from .window_sizing import fit_dialog_to_available_space
 
 STATUS_LABELS = {
     TaskStatus.WAITING: "等待",
@@ -40,7 +41,7 @@ class HistoryDetailsDialog(QDialog):
     def __init__(self, payload: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("任务详情与质量摘要")
-        self.resize(760, 600)
+        fit_dialog_to_available_space(self, 760, 600, minimum_width=520, minimum_height=420)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("详情来自应用数据目录中的处理记录，不包含文档正文。"))
         self.details = QPlainTextEdit(self._details_text(payload))
@@ -81,7 +82,7 @@ class HistoryDetailsDialog(QDialog):
             if quality:
                 sections.append(
                     f"质量：{quality.get('score', '—')}/100；"
-                    f"约 {quality.get('estimated_tokens', '—')} tokens；"
+                    f"约 {quality.get('estimated_tokens', '—')} 个估算令牌；"
                     f"拆分 {quality.get('chunk_count', 0)} 段"
                 )
                 for issue in quality.get("issues") or []:
@@ -102,8 +103,11 @@ class HistoryDialog(QDialog):
         super().__init__(parent)
         self.repository = repository
         self.setWindowTitle("处理历史")
-        self.resize(980, 560)
-        self.setStyleSheet(APP_STYLESHEET)
+        fit_dialog_to_available_space(self, 980, 560, minimum_width=640, minimum_height=480)
+        # Inherit the active light/dark shell theme when opened from MainWindow.
+        # Standalone tests and utility use still receive the default stylesheet.
+        if parent is None:
+            self.setStyleSheet(APP_STYLESHEET)
 
         root = QVBoxLayout(self)
         intro = QLabel("这里仅保存任务来源、参数和结果路径。删除记录不会删除原文件或正式输出。")
@@ -114,9 +118,9 @@ class HistoryDialog(QDialog):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("搜索文件名、输出路径或任务编号")
         self.workspace_filter = QComboBox()
-        self.workspace_filter.addItem("全部 Workspace", None)
-        self.workspace_filter.addItem("Documents", WorkspaceId.DOCUMENTS.value)
-        self.workspace_filter.addItem("Video", WorkspaceId.VIDEO.value)
+        self.workspace_filter.addItem("全部工作区", None)
+        self.workspace_filter.addItem("文档", WorkspaceId.DOCUMENTS.value)
+        self.workspace_filter.addItem("视频", WorkspaceId.VIDEO.value)
         if workspace is not None:
             self.workspace_filter.setCurrentIndex(self.workspace_filter.findData(workspace.value))
         self.status_filter = QComboBox()
@@ -231,23 +235,21 @@ class HistoryDialog(QDialog):
                 overflow = summary.get("overflow_packs")
                 context_parts = []
                 if isinstance(source_count, int):
-                    context_parts.append(f"{source_count} sources")
+                    context_parts.append(f"{source_count} 个来源")
                 if isinstance(pack_count, int):
-                    context_parts.append(f"{pack_count} packs")
-                context_parts.append(
-                    f"Budget {budget:,}" if isinstance(budget, int) else "No limit"
-                )
+                    context_parts.append(f"{pack_count} 个包")
+                context_parts.append(f"预算 {budget:,}" if isinstance(budget, int) else "无限制")
                 if isinstance(overflow, int) and overflow:
-                    context_parts.append(f"{overflow} over budget")
+                    context_parts.append(f"{overflow} 个超出预算")
                 return " · ".join(context_parts)
         parts = []
         if scores:
             parts.append(f"{round(sum(scores) / len(scores))}/100")
         if tokens:
-            parts.append(f"~{tokens:,} tokens")
+            parts.append(f"约 {tokens:,} 个估算令牌")
         if chunks:
-            parts.append(f"{chunks} sections")
-        return " · ".join(parts) or "Available in Details"
+            parts.append(f"{chunks} 段")
+        return " · ".join(parts) or "可在详情中查看"
 
     def refresh(self) -> None:
         raw_status = self.status_filter.currentData()
@@ -307,7 +309,15 @@ class HistoryDialog(QDialog):
     def _open_folder(self) -> None:
         self.repository.root.mkdir(parents=True, exist_ok=True)
         if os.name == "nt":
-            os.startfile(str(self.repository.root))
+            try:
+                os.startfile(str(self.repository.root))
+            except OSError:
+                # 打开历史目录失败（目录被占用或权限不足）时给出可见反馈而不是崩溃。
+                QMessageBox.warning(
+                    self,
+                    "无法打开文件夹",
+                    f"系统无法打开：\n{self.repository.root}",
+                )
 
     def _show_details(self) -> None:
         task_ids = self._selected_task_ids()

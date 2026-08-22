@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import threading
@@ -60,7 +61,8 @@ class ProcessRunner:
             process.wait(timeout=1)
         except subprocess.TimeoutExpired:
             process.kill()
-            process.wait(timeout=1)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=1)
 
     def run(
         self,

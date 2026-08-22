@@ -33,6 +33,7 @@ from ..services.tool_versions import detect_tools_with_versions
 from .theme import ThemeMode, stylesheet_for_theme
 from .tool_installation import ToolInstallationCoordinator
 from .tool_status_table import ToolStatusTable
+from .window_sizing import fit_dialog_to_available_space
 
 ConfigSaver = Callable[[dict], object]
 ToolDetector = Callable[[dict], dict[str, ToolStatus]]
@@ -60,8 +61,7 @@ class SettingsDialog(QDialog):
         self.document_tool_paths: dict[str, QLineEdit] = {}
         self.video_tool_paths: dict[str, QLineEdit] = {}
         self.setWindowTitle("设置")
-        self.resize(900, 680)
-        self.setMinimumSize(760, 580)
+        fit_dialog_to_available_space(self, 900, 680, minimum_width=640, minimum_height=500)
         self._build_ui()
         if initial_tab:
             tab_index = {"documents": 1, "video": 2}.get(initial_tab)
@@ -132,13 +132,18 @@ class SettingsDialog(QDialog):
         install_row.addWidget(self.tool_install_directory, 1)
         install_row.addWidget(install_browse)
         general_form.addRow("工具补充目录", install_row)
-        tabs.addTab(general, "常规")
+        general_scroll = QScrollArea()
+        general_scroll.setWidgetResizable(True)
+        general_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        general_scroll.setWidget(general)
+        self.general_scroll = general_scroll
+        tabs.addTab(general_scroll, "常规")
 
         documents_page, self.document_tool_table, document_scroll = self._tool_page(
-            DOCUMENT_TOOL_NAMES, self.document_tool_paths, "Document tools"
+            DOCUMENT_TOOL_NAMES, self.document_tool_paths, "文档工具"
         )
         video_page, self.video_tool_table, video_scroll = self._tool_page(
-            VIDEO_TOOL_NAMES, self.video_tool_paths, "Video tools"
+            VIDEO_TOOL_NAMES, self.video_tool_paths, "视频工具"
         )
         documents_page.layout().insertWidget(0, self._document_defaults())
         video_page.layout().insertWidget(0, self._video_defaults())
@@ -148,8 +153,8 @@ class SettingsDialog(QDialog):
         self.tool_table = self.document_tool_table
         self.tool_path_scroll = document_scroll
         self.video_tool_path_scroll = video_scroll
-        tabs.addTab(documents_page, "Documents")
-        tabs.addTab(video_page, "Video")
+        tabs.addTab(documents_page, "文档")
+        tabs.addTab(video_page, "视频")
         root.addWidget(tabs, 1)
 
         actions = QHBoxLayout()
@@ -171,15 +176,21 @@ class SettingsDialog(QDialog):
     ) -> tuple[QWidget, ToolStatusTable, QScrollArea]:
         page = QWidget()
         layout = QVBoxLayout(page)
+        # Keep the complete workspace-specific settings page scrollable.  The
+        # tools table and the defaults panel can grow considerably at 150% DPI,
+        # so scrolling only the path editor still allows the surrounding
+        # controls to overlap or fall below the dialog.
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
         section_title = QLabel(title)
         section_title.setObjectName("sectionTitle")
         hint = QLabel("可用能力会自动检测；自定义路径优先于随程序提供和系统 PATH。")
         hint.setObjectName("sectionDescription")
         hint.setWordWrap(True)
-        layout.addWidget(section_title)
-        layout.addWidget(hint)
+        content_layout.addWidget(section_title)
+        content_layout.addWidget(hint)
         table = ToolStatusTable()
-        layout.addWidget(table)
+        content_layout.addWidget(table)
         paths_widget = QWidget()
         path_form = QFormLayout(paths_widget)
         for key, descriptor in TOOL_DESCRIPTORS.items():
@@ -194,11 +205,12 @@ class SettingsDialog(QDialog):
             row.addWidget(browse)
             path_form.addRow(descriptor.display_name, row)
             path_inputs[key] = field
+        content_layout.addWidget(paths_widget)
+        content_layout.addStretch()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumHeight(150)
-        scroll.setWidget(paths_widget)
+        scroll.setWidget(content)
         layout.addWidget(scroll, 1)
         redetect = QPushButton("重新检测")
         redetect.clicked.connect(self._redetect)
@@ -209,11 +221,9 @@ class SettingsDialog(QDialog):
         panel = QFrame()
         panel.setObjectName("settingsGroup")
         form = QFormLayout(panel)
-        defaults_title = QLabel("Processing defaults")
+        defaults_title = QLabel("处理默认值")
         defaults_title.setObjectName("sectionTitle")
-        defaults_description = QLabel(
-            "These values start each new document job; the workspace can override them."
-        )
+        defaults_description = QLabel("这些值用于初始化新的文档任务；当前工作区仍可单独调整。")
         defaults_description.setObjectName("sectionDescription")
         defaults_description.setWordWrap(True)
         form.addRow(defaults_title)
@@ -230,7 +240,7 @@ class SettingsDialog(QDialog):
         self.document_target_tokens.setRange(500, 100000)
         self.document_target_tokens.setSingleStep(500)
         self.document_target_tokens.setValue(int(self.config["document"]["target_tokens"]))
-        self.document_target_tokens.setSuffix(" 估算 tokens / 段")
+        self.document_target_tokens.setSuffix(" 估算令牌 / 段")
         self.document_ocr = QCheckBox("默认启用本地 OCR")
         self.document_ocr.setChecked(bool(self.config["document"]["ocr_enabled"]))
         form.addRow("处理模式", self.document_mode)

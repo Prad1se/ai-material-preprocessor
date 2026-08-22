@@ -117,7 +117,7 @@ def to_markdown(
             )
             ensure_not_cancelled()
         except Exception:
-            if cancellation and cancellation.is_cancelled and enhanced_dir.exists():
+            if enhanced_dir.exists():
                 shutil.rmtree(enhanced_dir, ignore_errors=True)
             raise
         finally:

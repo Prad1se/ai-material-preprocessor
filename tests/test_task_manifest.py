@@ -2,6 +2,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from ai_material_preprocessor.models import Operation
 from ai_material_preprocessor.services.task_manifest import (
     TaskRecord,
@@ -140,3 +142,47 @@ def test_history_usage_and_clear_only_affect_history_root(tmp_path: Path) -> Non
     assert removed == usage
     assert not history.exists()
     assert unrelated.read_text(encoding="utf-8") == "keep"
+
+
+def test_manifest_write_keeps_previous_manifest_when_temp_write_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    history_root = tmp_path / "History"
+    first = write_task_manifest(
+        history_root,
+        [TaskRecord(tmp_path / "lesson.docx", Operation.TO_MARKDOWN, "success")],
+        created_at=datetime(2026, 8, 1, 2, 3, tzinfo=UTC),
+        task_id="task-first",
+    )
+    real_write_text = Path.write_text
+
+    def failing_write_text(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        if self.name.endswith(".json.tmp"):
+            raise OSError("simulated crash during manifest write")
+        return real_write_text(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", failing_write_text)
+
+    with pytest.raises(OSError):
+        write_task_manifest(
+            history_root,
+            [TaskRecord(tmp_path / "other.docx", Operation.TO_PDF, "failed")],
+            created_at=datetime(2026, 8, 2, 2, 3, tzinfo=UTC),
+            task_id="task-second",
+        )
+
+    monkeypatch.undo()
+    assert json.loads(first.read_text(encoding="utf-8"))["task_id"] == "task-first"
+    assert list(first.parent.glob("*.tmp")) == []
+
+
+def test_manifest_write_leaves_no_temporary_file_behind(tmp_path: Path) -> None:
+    manifest = write_task_manifest(
+        tmp_path / "History",
+        [TaskRecord(tmp_path / "lesson.docx", Operation.TO_MARKDOWN, "success")],
+        created_at=datetime(2026, 8, 1, 2, 3, tzinfo=UTC),
+        task_id="task-clean",
+    )
+
+    assert json.loads(manifest.read_text(encoding="utf-8"))["task_id"] == "task-clean"
+    assert list(manifest.parent.iterdir()) == [manifest]

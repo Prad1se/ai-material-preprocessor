@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -181,3 +183,27 @@ def test_process_runner_merges_explicit_environment_without_shell() -> None:
     result = ProcessRunner().run(request)
 
     assert result.stdout.strip() == "D:/\\u5e26 \\u7a7a\\u683c/\\u7f13\\u5b58"
+
+
+def test_stop_process_survives_wait_timeout_after_kill() -> None:
+    class StubProcess:
+        def __init__(self) -> None:
+            self.actions: list[str] = []
+
+        def poll(self) -> int | None:
+            return None
+
+        def terminate(self) -> None:
+            self.actions.append("terminate")
+
+        def kill(self) -> None:
+            self.actions.append("kill")
+
+        def wait(self, timeout: float | None = None) -> int:
+            raise subprocess.TimeoutExpired(cmd="stub", timeout=timeout)
+
+    stub = cast("subprocess.Popen[str]", StubProcess())
+
+    ProcessRunner._stop_process(stub)
+
+    assert stub.actions == ["terminate", "kill"]

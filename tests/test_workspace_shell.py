@@ -230,7 +230,7 @@ def test_document_history_surfaces_existing_quality_summary(qtbot, tmp_path: Pat
     qtbot.addWidget(dialog)
 
     assert dialog.table.horizontalHeaderItem(5).text() == "质量摘要"
-    assert dialog.table.item(0, 5).text() == "88/100 · ~2,400 tokens · 3 sections"
+    assert dialog.table.item(0, 5).text() == "88/100 · 约 2,400 个估算令牌 · 3 段"
 
 
 def test_settings_are_partitioned_into_general_documents_and_video(qtbot) -> None:
@@ -246,8 +246,8 @@ def test_settings_are_partitioned_into_general_documents_and_video(qtbot) -> Non
     assert tabs is not None
     assert [tabs.tabText(index) for index in range(tabs.count())] == [
         "常规",
-        "Documents",
-        "Video",
+        "文档",
+        "视频",
     ]
     assert set(dialog.document_tool_paths).isdisjoint(dialog.video_tool_paths)
 

@@ -7,8 +7,8 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout, QW
 from ..application.workspaces import WorkspaceId
 
 WORKSPACE_LABELS = {
-    WorkspaceId.DOCUMENTS: "Documents",
-    WorkspaceId.VIDEO: "Video",
+    WorkspaceId.DOCUMENTS: "文档",
+    WorkspaceId.VIDEO: "视频",
 }
 
 
@@ -23,17 +23,17 @@ class CrossWorkspaceHandoffDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("切换 Workspace？")
+        self.setWindowTitle("切换工作区？")
         layout = QVBoxLayout(self)
         target_label = WORKSPACE_LABELS[target]
         count = len(paths)
         message = QLabel(
-            f"检测到 {count} 个属于 {target_label} Workspace 的文件。\n"
+            f"检测到 {count} 个属于{target_label}工作区的文件。\n"
             f"是否切换到 {target_label} 并移交这些输入？"
         )
         message.setWordWrap(True)
         layout.addWidget(message)
-        note = QLabel("移交只会切换 Workspace 并加入输入列表，不会自动开始处理。")
+        note = QLabel("移交只会切换工作区并加入输入列表，不会自动开始处理。")
         note.setObjectName("sectionDescription")
         note.setWordWrap(True)
         layout.addWidget(note)

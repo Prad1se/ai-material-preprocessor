@@ -3,10 +3,11 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QBoxLayout,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
 from ...application.preview_registry import PreviewProviderRegistry
 from ...application.workspaces import WorkspaceId
 from ...models import TaskStatus, ToolStatus
+from ..task_center_panel import STATUS_LABELS
 
 
 class WorkspacePresentationState(StrEnum):
@@ -104,13 +106,16 @@ class WorkspaceView(QWidget):
         page = QWidget()
         page.setObjectName("workspacePage")
         root = QVBoxLayout(page)
+        self.page_layout = root
         root.setContentsMargins(28, 24, 32, 30)
         root.setSpacing(16)
         root.addWidget(self._create_hero())
 
         content = QHBoxLayout()
+        self.content_layout = content
         content.setSpacing(16)
         input_panel = QFrame()
+        self.input_panel = input_panel
         input_panel.setObjectName("panel")
         input_layout = QVBoxLayout(input_panel)
         input_layout.setContentsMargins(22, 20, 22, 22)
@@ -136,7 +141,8 @@ class WorkspaceView(QWidget):
         input_layout.addWidget(description)
         input_layout.addWidget(self.file_list, 1)
         content.addWidget(input_panel, 5)
-        content.addWidget(self._create_options_panel(), 4)
+        self.options_panel = self._create_options_panel()
+        content.addWidget(self.options_panel, 4)
         root.addLayout(content)
 
         actions = QHBoxLayout()
@@ -160,7 +166,7 @@ class WorkspaceView(QWidget):
         recent.setObjectName("workspaceRecent")
         recent_layout = QVBoxLayout(recent)
         recent_title = QLabel(
-            "Recent document tasks" if self.workspace_id is WorkspaceId.DOCUMENTS else "Media queue"
+            "最近的文档任务" if self.workspace_id is WorkspaceId.DOCUMENTS else "媒体队列"
         )
         recent_title.setObjectName("sectionTitle")
         self.recent_tasks = QTableWidget(0, 4)
@@ -182,8 +188,10 @@ class WorkspaceView(QWidget):
         root.addWidget(self.state_label)
 
         scroll = QScrollArea()
+        self.workspace_scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(page)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -203,6 +211,25 @@ class WorkspaceView(QWidget):
             lambda: self.history_requested.emit(self.workspace_id.value)
         )
         self.set_presentation_state(WorkspacePresentationState.EMPTY)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if not hasattr(self, "content_layout"):
+            return
+        compact = self.width() < 720
+        self.content_layout.setDirection(
+            QBoxLayout.Direction.TopToBottom if compact else QBoxLayout.Direction.LeftToRight
+        )
+        self.page_layout.setContentsMargins(
+            14 if compact else 28,
+            12 if compact else 24,
+            14 if compact else 32,
+            18 if compact else 30,
+        )
+        self.page_layout.setSpacing(12 if compact else 16)
+        mascot = getattr(self, "mouse_mascot", None)
+        if mascot is not None:
+            mascot.setVisible(not compact)
 
     def _create_hero(self) -> QWidget:
         raise NotImplementedError
@@ -292,7 +319,7 @@ class WorkspaceView(QWidget):
             WorkspacePresentationState.EMPTY: "等待素材",
             WorkspacePresentationState.INPUTS_SELECTED: f"已选择 {len(self.paths)} 个素材",
             WorkspacePresentationState.PREVIEW: "已生成处理预览，尚未开始任务",
-            WorkspacePresentationState.PROCESSING: "正在处理，切换 Workspace 不会取消任务",
+            WorkspacePresentationState.PROCESSING: "正在处理，切换工作区不会取消任务",
             WorkspacePresentationState.SUCCESS: "处理完成，原文件未改动",
             WorkspacePresentationState.WARNING: "处理完成，但有需要检查的项目",
             WorkspacePresentationState.ERROR: "处理未完成，原文件未改动",
@@ -338,5 +365,8 @@ class WorkspaceView(QWidget):
             row = self.recent_tasks.rowCount()
             self.recent_tasks.insertRow(row)
             self._task_rows[task_id] = row
-        for column, value in enumerate((filename, operation, status.value, f"{progress}%")):
+        # 状态列与任务中心共用同一份中文标签，避免同一界面出现英文枚举原值。
+        for column, value in enumerate(
+            (filename, operation, STATUS_LABELS[status], f"{progress}%")
+        ):
             self.recent_tasks.setItem(row, column, QTableWidgetItem(value))

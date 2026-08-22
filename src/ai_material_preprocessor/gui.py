@@ -6,7 +6,8 @@ from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -50,6 +51,7 @@ from .ui.preview_dialog import (
 from .ui.settings_dialog import SettingsDialog
 from .ui.task_center_panel import TaskCenterPanel
 from .ui.theme import stylesheet_for_theme
+from .ui.welcome_dialog import WelcomeDialog
 from .ui.workers import Worker
 from .ui.workspaces.common import WorkspacePresentationState, WorkspaceView
 from .ui.workspaces.documents import DocumentWorkspace
@@ -87,10 +89,11 @@ class MainWindow(QMainWindow):
         self.active_job_workspace: WorkspaceId | None = None
         self.last_outputs: list[str] = []
 
-        self.setWindowTitle("AI Material Preprocessor")
+        self.setWindowTitle("AI 素材预处理工具")
         self.resize(1280, 820)
-        self.setMinimumSize(980, 700)
+        self.setMinimumSize(760, 560)
         self._build_ui()
+        self._update_responsive_layout()
         self._apply_style()
         self._show_workspace(self._configured_workspace(), persist=False)
         if self.task_repository is not None:
@@ -117,23 +120,24 @@ class MainWindow(QMainWindow):
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
 
-        navigation = QFrame()
-        navigation.setObjectName("workspaceNavigation")
-        navigation.setFixedWidth(218)
-        nav = QVBoxLayout(navigation)
+        self.navigation = QFrame()
+        self.navigation.setObjectName("workspaceNavigation")
+        self.navigation.setFixedWidth(218)
+        nav = QVBoxLayout(self.navigation)
+        self.navigation_layout = nav
         nav.setContentsMargins(20, 24, 20, 20)
         nav.setSpacing(9)
-        brand = QLabel("AI Material\nPreprocessor")
-        brand.setObjectName("shellBrand")
-        nav.addWidget(brand)
-        tagline = QLabel("Two workspaces · one private core")
-        tagline.setObjectName("navHint")
-        tagline.setWordWrap(True)
-        nav.addWidget(tagline)
+        self.brand = QLabel("AI 素材\n预处理工具")
+        self.brand.setObjectName("shellBrand")
+        nav.addWidget(self.brand)
+        self.tagline = QLabel("两个工作区 · 一个本地核心")
+        self.tagline.setObjectName("navHint")
+        self.tagline.setWordWrap(True)
+        nav.addWidget(self.tagline)
         nav.addSpacing(20)
-        self.documents_nav = self._nav_button("▤  Documents")
-        self.video_nav = self._nav_button("▶  Video")
-        self.tasks_nav = self._nav_button("☷  Tasks")
+        self.documents_nav = self._nav_button("▤  文档")
+        self.video_nav = self._nav_button("▶  视频")
+        self.tasks_nav = self._nav_button("☷  任务")
         self.workspace_group = QButtonGroup(self)
         self.workspace_group.setExclusive(True)
         for button in (self.documents_nav, self.video_nav, self.tasks_nav):
@@ -144,13 +148,13 @@ class MainWindow(QMainWindow):
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setObjectName("navSeparator")
         nav.addWidget(separator)
-        self.history_button = self._nav_button("History", checkable=False)
-        self.settings_button = self._nav_button("Settings", checkable=False)
-        self.about_button = self._nav_button("About", checkable=False)
+        self.history_button = self._nav_button("历史", checkable=False)
+        self.settings_button = self._nav_button("设置", checkable=False)
+        self.about_button = self._nav_button("关于", checkable=False)
         nav.addWidget(self.history_button)
         nav.addWidget(self.settings_button)
         nav.addWidget(self.about_button)
-        shell.addWidget(navigation)
+        shell.addWidget(self.navigation)
 
         self.workspace_stack = QStackedWidget()
         self.document_workspace = DocumentWorkspace(self.config, self.tools, self.preview_registry)
@@ -176,9 +180,32 @@ class MainWindow(QMainWindow):
             workspace.jobs_requested.connect(self._start_jobs)
             workspace.preview_ready.connect(self._present_preview)
             workspace.handoff_requested.connect(self._handoff_requested)
-            workspace.history_requested.connect(lambda raw: self._open_history(WorkspaceId(raw)))
+            workspace.history_requested.connect(self._open_workspace_history)
             workspace.open_output_requested.connect(self._open_output)
             workspace.settings_requested.connect(self._open_workspace_settings)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "navigation"):
+            self._update_responsive_layout()
+
+    def _update_responsive_layout(self) -> None:
+        width = self.width()
+        if width < 840:
+            self.navigation.setFixedWidth(136)
+            self.navigation_layout.setContentsMargins(12, 18, 12, 16)
+            self.brand.setText("AI 素材\n预处理")
+            self.tagline.hide()
+        elif width < 1080:
+            self.navigation.setFixedWidth(180)
+            self.navigation_layout.setContentsMargins(16, 22, 16, 18)
+            self.brand.setText("AI 素材\n预处理工具")
+            self.tagline.show()
+        else:
+            self.navigation.setFixedWidth(218)
+            self.navigation_layout.setContentsMargins(20, 24, 20, 20)
+            self.brand.setText("AI 素材\n预处理工具")
+            self.tagline.show()
 
     @staticmethod
     def _nav_button(text: str, *, checkable: bool = True) -> QPushButton:
@@ -193,9 +220,9 @@ class MainWindow(QMainWindow):
         page.setObjectName("tasksPage")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(34, 30, 34, 30)
-        title = QLabel("Shared Task Center")
+        title = QLabel("共享任务中心")
         title.setObjectName("title")
-        subtitle = QLabel("Document 与 Video 任务共享同一运行时；切换 Workspace 不会取消任务。")
+        subtitle = QLabel("文档与视频任务共享同一运行环境；切换工作区不会取消任务。")
         subtitle.setObjectName("sectionDescription")
         self.task_panel = TaskCenterPanel()
         self.task_table = self.task_panel.table
@@ -205,9 +232,7 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.status = QLabel("没有正在运行的任务")
         self.status.setObjectName("status")
-        self.history_label = QLabel(
-            "任务与历史继续使用共享 repository；workspace 由 operation 推断。"
-        )
+        self.history_label = QLabel("任务与历史使用共享存储；所属工作区由处理类型判断。")
         self.history_label.setObjectName("historyLabel")
         self.history_label.setToolTip(str(resolve_history_root(self.config)))
         layout.addWidget(title)
@@ -222,7 +247,21 @@ class MainWindow(QMainWindow):
         return page
 
     def switch_workspace(self, workspace: WorkspaceId | str) -> None:
-        self._show_workspace(WorkspaceId(workspace), persist=True)
+        try:
+            resolved = WorkspaceId(workspace)
+        except ValueError:
+            # 无法识别的工作区字符串（如旧配置残留）直接忽略，保持当前工作区不变。
+            return
+        self._show_workspace(resolved, persist=True)
+
+    def _open_workspace_history(self, raw_workspace: str) -> None:
+        """按工作区打开历史；无法识别的值回退为显示全部历史。"""
+
+        try:
+            workspace: WorkspaceId | None = WorkspaceId(raw_workspace)
+        except ValueError:
+            workspace = None
+        self._open_history(workspace)
 
     def _show_workspace(self, workspace: WorkspaceId, *, persist: bool) -> None:
         self._current_workspace = workspace
@@ -306,9 +345,9 @@ class MainWindow(QMainWindow):
             return
         self.task_panel.upsert(
             task_id,
-            "Documents"
+            "文档"
             if workspace_for_operation(task.job.operation) is WorkspaceId.DOCUMENTS
-            else "Video",
+            else "视频",
             task.job.source.name,
             task.job.operation.value,
             status,
@@ -385,7 +424,7 @@ class MainWindow(QMainWindow):
                     source_map = None
             DocumentReportDialog(context_pack_reports, outputs, self, source_map=source_map).exec()
             if errors:
-                QMessageBox.warning(self, "Context Pack 完成但需要检查", "\n".join(errors[:6]))
+                QMessageBox.warning(self, "AI 上下文包已完成，但需要检查", "\n".join(errors[:6]))
         elif errors:
             QMessageBox.warning(
                 self,
@@ -443,7 +482,11 @@ class MainWindow(QMainWindow):
         output = Path(raw_output)
         folder = str(output if output.is_dir() else output.parent)
         if os.name == "nt":
-            os.startfile(folder)
+            try:
+                os.startfile(folder)
+            except OSError:
+                # 资源管理器拒绝打开（路径失效或权限不足）时给出可见反馈而不是崩溃。
+                QMessageBox.warning(self, "无法打开文件夹", f"系统无法打开：\n{folder}")
 
     def _open_history(self, workspace: WorkspaceId | None) -> None:
         repository = HistoryRepository(
@@ -484,6 +527,32 @@ class MainWindow(QMainWindow):
     def show_onboarding_if_needed(self) -> None:
         if bool(self.config["app"].get("onboarding_completed", False)):
             return
+        self.welcome_dialog = WelcomeDialog(
+            examples_dir=self._examples_dir(),
+            theme=str(self.config["app"].get("theme", "system")),
+            parent=self,
+        )
+        self.welcome_dialog.import_documents.connect(self._welcome_import_documents)
+        self.welcome_dialog.view_example.connect(self._welcome_view_example)
+        self.welcome_dialog.continue_setup.connect(self._show_onboarding)
+        self.welcome_dialog.show()
+
+    def _examples_dir(self) -> Path | None:
+        candidate = Path(__file__).resolve().parents[2] / "examples"
+        return candidate if candidate.is_dir() else None
+
+    def _welcome_import_documents(self) -> None:
+        self.switch_workspace(WorkspaceId.DOCUMENTS)
+        self.document_workspace.add_button.click()
+
+    def _welcome_view_example(self) -> None:
+        examples = self._examples_dir()
+        if examples is None:
+            QMessageBox.information(self, "示例", "请从源代码仓库运行应用，以打开示例文件夹。")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(examples)))
+
+    def _show_onboarding(self) -> None:
         self.tools = detect_tools_with_versions(self.config)
         self.onboarding_dialog = OnboardingDialog(self.config, self.tools, self)
         self.onboarding_dialog.onboarding_completed.connect(self._settings_applied)

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -49,9 +50,9 @@ from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
 
 _OPERATION_LABELS = {
-    Operation.TO_MARKDOWN: "AI-ready Markdown",
-    Operation.TO_PDF: "Create a PDF copy",
-    Operation.DOCUMENT_CONTEXT_PACK: "AI Context Pack",
+    Operation.TO_MARKDOWN: "AI 就绪 Markdown",
+    Operation.TO_PDF: "创建 PDF 副本",
+    Operation.DOCUMENT_CONTEXT_PACK: "AI 上下文包",
 }
 
 
@@ -70,7 +71,7 @@ class DocumentSelectionView(QTreeWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("documentList")
-        self.setHeaderLabels(["Document", "Type", "Size", "Location"])
+        self.setHeaderLabels(["文档", "类型", "大小", "位置"])
         self.setAcceptDrops(True)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setRootIsDecorated(False)
@@ -81,8 +82,8 @@ class DocumentSelectionView(QTreeWidget):
         self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.setAccessibleName("Selected documents")
-        self.setAccessibleDescription("Document name, type, size, and source folder")
+        self.setAccessibleName("已选择的文档")
+        self.setAccessibleDescription("文档名称、类型、大小和源文件夹")
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -117,9 +118,9 @@ class DocumentSelectionView(QTreeWidget):
 
 class DocumentWorkspace(WorkspaceView):
     workspace_id = WorkspaceId.DOCUMENTS
-    input_title = "Add documents"
+    input_title = "添加文档"
     input_description = "PDF · Word · PowerPoint · Excel · HTML · TXT"
-    input_accessible_description = "只接受文档格式；视频会建议转交 Video Workspace"
+    input_accessible_description = "只接受文档格式；视频文件会建议转交视频工作区"
 
     def __init__(self, config: dict, tools: dict[str, ToolStatus], preview_registry) -> None:
         self._applying_preset = False
@@ -132,6 +133,7 @@ class DocumentWorkspace(WorkspaceView):
         page = QWidget()
         page.setObjectName("workspacePage")
         root = QVBoxLayout(page)
+        self.page_layout = root
         root.setContentsMargins(30, 24, 34, 32)
         root.setSpacing(16)
         root.addWidget(self._create_hero())
@@ -164,16 +166,14 @@ class DocumentWorkspace(WorkspaceView):
         hero = QFrame()
         hero.setObjectName("documentHero")
         layout = QHBoxLayout(hero)
+        self.hero_layout = layout
         layout.setContentsMargins(24, 18, 18, 18)
         copy = QVBoxLayout()
-        eyebrow = QLabel("DORO DOCUMENTS  ·  PRIVATE ON THIS DEVICE")
+        eyebrow = QLabel("DORO 文档  ·  仅保存在本机")
         eyebrow.setObjectName("documentEyebrow")
-        title = QLabel("Prepare documents for AI")
+        title = QLabel("为 AI 准备文档")
         title.setObjectName("title")
-        subtitle = QLabel(
-            "Turn PDFs, Office files and notes into clean, usable outputs while keeping the "
-            "originals untouched."
-        )
+        subtitle = QLabel("将 PDF、Office 文件和笔记整理为清晰、可用的输出，同时保持原文件不变。")
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
         copy.addWidget(eyebrow)
@@ -186,6 +186,26 @@ class DocumentWorkspace(WorkspaceView):
         layout.addWidget(self.mascot_view)
         return hero
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if not hasattr(self, "page_layout"):
+            return
+        compact = self.width() < 720
+        self.page_layout.setContentsMargins(
+            14 if compact else 30,
+            12 if compact else 24,
+            14 if compact else 34,
+            18 if compact else 32,
+        )
+        self.page_layout.setSpacing(12 if compact else 16)
+        self.hero_layout.setContentsMargins(
+            16 if compact else 24,
+            14 if compact else 18,
+            16 if compact else 18,
+            14 if compact else 18,
+        )
+        self.mascot_view.setVisible(not compact)
+
     def _create_input_panel(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("documentDropPanel")
@@ -193,16 +213,15 @@ class DocumentWorkspace(WorkspaceView):
         layout.setContentsMargins(22, 18, 22, 20)
         layout.setSpacing(10)
         header = QHBoxLayout()
-        title = QLabel("Documents")
+        title = QLabel("文档")
         title.setObjectName("sectionTitle")
-        self.selected_count = QLabel("No documents selected")
+        self.selected_count = QLabel("未选择文档")
         self.selected_count.setObjectName("documentCount")
         header.addWidget(title)
         header.addStretch()
         header.addWidget(self.selected_count)
         self.empty_guidance = QLabel(
-            "Drop documents here, or choose files from your computer.\n"
-            "The next step appears after your documents are selected."
+            "将文档拖到这里，或从电脑中选择文件。\n选择文档后会显示下一步。"
         )
         self.empty_guidance.setObjectName("documentEmptyGuidance")
         self.empty_guidance.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -210,26 +229,29 @@ class DocumentWorkspace(WorkspaceView):
         self.input_description_label = QLabel(self.input_description)
         self.input_description_label.setObjectName("sectionDescription")
         self.input_description_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.input_description_label.setWordWrap(True)
         self.document_list = DocumentSelectionView()
         self.file_list = self.document_list
-        actions = QHBoxLayout()
-        self.add_button = QPushButton("Choose files")
+        actions = QGridLayout()
+        actions.setHorizontalSpacing(8)
+        actions.setVerticalSpacing(6)
+        self.add_button = QPushButton("选择文件")
         self.add_button.setObjectName("documentChooseFiles")
-        self.folder_button = QPushButton("Choose folder")
+        self.folder_button = QPushButton("选择文件夹")
         self.folder_button.setObjectName("secondary")
-        self.remove_button = QPushButton("Remove selected")
+        self.remove_button = QPushButton("删除所选")
         self.remove_button.setObjectName("linkButton")
-        self.clear_button = QPushButton("Clear all")
+        self.clear_button = QPushButton("清空全部")
         self.clear_button.setObjectName("linkButton")
-        self.reveal_button = QPushButton("Open source folder")
+        self.reveal_button = QPushButton("打开源文件夹")
         self.reveal_button.setObjectName("linkButton")
-        actions.addStretch()
-        actions.addWidget(self.add_button)
-        actions.addWidget(self.folder_button)
-        actions.addWidget(self.remove_button)
-        actions.addWidget(self.reveal_button)
-        actions.addWidget(self.clear_button)
-        actions.addStretch()
+        actions.setColumnStretch(0, 1)
+        actions.setColumnStretch(3, 1)
+        actions.addWidget(self.add_button, 0, 1)
+        actions.addWidget(self.folder_button, 0, 2)
+        actions.addWidget(self.remove_button, 1, 1)
+        actions.addWidget(self.reveal_button, 1, 2)
+        actions.addWidget(self.clear_button, 1, 3)
         layout.addLayout(header)
         layout.addWidget(self.empty_guidance)
         layout.addWidget(self.input_description_label)
@@ -250,32 +272,32 @@ class DocumentWorkspace(WorkspaceView):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(22, 18, 22, 20)
         layout.setSpacing(10)
-        title = QLabel("Preparation")
+        title = QLabel("处理设置")
         title.setObjectName("sectionTitle")
-        description = QLabel("Choose the output you need. Only relevant options are shown.")
+        description = QLabel("选择需要的输出格式，仅显示相关选项。")
         description.setObjectName("sectionDescription")
         layout.addWidget(title)
         layout.addWidget(description)
 
         preset_row = QHBoxLayout()
-        preset_label = QLabel("Prepare for")
+        preset_label = QLabel("准备用途")
         preset_label.setObjectName("fieldLabel")
         self.document_preset = QComboBox()
         self.document_preset.setMinimumWidth(220)
-        self.document_preset.addItem("Custom / current settings", None)
+        self.document_preset.addItem("自定义 / 当前设置", None)
         for preset in DOCUMENT_PRESETS:
             self.document_preset.addItem(preset.label, preset.preset_id)
         self.document_preset.currentIndexChanged.connect(self._preset_changed)
         preset_row.addWidget(preset_label)
         preset_row.addWidget(self.document_preset, 1)
         layout.addLayout(preset_row)
-        self.preset_note = QLabel("Use the current settings for this job.")
+        self.preset_note = QLabel("使用当前设置处理本次任务。")
         self.preset_note.setObjectName("documentModeDescription")
         self.preset_note.setWordWrap(True)
         layout.addWidget(self.preset_note)
 
         mode_row = QHBoxLayout()
-        mode_label = QLabel("Processing mode")
+        mode_label = QLabel("处理模式")
         mode_label.setObjectName("fieldLabel")
         self.operation = QComboBox()
         self.operation.setMinimumWidth(280)
@@ -296,7 +318,7 @@ class DocumentWorkspace(WorkspaceView):
         self.tool_hint = QLabel()
         self.tool_hint.setObjectName("documentToolWarning")
         self.tool_hint.setWordWrap(True)
-        self.setup_tool_button = QPushButton("Open Documents Settings")
+        self.setup_tool_button = QPushButton("打开文档设置")
         self.setup_tool_button.setObjectName("secondary")
         self.setup_tool_button.clicked.connect(
             lambda: self.settings_requested.emit(self.workspace_id.value)
@@ -310,21 +332,21 @@ class DocumentWorkspace(WorkspaceView):
         self.basic_panel.setObjectName("documentBasicOptions")
         basic = QVBoxLayout(self.basic_panel)
         basic.setContentsMargins(14, 12, 14, 12)
-        basic_title = QLabel("For this job")
+        basic_title = QLabel("本次任务")
         basic_title.setObjectName("fieldLabel")
         self.document_mode = QComboBox()
-        self.document_mode.addItem("Clean structure and prepare for AI", "enhanced")
-        self.document_mode.addItem("Keep the direct MarkItDown conversion", "raw")
+        self.document_mode.addItem("清理结构并准备 AI 使用", "enhanced")
+        self.document_mode.addItem("保留直接 MarkItDown 转换", "raw")
         self.document_mode.setCurrentIndex(
             1 if str(self.config["document"]["mode"]) == "raw" else 0
         )
         self.document_mode.currentIndexChanged.connect(self._operation_changed)
         self.document_mode.currentIndexChanged.connect(self._mark_preset_custom)
-        self.split_document = QCheckBox("Split long content into manageable sections")
+        self.split_document = QCheckBox("将长内容拆分为易于处理的章节")
         self.split_document.setChecked(bool(self.config["document"]["split_enabled"]))
         self.split_document.stateChanged.connect(self._split_changed)
         self.split_document.stateChanged.connect(self._mark_preset_custom)
-        self.ocr_enabled = QCheckBox("Use local OCR for scanned pages and embedded images")
+        self.ocr_enabled = QCheckBox("使用本地 OCR 识别扫描页和内嵌图片")
         self.ocr_enabled.setChecked(bool(self.config["document"]["ocr_enabled"]))
         self.ocr_enabled.stateChanged.connect(self._update_summary)
         self.ocr_enabled.stateChanged.connect(self._mark_preset_custom)
@@ -332,26 +354,23 @@ class DocumentWorkspace(WorkspaceView):
         self.context_budget_panel.setObjectName("contextBudgetPanel")
         budget_layout = QVBoxLayout(self.context_budget_panel)
         budget_layout.setContentsMargins(0, 8, 0, 4)
-        budget_label = QLabel("Context Budget")
+        budget_label = QLabel("上下文预算")
         budget_label.setObjectName("fieldLabel")
-        budget_note = QLabel(
-            "Uses a model-independent estimated token count. Content is never intentionally "
-            "removed to meet the budget."
-        )
+        budget_note = QLabel("使用与模型无关的令牌估算。不会为了满足预算而主动删除内容。")
         budget_note.setObjectName("sectionDescription")
         budget_note.setWordWrap(True)
         self.context_budget = QComboBox()
-        self.context_budget.addItem("No limit", None)
+        self.context_budget.addItem("不限", None)
         self.context_budget.addItem("32K", 32000)
         self.context_budget.addItem("64K", 64000)
         self.context_budget.addItem("128K", 128000)
-        self.context_budget.addItem("Custom", "custom")
+        self.context_budget.addItem("自定义", "custom")
         self.context_budget.currentIndexChanged.connect(self._budget_changed)
         self.context_budget.currentIndexChanged.connect(self._mark_preset_custom)
         self.custom_budget = QSpinBox()
         self.custom_budget.setRange(1000, 10000000)
         self.custom_budget.setSingleStep(1000)
-        self.custom_budget.setSuffix(" estimated tokens")
+        self.custom_budget.setSuffix(" 估算令牌")
         configured_budget = self.config["document"].get("context_pack_default_budget")
         if isinstance(configured_budget, int) and not isinstance(configured_budget, bool):
             preset_index = self.context_budget.findData(configured_budget)
@@ -375,13 +394,13 @@ class DocumentWorkspace(WorkspaceView):
         basic.addWidget(self.context_budget_panel)
 
         self.output_path = QLineEdit()
-        self.output_path.setPlaceholderText("Default: an AI素材处理结果 folder beside each source")
+        self.output_path.setPlaceholderText("默认：每个源文件旁的 AI素材处理结果 文件夹")
         self.output_path.textChanged.connect(self._update_summary)
-        output_button = QPushButton("Choose…")
+        output_button = QPushButton("选择…")
         output_button.setObjectName("secondary")
         output_button.clicked.connect(self._choose_output)
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("Output"))
+        output_row.addWidget(QLabel("输出"))
         output_row.addWidget(self.output_path, 1)
         output_row.addWidget(output_button)
         basic.addLayout(output_row)
@@ -389,7 +408,7 @@ class DocumentWorkspace(WorkspaceView):
 
         self.advanced_toggle = QToolButton()
         self.advanced_toggle.setObjectName("documentAdvancedToggle")
-        self.advanced_toggle.setText("Advanced options")
+        self.advanced_toggle.setText("高级选项")
         self.advanced_toggle.setCheckable(True)
         self.advanced_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.advanced_toggle.setArrowType(Qt.ArrowType.RightArrow)
@@ -399,17 +418,15 @@ class DocumentWorkspace(WorkspaceView):
         self.advanced_panel.setObjectName("documentAdvancedOptions")
         advanced = QVBoxLayout(self.advanced_panel)
         advanced.setContentsMargins(14, 10, 14, 12)
-        target_label = QLabel("Target section length")
+        target_label = QLabel("目标章节长度")
         target_label.setObjectName("fieldLabel")
         self.target_tokens = QSpinBox()
         self.target_tokens.setRange(500, 100000)
         self.target_tokens.setSingleStep(500)
-        self.target_tokens.setSuffix(" estimated tokens / section")
+        self.target_tokens.setSuffix(" 估算令牌 / 章节")
         self.target_tokens.setValue(int(self.config["document"]["target_tokens"]))
         self.target_tokens.valueChanged.connect(self._mark_preset_custom)
-        technical_note = QLabel(
-            "Token values are estimates. Content is not silently removed to meet this length."
-        )
+        technical_note = QLabel("令牌数值仅为估算，不会为了满足该长度而静默删除内容。")
         technical_note.setObjectName("sectionDescription")
         technical_note.setWordWrap(True)
         advanced.addWidget(target_label)
@@ -425,33 +442,32 @@ class DocumentWorkspace(WorkspaceView):
         panel.setObjectName("documentSummary")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(22, 16, 22, 18)
-        title = QLabel("Ready to prepare")
+        title = QLabel("准备就绪")
         title.setObjectName("sectionTitle")
-        details = QHBoxLayout()
-        self.summary_count = QLabel("Add documents to continue")
+        details = QGridLayout()
+        details.setHorizontalSpacing(14)
+        details.setVerticalSpacing(6)
+        self.summary_count = QLabel("添加文档后继续")
         self.summary_count.setObjectName("documentSummaryValue")
         self.summary_mode = QLabel("—")
         self.summary_mode.setObjectName("documentSummaryValue")
-        self.summary_ocr = QLabel("OCR: —")
+        self.summary_ocr = QLabel("OCR：—")
         self.summary_ocr.setObjectName("documentSummaryValue")
         self.summary_budget = QLabel()
         self.summary_budget.setObjectName("documentSummaryValue")
-        self.summary_output = QLabel("Output: —")
+        self.summary_output = QLabel("输出：—")
         self.summary_output.setObjectName("documentSummaryValue")
         self.summary_output.setWordWrap(True)
-        for widget in (
-            self.summary_count,
-            self.summary_mode,
-            self.summary_ocr,
-            self.summary_budget,
-        ):
-            details.addWidget(widget)
-        details.addStretch()
+        details.addWidget(self.summary_count, 0, 0)
+        details.addWidget(self.summary_mode, 0, 1)
+        details.addWidget(self.summary_ocr, 1, 0)
+        details.addWidget(self.summary_budget, 1, 1)
+        details.setColumnStretch(2, 1)
         actions = QHBoxLayout()
         self.preview_button = QPushButton("预览文档处理方案")
         self.preview_button.setObjectName("secondary")
         self.preview_button.clicked.connect(self._show_preview)
-        self.start_button = QPushButton("Prepare documents")
+        self.start_button = QPushButton("准备文档")
         self.start_button.setObjectName("documentPrimary")
         self.start_button.setDefault(True)
         self.start_button.clicked.connect(self._request_jobs)
@@ -487,10 +503,10 @@ class DocumentWorkspace(WorkspaceView):
         self.result_details = QLabel()
         self.result_details.setObjectName("documentResultDetails")
         self.result_details.setWordWrap(True)
-        self.technical_details_button = QPushButton("View technical details")
+        self.technical_details_button = QPushButton("查看技术详情")
         self.technical_details_button.setObjectName("linkButton")
         self.technical_details_button.clicked.connect(self._show_technical_details)
-        self.open_button = QPushButton("Open output")
+        self.open_button = QPushButton("打开输出")
         self.open_button.setObjectName("secondary")
         self.open_button.setEnabled(False)
         self.open_button.clicked.connect(
@@ -498,28 +514,31 @@ class DocumentWorkspace(WorkspaceView):
                 self.open_output_requested.emit(self.last_outputs[0]) if self.last_outputs else None
             )
         )
-        self.report_button = QPushButton("View Context Report")
+        self.report_button = QPushButton("查看上下文报告")
         self.report_button.setObjectName("secondary")
         self.report_button.setVisible(False)
         self.report_button.clicked.connect(self._open_context_report)
-        self.source_map_button = QPushButton("View Source Map")
+        self.source_map_button = QPushButton("查看来源地图")
         self.source_map_button.setObjectName("secondary")
         self.source_map_button.setVisible(False)
-        self.source_map_button.setAccessibleName("View Source Map")
+        self.source_map_button.setAccessibleName("查看来源地图")
         self.source_map_button.clicked.connect(self._open_source_map)
-        self.copy_for_ai_button = QPushButton("Copy for AI")
+        self.copy_for_ai_button = QPushButton("复制给 AI")
         self.copy_for_ai_button.setObjectName("secondary")
         self.copy_for_ai_button.setVisible(False)
-        self.copy_for_ai_button.setAccessibleName("Copy for AI")
+        self.copy_for_ai_button.setAccessibleName("复制给 AI")
         self.copy_for_ai_button.clicked.connect(self._copy_for_ai)
-        result_actions = QHBoxLayout()
-        result_actions.addWidget(self.result_heading)
-        result_actions.addStretch()
-        result_actions.addWidget(self.technical_details_button)
-        result_actions.addWidget(self.report_button)
-        result_actions.addWidget(self.source_map_button)
-        result_actions.addWidget(self.copy_for_ai_button)
-        result_actions.addWidget(self.open_button)
+        result_actions = QGridLayout()
+        result_actions.setHorizontalSpacing(8)
+        result_actions.setVerticalSpacing(6)
+        result_actions.addWidget(self.result_heading, 0, 0, 1, 2)
+        result_actions.addWidget(self.technical_details_button, 1, 0)
+        result_actions.addWidget(self.report_button, 1, 1)
+        result_actions.addWidget(self.source_map_button, 2, 0)
+        result_actions.addWidget(self.copy_for_ai_button, 2, 1)
+        result_actions.addWidget(self.open_button, 3, 0, 1, 2)
+        result_actions.setColumnStretch(0, 1)
+        result_actions.setColumnStretch(1, 1)
         layout.addLayout(header)
         layout.addWidget(self.state_message)
         layout.addWidget(self.workspace_progress)
@@ -534,9 +553,9 @@ class DocumentWorkspace(WorkspaceView):
         recent.setObjectName("workspaceRecent")
         layout = QVBoxLayout(recent)
         header = QHBoxLayout()
-        title = QLabel("Recent document tasks")
+        title = QLabel("最近的文档任务")
         title.setObjectName("sectionTitle")
-        self.history_button = QPushButton("View document history")
+        self.history_button = QPushButton("查看文档历史")
         self.history_button.setObjectName("linkButton")
         self.history_button.clicked.connect(
             lambda: self.history_requested.emit(self.workspace_id.value)
@@ -545,7 +564,7 @@ class DocumentWorkspace(WorkspaceView):
         header.addStretch()
         header.addWidget(self.history_button)
         self.recent_tasks = QTableWidget(0, 4)
-        self.recent_tasks.setHorizontalHeaderLabels(["Source", "Preparation", "Result", "Progress"])
+        self.recent_tasks.setHorizontalHeaderLabels(["来源", "处理方式", "结果", "进度"])
         self.recent_tasks.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.recent_tasks.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.recent_tasks.verticalHeader().setVisible(False)
@@ -559,19 +578,19 @@ class DocumentWorkspace(WorkspaceView):
     def _choose_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Choose documents",
+            "选择文档",
             "",
-            "Documents (*.pdf *.doc *.docx *.ppt *.pptx *.xls *.xlsx *.html *.htm *.txt *.csv *.json *.xml *.md);;All files (*)",
+            "文档 (*.pdf *.doc *.docx *.ppt *.pptx *.xls *.xlsx *.html *.htm *.txt *.csv *.json *.xml *.md);;所有文件 (*)",
         )
         self.add_inputs(paths)
 
     def _choose_folder(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Choose a document folder")
+        path = QFileDialog.getExistingDirectory(self, "选择文档文件夹")
         if path:
             self.add_inputs([path])
 
     def _choose_output(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Choose document output folder")
+        path = QFileDialog.getExistingDirectory(self, "选择文档输出文件夹")
         if path:
             self.output_path.setText(path)
 
@@ -581,20 +600,16 @@ class DocumentWorkspace(WorkspaceView):
             try:
                 size = _human_size(path.stat().st_size)
             except OSError:
-                size = "Unavailable"
+                size = "不可用"
             item = QTreeWidgetItem(
-                [path.name, path.suffix.upper().lstrip(".") or "FILE", size, str(path.parent)]
+                [path.name, path.suffix.upper().lstrip(".") or "文件", size, str(path.parent)]
             )
             item.setData(0, Qt.ItemDataRole.UserRole, str(path))
             item.setToolTip(0, str(path))
             item.setToolTip(3, str(path.parent))
             self.document_list.addTopLevelItem(item)
         count = len(self.paths)
-        self.selected_count.setText(
-            "No documents selected"
-            if count == 0
-            else f"{count} document{'s' if count != 1 else ''} selected"
-        )
+        self.selected_count.setText("未选择文档" if count == 0 else f"已选择 {count} 个文档")
         self.empty_guidance.setVisible(not self.paths)
         self.input_description_label.setVisible(not self.paths)
         self.document_list.setVisible(bool(self.paths))
@@ -671,7 +686,7 @@ class DocumentWorkspace(WorkspaceView):
                 if enabled
                 else option.reason
                 if option is not None and option.reason
-                else "Add compatible documents to use this preset."
+                else "请添加兼容的文档以使用此预设。"
             )
         current_id = self.document_preset.currentData()
         if current_id is not None:
@@ -682,16 +697,14 @@ class DocumentWorkspace(WorkspaceView):
     def _preset_changed(self) -> None:
         preset_id = self.document_preset.currentData()
         if preset_id is None:
-            self.preset_note.setText("Use the current settings for this job.")
+            self.preset_note.setText("使用当前设置处理本次任务。")
             return
         preset = PRESET_BY_ID[str(preset_id)]
         operation_index = self.operation.findData(preset.operation.value)
         operation_model = self.operation.model()
         assert isinstance(operation_model, QStandardItemModel)
         if operation_index < 0 or not operation_model.item(operation_index).isEnabled():
-            self.preset_note.setText(
-                "This preset is unavailable for the selected documents or installed tools."
-            )
+            self.preset_note.setText("此预设不适用于所选文档或当前已安装的工具。")
             return
         self._applying_preset = True
         try:
@@ -705,7 +718,7 @@ class DocumentWorkspace(WorkspaceView):
             self._applying_preset = False
         note = preset.description
         if preset.ocr_enabled and not self.ocr_enabled.isChecked():
-            note += " Local OCR is unavailable; this job will continue without OCR."
+            note += " 本地 OCR 不可用；本次任务将不使用 OCR。"
         self.preset_note.setText(note)
         self._update_summary()
 
@@ -732,9 +745,9 @@ class DocumentWorkspace(WorkspaceView):
     def _operation_label(self, operation: Operation) -> str:
         if operation is Operation.TO_MARKDOWN and hasattr(self, "document_mode"):
             return (
-                "AI-ready Markdown"
+                "AI 就绪 Markdown"
                 if self.document_mode.currentData() == "enhanced"
-                else "Convert to Markdown"
+                else "转换为 Markdown"
             )
         return _OPERATION_LABELS[operation]
 
@@ -764,38 +777,31 @@ class DocumentWorkspace(WorkspaceView):
         ocr_available = self.tools.get("rapidocr", ToolStatus("rapidocr", None)).available
         self.ocr_enabled.setEnabled(ocr_available)
         self.ocr_enabled.setToolTip(
-            "" if ocr_available else "Local OCR is unavailable. Set it up in Documents Settings."
+            "" if ocr_available else "本地 OCR 不可用，请在文档设置中完成配置。"
         )
         if markdown and enhanced:
             self.operation_description.setText(
-                "Clean structure, run the existing quality checks, and optionally split long "
-                "content while preserving source information."
+                "清理结构，运行现有质量检查，并可选地拆分长内容，同时保留来源信息。"
             )
-            self.output_hint.setText("Output: existing AI 资料包 format.")
+            self.output_hint.setText("输出：现有 AI 资料包格式。")
         elif context_pack:
             self.operation_description.setText(
-                "Combine one or more documents into traceable upload packs with a deterministic "
-                "Context Budget and an integrity report."
+                "将一个或多个文档组合为可追溯的上传包，并提供确定性的上下文预算和完整性报告。"
             )
             self.output_hint.setText(
-                "Output: START_HERE, complete content archive, numbered packs, source packages, "
-                "manifest and Context Report."
+                "输出：START_HERE、完整内容归档、编号分包、来源包、manifest 和上下文报告。"
             )
         elif markdown:
-            self.operation_description.setText(
-                "Keep the direct MarkItDown conversion without enhanced cleaning or splitting."
-            )
+            self.operation_description.setText("保留直接 MarkItDown 转换，不进行增强清理或拆分。")
             self.output_hint.setText("输出：单个 Markdown 文件。")
         elif operation is Operation.TO_PDF:
             self.operation_description.setText(
-                "Create a PDF copy using Microsoft Office or LibreOffice. The source is unchanged."
+                "使用 Microsoft Office 或 LibreOffice 创建 PDF 副本，源文件不会改变。"
             )
             self.output_hint.setText("输出：单个 PDF 文件。")
         else:
-            self.operation_description.setText(
-                "Select documents to see available preparation modes."
-            )
-            self.output_hint.setText("Add documents to see the output format.")
+            self.operation_description.setText("选择文档后查看可用的处理模式。")
+            self.output_hint.setText("添加文档后查看输出格式。")
         can_start = bool(self.paths and option is not None and option.available)
         self.start_button.setEnabled(can_start)
         self.preview_button.setEnabled(can_start)
@@ -825,59 +831,53 @@ class DocumentWorkspace(WorkspaceView):
         if not hasattr(self, "summary_count"):
             return
         count = len(self.paths)
-        self.summary_count.setText(
-            "Add documents to continue"
-            if count == 0
-            else f"{count} document{'s' if count != 1 else ''}"
-        )
+        self.summary_count.setText("添加文档后继续" if count == 0 else f"{count} 个文档")
         raw = self.operation.currentData()
         self.summary_mode.setText(
-            self._operation_label(Operation(raw)) if raw is not None else "No compatible mode"
+            self._operation_label(Operation(raw)) if raw is not None else "没有兼容的模式"
         )
         enhanced = (
             raw == Operation.TO_MARKDOWN.value and self.document_mode.currentData() == "enhanced"
         )
         ocr = enhanced and self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
-        self.summary_ocr.setText("OCR: On" if ocr else "OCR: Off")
+        self.summary_ocr.setText("OCR：开启" if ocr else "OCR：关闭")
         context_pack = raw == Operation.DOCUMENT_CONTEXT_PACK.value
         self.summary_budget.setVisible(context_pack)
         if context_pack:
             budget = self._context_budget_value()
             self.summary_ocr.setText(
-                "OCR: On"
+                "OCR：开启"
                 if self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
-                else "OCR: Off"
+                else "OCR：关闭"
             )
             self.summary_budget.setText(
-                f"Context Budget: {budget:,} estimated tokens"
-                if budget
-                else "Context Budget: No limit"
+                f"上下文预算：{budget:,} 个估算令牌" if budget else "上下文预算：不限"
             )
         if self.output_path.text().strip():
             output = self.output_path.text().strip()
         elif self.paths:
             output = str(self.output_for(self.paths[0]))
         else:
-            output = "beside each source"
-        self.summary_output.setText(f"Output: {output}")
+            output = "每个源文件旁"
+        self.summary_output.setText(f"输出：{output}")
 
     def _parameters(self) -> dict[str, object]:
         if self.operation.currentData() == Operation.DOCUMENT_CONTEXT_PACK.value:
             budget = self._context_budget_value()
             return {
-                "Sources": len(self.paths),
-                "Context Budget": f"{budget:,} estimated tokens" if budget else "No limit",
-                "Estimated context": "Available after preprocessing",
+                "来源数量": len(self.paths),
+                "上下文预算": f"{budget:,} 个估算令牌" if budget else "不限",
+                "预计上下文": "预处理后可用",
                 "OCR": "开启"
                 if self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
                 else "关闭",
-                "Integrity": "No content will be intentionally removed",
+                "完整性": "不会主动删除任何内容",
             }
         enhanced = self.document_mode.currentData() == "enhanced"
         return {
             "模式": "AI 增强" if enhanced else "原始转换",
             "自动拆分": "是" if enhanced and self.split_document.isChecked() else "否",
-            "目标长度": f"{self.target_tokens.value()} tokens",
+            "目标长度": f"{self.target_tokens.value()} 个估算令牌",
             "OCR": "开启"
             if enhanced and self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
             else "关闭",
@@ -895,10 +895,8 @@ class DocumentWorkspace(WorkspaceView):
             self.set_presentation_state(WorkspacePresentationState.PREVIEW)
         except Exception as exc:
             self._technical_details = str(exc)
-            self.set_presentation_state(
-                WorkspacePresentationState.ERROR, "Preview could not be created."
-            )
-            QMessageBox.critical(self, "Unable to preview", str(exc))
+            self.set_presentation_state(WorkspacePresentationState.ERROR, "无法创建预览。")
+            QMessageBox.critical(self, "无法预览", str(exc))
 
     def _request_jobs(self) -> None:
         option = self._selected_availability()
@@ -946,39 +944,39 @@ class DocumentWorkspace(WorkspaceView):
         self.presentation_state = state
         defaults = {
             WorkspacePresentationState.EMPTY: (
-                "Add documents",
-                "Waiting",
-                "Choose files to begin.",
+                "添加文档",
+                "等待中",
+                "选择文件以开始。",
             ),
             WorkspacePresentationState.INPUTS_SELECTED: (
-                "Ready to prepare",
-                "Ready",
-                f"{len(self.paths)} document{'s' if len(self.paths) != 1 else ''} selected.",
+                "准备就绪",
+                "就绪",
+                f"已选择 {len(self.paths)} 个文档。",
             ),
             WorkspacePresentationState.PREVIEW: (
-                "Preview ready",
-                "Not started",
-                "Review the preview, then prepare your documents when ready.",
+                "预览已准备",
+                "尚未开始",
+                "请检查预览，确认后再准备文档。",
             ),
             WorkspacePresentationState.PROCESSING: (
-                "Preparing documents",
+                "正在处理文档",
                 f"{self.workspace_progress.value()}%",
-                "Switching workspaces will not cancel this task.",
+                "切换工作区不会取消当前任务。",
             ),
             WorkspacePresentationState.SUCCESS: (
-                "Documents ready",
-                "Complete",
-                "The original files were not changed.",
+                "文档已准备好",
+                "完成",
+                "原文件未被修改。",
             ),
             WorkspacePresentationState.WARNING: (
-                "Documents ready with warnings",
-                "Check results",
-                "Some items need attention. Completed outputs are available.",
+                "文档已准备好，但有提醒",
+                "请检查结果",
+                "部分项目需要注意，已完成的输出仍然可用。",
             ),
             WorkspacePresentationState.ERROR: (
-                "Preparation stopped",
-                "Not completed",
-                "The original files were not changed.",
+                "处理已停止",
+                "未完成",
+                "原文件未被修改。",
             ),
         }
         heading, badge, default_message = defaults[state]
@@ -1022,7 +1020,7 @@ class DocumentWorkspace(WorkspaceView):
     def set_progress(self, value: int, message: str) -> None:
         self.workspace_progress.setValue(value)
         self.set_presentation_state(WorkspacePresentationState.PROCESSING, message)
-        self.state_heading.setText(f"Preparing documents · {value}%")
+        self.state_heading.setText(f"正在处理文档 · {value}%")
 
     def set_completed(
         self,
@@ -1071,60 +1069,67 @@ class DocumentWorkspace(WorkspaceView):
             else WorkspacePresentationState.ERROR
         )
         if summary is not None and summary.report_available:
-            self.result_heading.setText("AI Context Pack Ready")
+            self.result_heading.setText("AI 上下文包已准备好")
             self.result_details.setText(self._format_summary(summary))
         elif summary is not None:
-            self.result_heading.setText("Context Pack needs attention")
+            self.result_heading.setText("AI 上下文包需要检查")
             self.result_details.setText(
-                "The output was created, but context-report.json is missing or invalid.\n"
-                "Open the pack to inspect the available files."
+                "输出已创建，但 context-report.json 缺失或无效。\n请打开上下文包检查可用文件。"
             )
         else:
-            self.result_heading.setText(
-                f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
-            )
+            self.result_heading.setText(f"已创建 {len(outputs)} 个输出")
             self.result_details.setText(
                 "\n".join(outputs[:4]) + ("\n…" if len(outputs) > 4 else "")
             )
         self.set_presentation_state(
             state,
-            "Context Pack output created, but context-report.json could not be verified."
+            "上下文包输出已创建，但无法验证 context-report.json。"
             if report_unavailable
-            else f"Context Pack created with {overflow} over-budget pack. No content was removed."
+            else f"上下文包已创建，其中有 {overflow} 个分包超过预算。未删除任何内容。"
             if overflow
-            else f"Context Pack created with {len(summary.warnings)} warning(s). Review the results."
+            else f"上下文包已创建，其中有 {len(summary.warnings)} 条提醒。请检查结果。"
             if summary is not None and summary.warnings
-            else f"{len(outputs)} completed; {len(errors)} need attention."
+            else f"已完成 {len(outputs)} 个输出；有 {len(errors)} 个需要注意。"
             if errors
-            else f"{len(outputs)} completed. The original files were not changed.",
+            else f"已完成 {len(outputs)} 个输出。原文件未被修改。",
         )
 
     def _format_summary(self, summary: ContextPackSummary) -> str:
         lines = [
-            f"{summary.source_count} source{'s' if summary.source_count != 1 else ''}",
-            f"{summary.pack_count} context pack{'s' if summary.pack_count != 1 else ''}",
-            f"~{summary.estimated_tokens:,} estimated tokens",
+            f"来源：{summary.source_count} 个",
+            f"上下文包：{summary.pack_count} 个",
+            f"估算令牌：约 {summary.estimated_tokens:,} 个",
             "",
-            f"Budget: {self._summary_budget_label(summary)}",
+            f"预算：{self._summary_budget_label(summary)}",
             "",
-            f"Integrity: "
-            f"{'✓ All content blocks preserved' if summary.integrity_ok else 'Incomplete: some content blocks are missing or unverified'}",
+            f"完整性："
+            f"{'✓ 所有内容块均已保留' if summary.integrity_ok else '不完整：部分内容块缺失或未验证'}",
         ]
         if summary.warnings:
-            lines.extend(("", "Warnings:"))
+            lines.extend(("", "提醒："))
             for warning in summary.warnings:
+                code = str(warning.get("code") or "")
                 detail = (
-                    warning.get("reason")
+                    {
+                        "context_pack_over_budget": "某个内容块无法安全拆分，因此对应分包超出预算。",
+                        "privacy_path_redacted": "已从输出中移除私有文件路径。",
+                    }.get(code)
+                    or warning.get("reason")
                     or warning.get("message")
-                    or warning.get("code")
-                    or "unknown warning"
+                    or code
+                    or "未知提醒"
                 )
                 lines.append(f"- {detail}")
         return "\n".join(lines)
 
     @staticmethod
     def _summary_budget_label(summary: ContextPackSummary) -> str:
-        return summary.budget_label
+        label = summary.budget_label
+        if label == "No limit":
+            return "不限"
+        if label.endswith(" context window"):
+            return f"{label.removesuffix(' context window')} 上下文窗口"
+        return label.replace(" estimated tokens", " 预计 tokens")
 
     def _open_context_report(self) -> None:
         if not self.last_outputs:
@@ -1140,7 +1145,7 @@ class DocumentWorkspace(WorkspaceView):
             source_map = self.controller.load_source_map(self._source_map_pack_dir)
         except (OSError, ValueError) as exc:
             self.source_map_view.set_source_map(None)
-            QMessageBox.critical(self, "Source Map unavailable", str(exc))
+            QMessageBox.critical(self, "来源地图不可用", str(exc))
             return
         self.source_map_view.set_source_map(
             source_map,
@@ -1150,7 +1155,7 @@ class DocumentWorkspace(WorkspaceView):
 
     def _open_source_target(self, target: SourceOpenTarget) -> None:
         if not target.available or target.path is None:
-            QMessageBox.information(self, "Source unavailable", target.reason)
+            QMessageBox.information(self, "来源不可用", target.reason)
             return
         url = QUrl.fromLocalFile(str(target.path))
         if target.capability is SourceOpenCapability.PAGE_LEVEL and target.page is not None:
@@ -1161,8 +1166,8 @@ class DocumentWorkspace(WorkspaceView):
         if not QDesktopServices.openUrl(url):
             QMessageBox.warning(
                 self,
-                "Unable to open source",
-                "Windows could not open the source with its associated application.",
+                "无法打开来源",
+                "Windows 无法使用关联的应用打开此来源。",
             )
 
     def _reset_source_map(self) -> None:
@@ -1170,7 +1175,7 @@ class DocumentWorkspace(WorkspaceView):
         self._source_map_source_paths = ()
         self.source_map_button.setVisible(False)
         self.copy_for_ai_button.setVisible(False)
-        self.copy_for_ai_button.setText("Copy for AI")
+        self.copy_for_ai_button.setText("复制给 AI")
         self.source_map_view.set_source_map(None)
         self.content_stack.setCurrentIndex(0)
 
@@ -1183,12 +1188,12 @@ class DocumentWorkspace(WorkspaceView):
         try:
             text = build_context_copy(self._source_map_pack_dir)
         except (OSError, ValueError) as exc:
-            QMessageBox.critical(self, "Copy for AI unavailable", str(exc))
+            QMessageBox.critical(self, "无法复制给 AI", str(exc))
             return
         QApplication.clipboard().setText(text)
-        self.copy_for_ai_button.setText("Copied ✓")
-        QTimer.singleShot(2000, lambda: self.copy_for_ai_button.setText("Copy for AI"))
+        self.copy_for_ai_button.setText("已复制 ✓")
+        QTimer.singleShot(2000, lambda: self.copy_for_ai_button.setText("复制给 AI"))
 
     def _show_technical_details(self) -> None:
         if self._technical_details:
-            QMessageBox.information(self, "Technical details", self._technical_details)
+            QMessageBox.information(self, "技术详情", self._technical_details)

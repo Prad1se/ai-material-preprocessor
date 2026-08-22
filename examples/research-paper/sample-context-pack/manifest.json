@@ -1,0 +1,287 @@
+{
+  "package_type": "ai_context_pack",
+  "context_pack_version": 1,
+  "created_at": "2026-08-22T12:50:11+08:00",
+  "main_markdown": "content.md",
+  "start_here": "START_HERE.md",
+  "context_report": "context-report.json",
+  "estimator": {
+    "name": "model-independent-heuristic",
+    "version": 1
+  },
+  "rendering": {
+    "asset_links": "rebased_per_output_location"
+  },
+  "budget": {
+    "requested_tokens": null,
+    "soft_target_tokens": null,
+    "unit": "estimated_tokens"
+  },
+  "sources": [
+    {
+      "source_id": "source-001",
+      "order": 1,
+      "display_name": "sample-paper.pdf",
+      "format": ".pdf",
+      "estimated_tokens": 73,
+      "processing_result": "success",
+      "provenance_level": "page",
+      "sha256": null,
+      "warnings": [],
+      "content": "sources/source-001/content.md"
+    }
+  ],
+  "packs": [
+    {
+      "index": 1,
+      "file": "packs/001-context.md",
+      "estimated_tokens": 212,
+      "source_ids": [
+        "source-001"
+      ],
+      "block_ids": [
+        "source-001-block-0001",
+        "source-001-block-0002",
+        "source-001-block-0003",
+        "source-001-block-0004",
+        "source-001-block-0005",
+        "source-001-block-0006",
+        "source-001-block-0007",
+        "source-001-block-0008",
+        "source-001-block-0009",
+        "source-001-block-0010"
+      ],
+      "status": "within_budget",
+      "overflow_reason": null
+    }
+  ],
+  "blocks": [
+    {
+      "block_id": "source-001-block-0001",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 1,
+      "heading_context": [],
+      "estimated_tokens": 1,
+      "atomic": false,
+      "content_sha256": "b484cba221e554178839c38dbf98f58d9a777dfbb9d27f9b6ac05ae22480eaac",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 1 页",
+          "ordinal": 1,
+          "start_line": 1,
+          "end_line": 5,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0002",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 2,
+      "heading_context": [],
+      "estimated_tokens": 4,
+      "atomic": false,
+      "content_sha256": "4fd357611d9c060f807e94f39e6b9468a60032e548e4133740875387654b61fa",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 1 页",
+          "ordinal": 1,
+          "start_line": 1,
+          "end_line": 5,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0003",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 3,
+      "heading_context": [
+        "Neural Retrieval: A Synthetic Case Study"
+      ],
+      "estimated_tokens": 7,
+      "atomic": false,
+      "content_sha256": "3ff7286c0a78c7b39d3d8440d4c39ef4afdd8476527edce51f1bb40590a3280f",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 1 页",
+          "ordinal": 1,
+          "start_line": 1,
+          "end_line": 5,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0004",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 4,
+      "heading_context": [
+        "Neural Retrieval: A Synthetic Case Study"
+      ],
+      "estimated_tokens": 18,
+      "atomic": false,
+      "content_sha256": "f8745c1f34bb4b518bd5fef5d256e58c05f586ff15fb617feb028183b1384215",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 1 页",
+          "ordinal": 1,
+          "start_line": 1,
+          "end_line": 5,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0005",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 5,
+      "heading_context": [
+        "Neural Retrieval: A Synthetic Case Study"
+      ],
+      "estimated_tokens": 9,
+      "atomic": false,
+      "content_sha256": "71caee473f70b9d4ccde5755d843b85168496e77004f82c88b8a2e48238c04ac",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 1 页",
+          "ordinal": 1,
+          "start_line": 1,
+          "end_line": 5,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0006",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 6,
+      "heading_context": [
+        "Neural Retrieval: A Synthetic Case Study"
+      ],
+      "estimated_tokens": 1,
+      "atomic": false,
+      "content_sha256": "b484cba221e554178839c38dbf98f58d9a777dfbb9d27f9b6ac05ae22480eaac",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 2 页",
+          "ordinal": 2,
+          "start_line": 6,
+          "end_line": 9,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0007",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 7,
+      "heading_context": [
+        "Neural Retrieval: A Synthetic Case Study"
+      ],
+      "estimated_tokens": 4,
+      "atomic": false,
+      "content_sha256": "0a5e541fc7a72cb2fbbd3df24ec4f6dfe4fbd2af4b08208f4a577d18856d00be",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 2 页",
+          "ordinal": 2,
+          "start_line": 6,
+          "end_line": 9,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0008",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 8,
+      "heading_context": [
+        "Results"
+      ],
+      "estimated_tokens": 2,
+      "atomic": false,
+      "content_sha256": "5e8c6c3782628e8fb4db90b92f490b7fa68f304998115be0c2960e1a7c211786",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 2 页",
+          "ordinal": 2,
+          "start_line": 6,
+          "end_line": 9,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0009",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 9,
+      "heading_context": [
+        "Results"
+      ],
+      "estimated_tokens": 17,
+      "atomic": false,
+      "content_sha256": "3428cc39eab3712dca4a306a71d209c49a42128b812ae4694545720a287cac2a",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 2 页",
+          "ordinal": 2,
+          "start_line": 6,
+          "end_line": 9,
+          "confidence": null
+        }
+      ]
+    },
+    {
+      "block_id": "source-001-block-0010",
+      "source_id": "source-001",
+      "source_order": 1,
+      "block_order": 10,
+      "heading_context": [
+        "Results"
+      ],
+      "estimated_tokens": 15,
+      "atomic": false,
+      "content_sha256": "df13ec8e55257a2741763af8eed06c4c1c0c58b0b0fb5ee9773edb215e7fd8f8",
+      "provenance": [
+        {
+          "source_type": "page",
+          "label": "第 2 页",
+          "ordinal": 2,
+          "start_line": 6,
+          "end_line": 9,
+          "confidence": null
+        }
+      ]
+    }
+  ],
+  "warnings": [],
+  "integrity": {
+    "input_blocks": 10,
+    "packed_blocks": 10,
+    "missing_blocks": 0,
+    "missing_block_ids": [],
+    "duplicate_blocks": 0,
+    "duplicate_block_ids": [],
+    "order_preserved": true,
+    "status": "complete"
+  }
+}

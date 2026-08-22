@@ -59,7 +59,7 @@ def test_document_presets_are_additive_templates_for_real_context_pack_parameter
     assert all(preset.operation is Operation.DOCUMENT_CONTEXT_PACK for preset in DOCUMENT_PRESETS)
     assert [preset.context_budget for preset in DOCUMENT_PRESETS] == [128000, 64000, 64000]
     assert [preset.ocr_enabled for preset in DOCUMENT_PRESETS] == [True, False, False]
-    assert "code" in DOCUMENT_PRESETS[-1].description.casefold()
+    assert "代码块" in DOCUMENT_PRESETS[-1].description
 
 
 def test_research_paper_preset_updates_visible_job_parameters(qtbot, tmp_path: Path) -> None:
@@ -85,7 +85,7 @@ def test_coding_documents_preset_uses_existing_code_preservation_behavior(
     assert view.operation.currentData() == Operation.DOCUMENT_CONTEXT_PACK.value
     assert view.context_budget.currentData() == 64000
     assert not view.ocr_enabled.isChecked()
-    assert "code blocks" in view.preset_note.text().casefold()
+    assert "代码块" in view.preset_note.text()
 
 
 def test_manual_parameter_change_returns_preset_to_custom(qtbot, tmp_path: Path) -> None:
@@ -96,7 +96,7 @@ def test_manual_parameter_change_returns_preset_to_custom(qtbot, tmp_path: Path)
     view.context_budget.setCurrentIndex(view.context_budget.findData(64000))
 
     assert view.document_preset.currentData() is None
-    assert "current settings" in view.preset_note.text().casefold()
+    assert "当前设置" in view.preset_note.text()
 
 
 def test_preset_values_are_emitted_through_existing_job_model(qtbot, tmp_path: Path) -> None:
@@ -126,7 +126,7 @@ def test_research_preset_explains_ocr_degradation_when_tool_is_missing(
     _select_preset(view, "research_paper")
 
     assert not view.ocr_enabled.isChecked()
-    assert "ocr is unavailable" in view.preset_note.text().casefold()
+    assert "OCR 不可用" in view.preset_note.text()
 
 
 def test_context_pack_presets_are_disabled_when_operation_is_unavailable(

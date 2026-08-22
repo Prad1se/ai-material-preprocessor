@@ -82,3 +82,55 @@ def test_markdown_cli_fallback_returns_exactly_one_raw_output(monkeypatch, tmp_p
     assert result == output_root / "lesson.md"
     assert result.read_text(encoding="utf-8") == "# CLI result"
     assert list(output_root.glob("*.md")) == [result]
+
+
+def test_enhancement_failure_cleans_partial_output_directory(tmp_path: Path) -> None:
+    source = tmp_path / "lesson.docx"
+    source.write_bytes(b"fake-docx")
+
+    class ExplodingOcr:
+        def extract(self, source: Path):
+            raise RuntimeError("OCR crashed")
+
+    with pytest.raises(RuntimeError, match="OCR crashed"):
+        to_markdown(
+            source,
+            tmp_path / "output",
+            converter=FakeMarkItDown(),
+            enhance=True,
+            enhancement_options=EnhancementOptions(split_enabled=False, ocr_enabled=True),
+            ocr_engine=ExplodingOcr(),
+        )
+
+    assert not (tmp_path / "output" / "lesson_AI资料包").exists()
+
+
+def test_enhancement_cancellation_still_cleans_partial_output_directory(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "lesson.docx"
+    source.write_bytes(b"fake-docx")
+    token = CancellationToken()
+
+    class CancellingOcr:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def extract(self, source: Path):
+            self.calls += 1
+            token.cancel()
+            return []
+
+    with pytest.raises(ConversionError) as raised:
+        to_markdown(
+            source,
+            tmp_path / "output",
+            converter=FakeMarkItDown(),
+            enhance=True,
+            enhancement_options=EnhancementOptions(split_enabled=False, ocr_enabled=True),
+            ocr_engine=CancellingOcr(),
+            cancellation=token,
+        )
+
+    assert raised.value.code is ErrorCode.CANCELLED
+    assert not (tmp_path / "output" / "lesson_AI资料包").exists()

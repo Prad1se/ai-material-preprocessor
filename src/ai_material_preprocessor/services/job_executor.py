@@ -8,7 +8,7 @@ from ..application.default_registry import build_default_executor_registry
 from ..application.executor_registry import OperationExecutorRegistry, TaskExecutionResult
 from ..apps.documents.executor import DocumentService
 from ..apps.video.executor import VideoService
-from ..errors import UserFacingError, explain_error
+from ..errors import ErrorCode, UserFacingError, explain_error
 from ..infrastructure.processes import CancellationToken
 from ..models import Job, TaskStatus, ToolStatus
 from .document_service import DocumentConversionService
@@ -53,8 +53,6 @@ class JobExecutor:
     @staticmethod
     def _raise_if_cancelled(cancellation: CancellationToken | None) -> None:
         if cancellation and cancellation.is_cancelled:
-            from ..errors import ErrorCode
-
             raise UserFacingError(
                 ErrorCode.CANCELLED,
                 "任务已取消，原文件没有改动。",
