@@ -12,7 +12,7 @@ class FakeDocumentService:
     def __init__(self) -> None:
         self.calls: list[tuple[Operation, Path]] = []
 
-    def convert(self, job: Job, *, cancellation=None) -> tuple[Path, list[dict]]:
+    def convert(self, job: Job, *, cancellation=None, on_progress=None) -> tuple[Path, list[dict]]:
         self.calls.append((job.operation, job.source))
         if "broken" in job.source.name:
             raise UserFacingError(
@@ -39,6 +39,7 @@ class CancellationAwareDocumentService:
         job: Job,
         *,
         cancellation: CancellationToken | None = None,
+        on_progress=None,
     ) -> tuple[Path, list[dict]]:
         self.token = cancellation
         return job.output_root / f"{job.source.stem}.md", []

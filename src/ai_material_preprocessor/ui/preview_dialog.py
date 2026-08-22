@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..preview_models import VideoPreview
+from ..services.source_map import SourceMap
+from .source_map_view import SourceMapView
 
 
 def format_bytes(value: int) -> str:
@@ -50,9 +52,13 @@ class DocumentReportDialog(QDialog):
         reports: list[dict],
         outputs: list[str],
         parent: QWidget | None = None,
+        source_map: SourceMap | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("转换质量与 AI 阅读预览")
+        is_context_pack = any(report.get("context_pack_version") == 1 for report in reports)
+        self.setWindowTitle(
+            "AI Context Pack 与 Source Map" if is_context_pack else "转换质量与 AI 阅读预览"
+        )
         self.resize(980, 720)
         root = QVBoxLayout(self)
         root.addWidget(QLabel("报告仅显示在应用中；不会在输出目录额外生成 Markdown 或 JSON 报告。"))
@@ -62,10 +68,18 @@ class DocumentReportDialog(QDialog):
         self.chunk_table = QTableWidget()
         self.ocr_table = QTableWidget()
         self.risk_list = QListWidget()
+        self.context_pack_summary = QLabel()
+        self.warning_list = QListWidget()
+        self.source_map_view = SourceMapView()
         for index, report in enumerate(reports):
             page, widgets = self._report_page(report, outputs)
-            tabs.addTab(page, str(report.get("source") or f"文档 {index + 1}"))
-            if index == 0:
+            tab_title = (
+                "AI Context Pack"
+                if report.get("context_pack_version") == 1
+                else str(report.get("source") or f"文档 {index + 1}")
+            )
+            tabs.addTab(page, tab_title)
+            if index == 0 and widgets is not None:
                 (
                     self.markdown_preview,
                     self.outline,
@@ -73,11 +87,17 @@ class DocumentReportDialog(QDialog):
                     self.ocr_table,
                     self.risk_list,
                 ) = widgets
+        if source_map is not None:
+            self.source_map_view.back_button.setVisible(False)
+            self.source_map_view.set_source_map(source_map)
+            tabs.addTab(self.source_map_view, "Source Map")
+            tabs.setCurrentWidget(self.source_map_view)
         root.addWidget(tabs)
         root.addWidget(_close_buttons(self))
 
-    @staticmethod
-    def _report_page(report: dict, outputs: list[str]):
+    def _report_page(self, report: dict, outputs: list[str]):
+        if report.get("context_pack_version") == 1:
+            return self._context_pack_page(report, outputs), None
         page = QWidget()
         layout = QVBoxLayout(page)
         summary = QLabel(
@@ -162,6 +182,46 @@ class DocumentReportDialog(QDialog):
         tabs.addTab(risk_list, "风险提示")
         layout.addWidget(tabs)
         return page, (markdown_preview, outline, chunk_table, ocr_table, risk_list)
+
+    def _context_pack_page(self, report: dict, outputs: list[str]) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        self.context_pack_summary = QLabel(
+            f"完整性 {report.get('integrity', 'unknown')} · "
+            f"约 {report.get('estimated_tokens', 0):,} tokens · "
+            f"{report.get('source_count', 0)} 个来源 · "
+            f"{report.get('pack_count', 0)} 个包"
+        )
+        self.context_pack_summary.setObjectName("previewSummary")
+        layout.addWidget(self.context_pack_summary)
+        form = QFormLayout()
+        budget = report.get("requested_budget")
+        form.addRow(
+            "Context Budget",
+            QLabel(f"{int(budget):,} 估算 tokens" if budget else "无限制"),
+        )
+        soft = report.get("soft_target")
+        form.addRow("软目标", QLabel(f"{int(soft):,}" if soft else "—"))
+        form.addRow("超出预算包数", QLabel(str(report.get("overflow_packs", 0))))
+        form.addRow("完整性", QLabel(str(report.get("integrity", "未知"))))
+        layout.addLayout(form)
+        if outputs:
+            output_label = QLabel("输出目录：\n" + "\n".join(outputs[:3]))
+            output_label.setWordWrap(True)
+            layout.addWidget(output_label)
+        self.warning_list = QListWidget()
+        for warning in report.get("warnings") or []:
+            if isinstance(warning, dict):
+                self.warning_list.addItem(
+                    str(warning.get("reason") or warning.get("message") or warning)
+                )
+            else:
+                self.warning_list.addItem(str(warning))
+        if self.warning_list.count() == 0:
+            self.warning_list.addItem("未发现警告。")
+        layout.addWidget(QLabel("处理警告"))
+        layout.addWidget(self.warning_list, 1)
+        return page
 
 
 class VideoPreviewDialog(QDialog):

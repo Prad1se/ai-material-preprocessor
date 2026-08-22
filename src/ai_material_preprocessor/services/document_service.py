@@ -4,8 +4,10 @@ from pathlib import Path
 
 from ..converters.markdown import to_markdown
 from ..converters.office_pdf import to_pdf
+from ..errors import ErrorCode, UserFacingError
 from ..infrastructure.processes import CancellationToken
 from ..models import Job, Operation, ToolStatus
+from .context_pack import ContextBudget, create_context_pack
 from .document_enhancement import EnhancementOptions
 from .preview import (
     build_document_preview,
@@ -38,7 +40,55 @@ class DocumentConversionService:
         job: Job,
         *,
         cancellation: CancellationToken | None = None,
+        on_progress=None,
     ) -> tuple[Path, list[dict]]:
+        if job.operation is Operation.DOCUMENT_CONTEXT_PACK:
+            document = self.config["document"]
+            options = EnhancementOptions(
+                split_enabled=False,
+                target_tokens=int(document["target_tokens"]),
+                max_tokens=int(document["max_tokens"]),
+                ocr_enabled=(
+                    job.context_ocr_enabled
+                    if job.context_ocr_enabled is not None
+                    else bool(document["ocr_enabled"])
+                ),
+            )
+
+            def prepare_source(source: Path, source_id: str, source_root: Path) -> Path:
+                result = to_markdown(
+                    source,
+                    source_root,
+                    self._path("markitdown"),
+                    enhance=True,
+                    enhancement_options=options,
+                    cancellation=cancellation,
+                    tool_versions=self._document_tool_versions(include_ocr=options.ocr_enabled),
+                )
+                package_dir = result.parent
+                target = source_root / source_id
+                if target.exists():
+                    raise FileExistsError(target)
+                package_dir.rename(target)
+                return target
+
+            def ensure_not_cancelled() -> None:
+                if cancellation and cancellation.is_cancelled:
+                    raise UserFacingError(
+                        ErrorCode.CANCELLED,
+                        "任务已取消，原文件没有改动。",
+                        retryable=True,
+                    )
+
+            context_result = create_context_pack(
+                sources=job.input_sources,
+                output_root=job.output_root,
+                budget=ContextBudget(job.context_budget),
+                source_processor=prepare_source,
+                on_progress=on_progress,
+                ensure_not_cancelled=ensure_not_cancelled,
+            )
+            return context_result.output_dir, [context_result.quality_summary()]
         if job.operation is Operation.TO_MARKDOWN:
             document = self.config["document"]
             enhanced = str(document["mode"]) == "enhanced"

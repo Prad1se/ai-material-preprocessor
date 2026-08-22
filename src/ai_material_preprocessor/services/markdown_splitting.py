@@ -2,10 +2,20 @@ from __future__ import annotations
 
 import math
 import re
+from dataclasses import dataclass
 
 from .document_provenance import extract_provenance, source_label_for_line
 from .markdown_cleaning import HEADING_PATTERN
 from .markdown_types import MarkdownChunk
+
+
+@dataclass(frozen=True)
+class StructuredMarkdownBlock:
+    content: str
+    start_line: int
+    end_line: int
+    heading_context: tuple[str, ...]
+    atomic: bool
 
 
 def estimate_tokens(text: str) -> int:
@@ -95,6 +105,118 @@ def _split_oversized_text(text: str, limit: int) -> list[str]:
         pieces.append(remaining[:cut].strip())
         remaining = remaining[cut:].strip()
     return [piece for piece in pieces if piece]
+
+
+def split_oversized_markdown_block(text: str, limit: int) -> tuple[str, ...]:
+    """Reuse the document splitter's safe text fallback for a single block."""
+    if limit < 1:
+        raise ValueError("The block token limit must be positive.")
+    return tuple(_split_oversized_text(text, limit))
+
+
+def structured_markdown_blocks(text: str) -> tuple[StructuredMarkdownBlock, ...]:
+    """Expose the existing structural parser without applying a job-specific budget."""
+    lines = text.splitlines()
+    headings: list[str] = []
+    result: list[StructuredMarkdownBlock] = []
+
+    def append(content: str, start_line: int, *, atomic: bool) -> None:
+        nonlocal headings
+        heading = HEADING_PATTERN.match(content)
+        if heading:
+            level = len(heading.group(1))
+            headings = headings[: level - 1]
+            headings.append(heading.group(2).strip())
+        result.append(
+            StructuredMarkdownBlock(
+                content=content,
+                start_line=start_line,
+                end_line=start_line + content.count("\n"),
+                heading_context=tuple(headings),
+                atomic=atomic,
+            )
+        )
+
+    normal: list[str] = []
+    normal_start = 1
+
+    def flush_normal() -> None:
+        nonlocal normal
+        if not normal:
+            return
+        segment = "\n".join(normal)
+        cursor = 0
+        for block in _sentence_blocks(segment):
+            position = segment.find(block, cursor)
+            if position < 0:
+                position = cursor
+            append(block, normal_start + segment.count("\n", 0, position), atomic=False)
+            cursor = position + len(block)
+        normal = []
+
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.lstrip()
+        fence = re.match(r"^(`{3,}|~{3,})", stripped)
+        if fence:
+            flush_normal()
+            opening = fence.group(1)
+            marker = opening[0]
+            minimum_length = len(opening)
+            start = index
+            fenced = [line]
+            index += 1
+            while index < len(lines):
+                fenced.append(lines[index])
+                if re.match(
+                    rf"^\s*{re.escape(marker)}{{{minimum_length},}}\s*$",
+                    lines[index],
+                ):
+                    index += 1
+                    break
+                index += 1
+            append("\n".join(fenced), start + 1, atomic=True)
+            continue
+        if stripped.startswith("|"):
+            flush_normal()
+            start = index
+            table: list[str] = []
+            while index < len(lines) and lines[index].lstrip().startswith("|"):
+                table.append(lines[index])
+                index += 1
+            append("\n".join(table), start + 1, atomic=True)
+            continue
+        if re.search(r"\]\((?:\./)?assets/[^)]+\)", line, flags=re.IGNORECASE):
+            flush_normal()
+            append(line.strip(), index + 1, atomic=True)
+            index += 1
+            continue
+        if stripped == "$$" or (stripped.startswith("$$") and stripped.endswith("$$")):
+            flush_normal()
+            start = index
+            math = [line]
+            index += 1
+            if stripped == "$$":
+                while index < len(lines):
+                    math.append(lines[index])
+                    index += 1
+                    if lines[index - 1].strip() == "$$":
+                        break
+            append("\n".join(math), start + 1, atomic=True)
+            continue
+        if not line.strip() or HEADING_PATTERN.match(line):
+            flush_normal()
+            if HEADING_PATTERN.match(line):
+                append(line.strip(), index + 1, atomic=False)
+            index += 1
+            continue
+        if not normal:
+            normal_start = index + 1
+        normal.append(line)
+        index += 1
+    flush_normal()
+    return tuple(result)
 
 
 def split_markdown(

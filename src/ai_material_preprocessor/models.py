@@ -16,6 +16,7 @@ class Operation(StrEnum):
     KEYFRAMES_CONTACT_SHEET = "提取关键帧和联系表"
     RENAME_VIDEO = "按拍摄时间/地点命名"
     ORGANIZE_VIDEO = "按日期/地点整理"
+    DOCUMENT_CONTEXT_PACK = "生成 Context Pack"
 
 
 class TaskStatus(StrEnum):
@@ -51,6 +52,35 @@ class Job:
     output_root: Path
     location: str = ""
     project: str = ""
+    sources: tuple[Path, ...] = ()
+    context_budget: int | None = None
+    context_ocr_enabled: bool | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.sources, tuple):
+            raise TypeError("Job.sources must be a tuple of Paths.")
+        if any(not isinstance(path, Path) for path in self.sources):
+            raise TypeError("Job.sources must contain only Paths.")
+        if len(set(self.sources)) != len(self.sources):
+            raise ValueError("Job.sources must not contain duplicate paths.")
+        if self.source in self.sources[1:]:
+            raise ValueError("Job.sources must not repeat the primary source.")
+        if self.context_budget is not None and (
+            isinstance(self.context_budget, bool) or not isinstance(self.context_budget, int)
+        ):
+            raise TypeError("Job.context_budget must be an integer or None.")
+        if self.context_budget is not None and self.context_budget <= 0:
+            raise ValueError("Job.context_budget must be positive.")
+        if self.context_ocr_enabled is not None and not isinstance(self.context_ocr_enabled, bool):
+            raise TypeError("Job.context_ocr_enabled must be a boolean or None.")
+
+    @property
+    def input_sources(self) -> tuple[Path, ...]:
+        """All inputs in deterministic order, including the primary source."""
+
+        if self.sources and self.sources[0] == self.source:
+            return self.sources
+        return (self.source, *self.sources)
 
 
 @dataclass(frozen=True)

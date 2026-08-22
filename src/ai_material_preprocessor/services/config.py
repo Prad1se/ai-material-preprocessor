@@ -69,6 +69,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "target_tokens": 4000,
         "max_tokens": 6000,
         "ocr_enabled": False,
+        "context_pack_default_budget": None,
     },
     "task_center": {
         "state_directory": "",

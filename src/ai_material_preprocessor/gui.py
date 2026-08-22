@@ -32,6 +32,7 @@ from .services.config import load_config, save_config
 from .services.environment import detect_tools
 from .services.history_repository import HistoryRepository, default_cache_root
 from .services.preview import completed_contact_sheet
+from .services.source_map import load_source_map
 from .services.task_manifest import resolve_history_root
 from .services.task_repository import PersistentTaskQueue
 from .services.tool_versions import detect_tools_with_versions
@@ -364,11 +365,27 @@ class MainWindow(QMainWindow):
             if self.active_job_workspace is not None
             else self.current_workspace_view
         )
-        origin.set_completed(outputs, errors)
-        if quality_reports:
-            DocumentReportDialog(quality_reports, outputs, self).exec()
+        origin.set_completed(outputs, errors, quality_reports)
+        context_pack_reports = [
+            report for report in quality_reports if report.get("context_pack_version") == 1
+        ]
+        document_reports = [
+            report for report in quality_reports if report.get("context_pack_version") != 1
+        ]
+        if document_reports:
+            DocumentReportDialog(document_reports, outputs, self).exec()
             if errors:
                 QMessageBox.warning(self, "部分任务未完成", "\n".join(errors[:6]))
+        elif context_pack_reports:
+            source_map = None
+            if outputs:
+                try:
+                    source_map = load_source_map(Path(outputs[0]))
+                except (OSError, ValueError):
+                    source_map = None
+            DocumentReportDialog(context_pack_reports, outputs, self, source_map=source_map).exec()
+            if errors:
+                QMessageBox.warning(self, "Context Pack 完成但需要检查", "\n".join(errors[:6]))
         elif errors:
             QMessageBox.warning(
                 self,
@@ -423,7 +440,8 @@ class MainWindow(QMainWindow):
             raise TypeError(f"Unsupported preview result: {type(result).__name__}")
 
     def _open_output(self, raw_output: str) -> None:
-        folder = str(Path(raw_output).parent)
+        output = Path(raw_output)
+        folder = str(output if output.is_dir() else output.parent)
         if os.name == "nt":
             os.startfile(folder)
 

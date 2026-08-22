@@ -22,6 +22,7 @@ def test_load_config_deep_merges_partial_user_values(tmp_path: Path) -> None:
     assert config["document"]["target_tokens"] == 4000
     assert config["document"]["max_tokens"] == 6000
     assert config["document"]["ocr_enabled"] is False
+    assert config["document"]["context_pack_default_budget"] is None
     assert config["video"]["scene_threshold"] == 0.30
     assert config["video"]["max_keyframes"] == 24
     assert config["video"]["project_name"] == ""
@@ -41,10 +42,13 @@ def test_save_config_is_utf8_and_round_trips(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     config = load_config(tmp_path / "missing.json")
     config["video"]["rename_template"] = "{date}_{location}_旅行"
+    config["document"]["context_pack_default_budget"] = 64000
 
     save_config(config, path)
 
     assert load_config(path)["video"]["rename_template"] == "{date}_{location}_旅行"
+    assert load_config(path)["document"]["context_pack_default_budget"] == 64000
+    assert load_config(path)["app"]["schema_version"] == 4
 
 
 def test_default_config_path_uses_local_application_data(tmp_path: Path) -> None:

@@ -304,7 +304,13 @@ class WorkspaceView(QWidget):
         self.workspace_progress.setValue(value)
         self.set_presentation_state(WorkspacePresentationState.PROCESSING, message)
 
-    def set_completed(self, outputs: list[str], errors: list[str]) -> None:
+    def set_completed(
+        self,
+        outputs: list[str],
+        errors: list[str],
+        quality_reports: list[dict] | None = None,
+    ) -> None:
+        del quality_reports
         self.last_outputs = outputs
         self.open_button.setEnabled(bool(outputs))
         self.workspace_progress.setValue(

@@ -47,6 +47,22 @@ def _quality_summary(reports: tuple[dict, ...]) -> dict[str, object]:
     if not reports:
         return {}
     report = reports[0]
+    if "context_pack_version" in report:
+        return {
+            key: report[key]
+            for key in (
+                "context_pack_version",
+                "source_count",
+                "requested_budget",
+                "soft_target",
+                "estimated_tokens",
+                "pack_count",
+                "overflow_packs",
+                "integrity",
+                "warnings",
+            )
+            if key in report
+        }
     summary: dict[str, object] = {
         key: report[key]
         for key in ("score", "estimated_tokens", "heading_count", "image_count")
@@ -157,6 +173,13 @@ class ApplicationTaskRunner:
         return [task for task in self.center.tasks if task.task_id in self.batch_ids]
 
     def _parameters_for(self, task: QueuedTask) -> dict[str, object]:
+        if task.job.operation.name == "DOCUMENT_CONTEXT_PACK":
+            return {
+                "context_budget": task.job.context_budget,
+                "budget_unit": "estimated_tokens",
+                "source_count": len(task.job.input_sources),
+                "ocr_enabled": task.job.context_ocr_enabled,
+            }
         if task.job.operation.name == "TO_MARKDOWN":
             document = self.config.get("document", {})
             return {
@@ -190,7 +213,7 @@ class ApplicationTaskRunner:
     def _tool_versions_for(self, task: QueuedTask) -> dict[str, str]:
         relevant = (
             ("markitdown", "rapidocr")
-            if task.job.operation.name == "TO_MARKDOWN"
+            if task.job.operation.name in {"TO_MARKDOWN", "DOCUMENT_CONTEXT_PACK"}
             else ("libreoffice", "winword", "powerpoint")
             if task.job.operation.name == "TO_PDF"
             else ("ffmpeg", "ffprobe", "exiftool")
@@ -234,6 +257,7 @@ class ApplicationTaskRunner:
                 parameters=self._parameters_for(task),
                 tool_versions=self._tool_versions_for(task),
                 quality_summary=_quality_summary(self.center.quality_reports_for(task.task_id)),
+                sources=(task.job.input_sources if len(task.job.input_sources) > 1 else ()),
             )
             for task in tasks
             if task.status.is_terminal

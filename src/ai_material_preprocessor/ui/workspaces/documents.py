@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QStackedWidget,
     QTableWidget,
     QToolButton,
     QTreeWidget,
@@ -29,17 +31,27 @@ from PySide6.QtWidgets import (
 
 from ...application.preview_registry import PreviewRequest
 from ...application.workspaces import WorkspaceId
+from ...apps.documents.presets import DOCUMENT_PRESETS, PRESET_BY_ID
 from ...apps.documents.workspace_controller import (
     DocumentOperationAvailability,
     DocumentWorkspaceController,
 )
 from ...models import Operation, ToolStatus
+from ...services.context_copy import build_context_copy
+from ...services.context_summary import ContextPackSummary, summarize_context_pack
+from ...services.source_open import (
+    SourceOpenCapability,
+    SourceOpenTarget,
+    source_paths_by_id,
+)
 from ..document_mascot import DocumentMascotState, DocumentMascotView
+from ..source_map_view import SourceMapView
 from .common import WorkspacePresentationState, WorkspaceView
 
 _OPERATION_LABELS = {
     Operation.TO_MARKDOWN: "AI-ready Markdown",
     Operation.TO_PDF: "Create a PDF copy",
+    Operation.DOCUMENT_CONTEXT_PACK: "AI Context Pack",
 }
 
 
@@ -110,7 +122,11 @@ class DocumentWorkspace(WorkspaceView):
     input_accessible_description = "只接受文档格式；视频会建议转交 Video Workspace"
 
     def __init__(self, config: dict, tools: dict[str, ToolStatus], preview_registry) -> None:
+        self._applying_preset = False
+        self._pending_context_source_paths: tuple[Path, ...] = ()
+        self._source_map_source_paths: tuple[Path, ...] = ()
         super().__init__(config, tools, DocumentWorkspaceController(tools), preview_registry)
+        self.source_map_view.open_source_requested.connect(self._open_source_target)
 
     def _build_ui(self) -> None:
         page = QWidget()
@@ -132,9 +148,15 @@ class DocumentWorkspace(WorkspaceView):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(page)
+        self.source_map_view = SourceMapView()
+        self.source_map_view.back_requested.connect(self._close_source_map)
+        self._source_map_pack_dir: Path | None = None
+        self.content_stack = QStackedWidget()
+        self.content_stack.addWidget(scroll)
+        self.content_stack.addWidget(self.source_map_view)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(scroll)
+        layout.addWidget(self.content_stack)
         self._render_input_paths()
         self.set_presentation_state(WorkspacePresentationState.EMPTY)
 
@@ -235,12 +257,30 @@ class DocumentWorkspace(WorkspaceView):
         layout.addWidget(title)
         layout.addWidget(description)
 
+        preset_row = QHBoxLayout()
+        preset_label = QLabel("Prepare for")
+        preset_label.setObjectName("fieldLabel")
+        self.document_preset = QComboBox()
+        self.document_preset.setMinimumWidth(220)
+        self.document_preset.addItem("Custom / current settings", None)
+        for preset in DOCUMENT_PRESETS:
+            self.document_preset.addItem(preset.label, preset.preset_id)
+        self.document_preset.currentIndexChanged.connect(self._preset_changed)
+        preset_row.addWidget(preset_label)
+        preset_row.addWidget(self.document_preset, 1)
+        layout.addLayout(preset_row)
+        self.preset_note = QLabel("Use the current settings for this job.")
+        self.preset_note.setObjectName("documentModeDescription")
+        self.preset_note.setWordWrap(True)
+        layout.addWidget(self.preset_note)
+
         mode_row = QHBoxLayout()
         mode_label = QLabel("Processing mode")
         mode_label.setObjectName("fieldLabel")
         self.operation = QComboBox()
         self.operation.setMinimumWidth(280)
         self.operation.currentIndexChanged.connect(self._operation_changed)
+        self.operation.currentIndexChanged.connect(self._mark_preset_custom)
         mode_row.addWidget(mode_label)
         mode_row.addWidget(self.operation, 1)
         layout.addLayout(mode_row)
@@ -279,16 +319,60 @@ class DocumentWorkspace(WorkspaceView):
             1 if str(self.config["document"]["mode"]) == "raw" else 0
         )
         self.document_mode.currentIndexChanged.connect(self._operation_changed)
+        self.document_mode.currentIndexChanged.connect(self._mark_preset_custom)
         self.split_document = QCheckBox("Split long content into manageable sections")
         self.split_document.setChecked(bool(self.config["document"]["split_enabled"]))
         self.split_document.stateChanged.connect(self._split_changed)
+        self.split_document.stateChanged.connect(self._mark_preset_custom)
         self.ocr_enabled = QCheckBox("Use local OCR for scanned pages and embedded images")
         self.ocr_enabled.setChecked(bool(self.config["document"]["ocr_enabled"]))
         self.ocr_enabled.stateChanged.connect(self._update_summary)
+        self.ocr_enabled.stateChanged.connect(self._mark_preset_custom)
+        self.context_budget_panel = QFrame()
+        self.context_budget_panel.setObjectName("contextBudgetPanel")
+        budget_layout = QVBoxLayout(self.context_budget_panel)
+        budget_layout.setContentsMargins(0, 8, 0, 4)
+        budget_label = QLabel("Context Budget")
+        budget_label.setObjectName("fieldLabel")
+        budget_note = QLabel(
+            "Uses a model-independent estimated token count. Content is never intentionally "
+            "removed to meet the budget."
+        )
+        budget_note.setObjectName("sectionDescription")
+        budget_note.setWordWrap(True)
+        self.context_budget = QComboBox()
+        self.context_budget.addItem("No limit", None)
+        self.context_budget.addItem("32K", 32000)
+        self.context_budget.addItem("64K", 64000)
+        self.context_budget.addItem("128K", 128000)
+        self.context_budget.addItem("Custom", "custom")
+        self.context_budget.currentIndexChanged.connect(self._budget_changed)
+        self.context_budget.currentIndexChanged.connect(self._mark_preset_custom)
+        self.custom_budget = QSpinBox()
+        self.custom_budget.setRange(1000, 10000000)
+        self.custom_budget.setSingleStep(1000)
+        self.custom_budget.setSuffix(" estimated tokens")
+        configured_budget = self.config["document"].get("context_pack_default_budget")
+        if isinstance(configured_budget, int) and not isinstance(configured_budget, bool):
+            preset_index = self.context_budget.findData(configured_budget)
+            if preset_index >= 0:
+                self.context_budget.setCurrentIndex(preset_index)
+            else:
+                self.context_budget.setCurrentIndex(self.context_budget.findData("custom"))
+                self.custom_budget.setValue(configured_budget)
+        else:
+            self.custom_budget.setValue(100000)
+        self.custom_budget.valueChanged.connect(self._update_summary)
+        self.custom_budget.valueChanged.connect(self._mark_preset_custom)
+        budget_layout.addWidget(budget_label)
+        budget_layout.addWidget(self.context_budget)
+        budget_layout.addWidget(self.custom_budget)
+        budget_layout.addWidget(budget_note)
         basic.addWidget(basic_title)
         basic.addWidget(self.document_mode)
         basic.addWidget(self.split_document)
         basic.addWidget(self.ocr_enabled)
+        basic.addWidget(self.context_budget_panel)
 
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("Default: an AI素材处理结果 folder beside each source")
@@ -322,6 +406,7 @@ class DocumentWorkspace(WorkspaceView):
         self.target_tokens.setSingleStep(500)
         self.target_tokens.setSuffix(" estimated tokens / section")
         self.target_tokens.setValue(int(self.config["document"]["target_tokens"]))
+        self.target_tokens.valueChanged.connect(self._mark_preset_custom)
         technical_note = QLabel(
             "Token values are estimates. Content is not silently removed to meet this length."
         )
@@ -331,6 +416,7 @@ class DocumentWorkspace(WorkspaceView):
         advanced.addWidget(self.target_tokens)
         advanced.addWidget(technical_note)
         self.advanced_panel.setVisible(False)
+        self.custom_budget.setVisible(self.context_budget.currentData() == "custom")
         layout.addWidget(self.advanced_panel)
         return panel
 
@@ -348,10 +434,17 @@ class DocumentWorkspace(WorkspaceView):
         self.summary_mode.setObjectName("documentSummaryValue")
         self.summary_ocr = QLabel("OCR: —")
         self.summary_ocr.setObjectName("documentSummaryValue")
+        self.summary_budget = QLabel()
+        self.summary_budget.setObjectName("documentSummaryValue")
         self.summary_output = QLabel("Output: —")
         self.summary_output.setObjectName("documentSummaryValue")
         self.summary_output.setWordWrap(True)
-        for widget in (self.summary_count, self.summary_mode, self.summary_ocr):
+        for widget in (
+            self.summary_count,
+            self.summary_mode,
+            self.summary_ocr,
+            self.summary_budget,
+        ):
             details.addWidget(widget)
         details.addStretch()
         actions = QHBoxLayout()
@@ -405,10 +498,27 @@ class DocumentWorkspace(WorkspaceView):
                 self.open_output_requested.emit(self.last_outputs[0]) if self.last_outputs else None
             )
         )
+        self.report_button = QPushButton("View Context Report")
+        self.report_button.setObjectName("secondary")
+        self.report_button.setVisible(False)
+        self.report_button.clicked.connect(self._open_context_report)
+        self.source_map_button = QPushButton("View Source Map")
+        self.source_map_button.setObjectName("secondary")
+        self.source_map_button.setVisible(False)
+        self.source_map_button.setAccessibleName("View Source Map")
+        self.source_map_button.clicked.connect(self._open_source_map)
+        self.copy_for_ai_button = QPushButton("Copy for AI")
+        self.copy_for_ai_button.setObjectName("secondary")
+        self.copy_for_ai_button.setVisible(False)
+        self.copy_for_ai_button.setAccessibleName("Copy for AI")
+        self.copy_for_ai_button.clicked.connect(self._copy_for_ai)
         result_actions = QHBoxLayout()
         result_actions.addWidget(self.result_heading)
         result_actions.addStretch()
         result_actions.addWidget(self.technical_details_button)
+        result_actions.addWidget(self.report_button)
+        result_actions.addWidget(self.source_map_button)
+        result_actions.addWidget(self.copy_for_ai_button)
         result_actions.addWidget(self.open_button)
         layout.addLayout(header)
         layout.addWidget(self.state_message)
@@ -541,7 +651,69 @@ class DocumentWorkspace(WorkspaceView):
             if index >= 0:
                 self.operation.setCurrentIndex(index)
         self.operation.blockSignals(False)
+        self._refresh_preset_availability(availability)
         self._operation_changed()
+
+    def _refresh_preset_availability(
+        self, availability: list[DocumentOperationAvailability]
+    ) -> None:
+        available_by_operation = {option.operation: option for option in availability}
+        model = self.document_preset.model()
+        assert isinstance(model, QStandardItemModel)
+        for preset in DOCUMENT_PRESETS:
+            index = self.document_preset.findData(preset.preset_id)
+            item = model.item(index)
+            option = available_by_operation.get(preset.operation)
+            enabled = option is not None and option.available
+            item.setEnabled(enabled)
+            item.setToolTip(
+                ""
+                if enabled
+                else option.reason
+                if option is not None and option.reason
+                else "Add compatible documents to use this preset."
+            )
+        current_id = self.document_preset.currentData()
+        if current_id is not None:
+            current_item = model.item(self.document_preset.currentIndex())
+            if not current_item.isEnabled():
+                self.document_preset.setCurrentIndex(0)
+
+    def _preset_changed(self) -> None:
+        preset_id = self.document_preset.currentData()
+        if preset_id is None:
+            self.preset_note.setText("Use the current settings for this job.")
+            return
+        preset = PRESET_BY_ID[str(preset_id)]
+        operation_index = self.operation.findData(preset.operation.value)
+        operation_model = self.operation.model()
+        assert isinstance(operation_model, QStandardItemModel)
+        if operation_index < 0 or not operation_model.item(operation_index).isEnabled():
+            self.preset_note.setText(
+                "This preset is unavailable for the selected documents or installed tools."
+            )
+            return
+        self._applying_preset = True
+        try:
+            self.operation.setCurrentIndex(operation_index)
+            budget_index = self.context_budget.findData(preset.context_budget)
+            if budget_index >= 0:
+                self.context_budget.setCurrentIndex(budget_index)
+            ocr_available = self.tools.get("rapidocr", ToolStatus("rapidocr", None)).available
+            self.ocr_enabled.setChecked(preset.ocr_enabled and ocr_available)
+        finally:
+            self._applying_preset = False
+        note = preset.description
+        if preset.ocr_enabled and not self.ocr_enabled.isChecked():
+            note += " Local OCR is unavailable; this job will continue without OCR."
+        self.preset_note.setText(note)
+        self._update_summary()
+
+    def _mark_preset_custom(self) -> None:
+        if self._applying_preset or not hasattr(self, "document_preset"):
+            return
+        if self.document_preset.currentData() is not None:
+            self.document_preset.setCurrentIndex(0)
 
     def _selected_availability(self) -> DocumentOperationAvailability | None:
         raw = self.operation.currentData()
@@ -570,6 +742,7 @@ class DocumentWorkspace(WorkspaceView):
         raw = self.operation.currentData()
         operation = Operation(raw) if raw is not None else None
         markdown = operation is Operation.TO_MARKDOWN
+        context_pack = operation is Operation.DOCUMENT_CONTEXT_PACK
         enhanced = markdown and self.document_mode.currentData() == "enhanced"
         if markdown and self.operation.currentIndex() >= 0:
             self.operation.setItemText(
@@ -577,7 +750,8 @@ class DocumentWorkspace(WorkspaceView):
             )
         self.document_mode.setVisible(markdown)
         self.split_document.setVisible(enhanced)
-        self.ocr_enabled.setVisible(enhanced)
+        self.ocr_enabled.setVisible(enhanced or context_pack)
+        self.context_budget_panel.setVisible(context_pack)
         self.advanced_toggle.setVisible(enhanced)
         if not enhanced:
             self.advanced_toggle.setChecked(False)
@@ -597,8 +771,15 @@ class DocumentWorkspace(WorkspaceView):
                 "Clean structure, run the existing quality checks, and optionally split long "
                 "content while preserving source information."
             )
+            self.output_hint.setText("Output: existing AI 资料包 format.")
+        elif context_pack:
+            self.operation_description.setText(
+                "Combine one or more documents into traceable upload packs with a deterministic "
+                "Context Budget and an integrity report."
+            )
             self.output_hint.setText(
-                "Output: existing AI 资料包 format. This phase does not add Context Pack."
+                "Output: START_HERE, complete content archive, numbered packs, source packages, "
+                "manifest and Context Report."
             )
         elif markdown:
             self.operation_description.setText(
@@ -621,6 +802,14 @@ class DocumentWorkspace(WorkspaceView):
         self.start_button.setToolTip(reason)
         self.preview_button.setToolTip(reason)
         self._update_summary()
+
+    def _budget_changed(self) -> None:
+        self.custom_budget.setVisible(self.context_budget.currentData() == "custom")
+        self._update_summary()
+
+    def _context_budget_value(self) -> int | None:
+        value = self.context_budget.currentData()
+        return self.custom_budget.value() if value == "custom" else value
 
     def _advanced_toggled(self, checked: bool) -> None:
         self.advanced_panel.setVisible(checked)
@@ -650,6 +839,20 @@ class DocumentWorkspace(WorkspaceView):
         )
         ocr = enhanced and self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
         self.summary_ocr.setText("OCR: On" if ocr else "OCR: Off")
+        context_pack = raw == Operation.DOCUMENT_CONTEXT_PACK.value
+        self.summary_budget.setVisible(context_pack)
+        if context_pack:
+            budget = self._context_budget_value()
+            self.summary_ocr.setText(
+                "OCR: On"
+                if self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                else "OCR: Off"
+            )
+            self.summary_budget.setText(
+                f"Context Budget: {budget:,} estimated tokens"
+                if budget
+                else "Context Budget: No limit"
+            )
         if self.output_path.text().strip():
             output = self.output_path.text().strip()
         elif self.paths:
@@ -659,6 +862,17 @@ class DocumentWorkspace(WorkspaceView):
         self.summary_output.setText(f"Output: {output}")
 
     def _parameters(self) -> dict[str, object]:
+        if self.operation.currentData() == Operation.DOCUMENT_CONTEXT_PACK.value:
+            budget = self._context_budget_value()
+            return {
+                "Sources": len(self.paths),
+                "Context Budget": f"{budget:,} estimated tokens" if budget else "No limit",
+                "Estimated context": "Available after preprocessing",
+                "OCR": "开启"
+                if self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                else "关闭",
+                "Integrity": "No content will be intentionally removed",
+            }
         enhanced = self.document_mode.currentData() == "enhanced"
         return {
             "模式": "AI 增强" if enhanced else "原始转换",
@@ -700,7 +914,30 @@ class DocumentWorkspace(WorkspaceView):
         self.config["document"]["ocr_enabled"] = (
             self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
         )
-        jobs = self.controller.create_jobs(self.paths, option.operation, self.output_for)
+        context_budget = (
+            self._context_budget_value()
+            if option.operation is Operation.DOCUMENT_CONTEXT_PACK
+            else None
+        )
+        if option.operation is Operation.DOCUMENT_CONTEXT_PACK:
+            self.config["document"]["context_pack_default_budget"] = context_budget
+        jobs = self.controller.create_jobs(
+            self.paths,
+            option.operation,
+            self.output_for,
+            context_budget=context_budget,
+            context_ocr_enabled=(
+                self.ocr_enabled.isEnabled() and self.ocr_enabled.isChecked()
+                if option.operation is Operation.DOCUMENT_CONTEXT_PACK
+                else None
+            ),
+        )
+        self._pending_context_source_paths = (
+            tuple(jobs[0].input_sources)
+            if jobs and option.operation is Operation.DOCUMENT_CONTEXT_PACK
+            else ()
+        )
+        self._reset_source_map()
         self.jobs_requested.emit(self.workspace_id.value, jobs)
 
     def set_presentation_state(
@@ -758,9 +995,11 @@ class DocumentWorkspace(WorkspaceView):
         self.state_panel.style().unpolish(self.state_panel)
         self.state_panel.style().polish(self.state_panel)
         mascot_state = {
-            WorkspacePresentationState.EMPTY: DocumentMascotState.EMPTY,
+            WorkspacePresentationState.EMPTY: (
+                DocumentMascotState.COMPLETED if self.last_outputs else DocumentMascotState.EMPTY
+            ),
             WorkspacePresentationState.INPUTS_SELECTED: DocumentMascotState.READY,
-            WorkspacePresentationState.PREVIEW: DocumentMascotState.READY,
+            WorkspacePresentationState.PREVIEW: DocumentMascotState.PREVIEW,
             WorkspacePresentationState.PROCESSING: DocumentMascotState.PROCESSING,
             WorkspacePresentationState.SUCCESS: DocumentMascotState.SUCCESS,
             WorkspacePresentationState.WARNING: DocumentMascotState.WARNING,
@@ -785,30 +1024,170 @@ class DocumentWorkspace(WorkspaceView):
         self.set_presentation_state(WorkspacePresentationState.PROCESSING, message)
         self.state_heading.setText(f"Preparing documents · {value}%")
 
-    def set_completed(self, outputs: list[str], errors: list[str]) -> None:
+    def set_completed(
+        self,
+        outputs: list[str],
+        errors: list[str],
+        quality_reports: list[dict] | None = None,
+    ) -> None:
+        self._reset_source_map()
         self.last_outputs = outputs
         self.open_button.setEnabled(bool(outputs))
         self.workspace_progress.setValue(
             100 if outputs and not errors else self.workspace_progress.value()
         )
         self._technical_details = "\n".join(errors)
+        context_report = next(
+            (
+                report
+                for report in (quality_reports or [])
+                if report.get("context_pack_version") == 1
+            ),
+            None,
+        )
+        self._source_map_pack_dir = Path(outputs[0]) if (context_report and outputs) else None
+        if self._source_map_pack_dir is not None:
+            self._source_map_source_paths = self._pending_context_source_paths or tuple(self.paths)
+        else:
+            self._source_map_source_paths = ()
+        self._pending_context_source_paths = ()
+        self.report_button.setVisible(self._source_map_pack_dir is not None)
+        self.source_map_button.setVisible(self._source_map_pack_dir is not None)
+        self.copy_for_ai_button.setVisible(self._source_map_pack_dir is not None)
+        summary: ContextPackSummary | None = None
+        if self._source_map_pack_dir is not None:
+            try:
+                summary = summarize_context_pack(self._source_map_pack_dir)
+            except (OSError, ValueError):
+                summary = None
+        overflow = summary.overflow_count if summary is not None else 0
+        report_unavailable = summary is not None and not summary.report_available
+        report_warnings = bool(summary and summary.warnings)
         state = (
             WorkspacePresentationState.WARNING
-            if outputs and errors
+            if outputs and (errors or overflow or report_warnings or report_unavailable)
             else WorkspacePresentationState.SUCCESS
             if outputs
             else WorkspacePresentationState.ERROR
         )
-        self.result_heading.setText(
-            f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
-        )
-        self.result_details.setText("\n".join(outputs[:4]) + ("\n…" if len(outputs) > 4 else ""))
+        if summary is not None and summary.report_available:
+            self.result_heading.setText("AI Context Pack Ready")
+            self.result_details.setText(self._format_summary(summary))
+        elif summary is not None:
+            self.result_heading.setText("Context Pack needs attention")
+            self.result_details.setText(
+                "The output was created, but context-report.json is missing or invalid.\n"
+                "Open the pack to inspect the available files."
+            )
+        else:
+            self.result_heading.setText(
+                f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} created"
+            )
+            self.result_details.setText(
+                "\n".join(outputs[:4]) + ("\n…" if len(outputs) > 4 else "")
+            )
         self.set_presentation_state(
             state,
-            f"{len(outputs)} completed; {len(errors)} need attention."
+            "Context Pack output created, but context-report.json could not be verified."
+            if report_unavailable
+            else f"Context Pack created with {overflow} over-budget pack. No content was removed."
+            if overflow
+            else f"Context Pack created with {len(summary.warnings)} warning(s). Review the results."
+            if summary is not None and summary.warnings
+            else f"{len(outputs)} completed; {len(errors)} need attention."
             if errors
             else f"{len(outputs)} completed. The original files were not changed.",
         )
+
+    def _format_summary(self, summary: ContextPackSummary) -> str:
+        lines = [
+            f"{summary.source_count} source{'s' if summary.source_count != 1 else ''}",
+            f"{summary.pack_count} context pack{'s' if summary.pack_count != 1 else ''}",
+            f"~{summary.estimated_tokens:,} estimated tokens",
+            "",
+            f"Budget: {self._summary_budget_label(summary)}",
+            "",
+            f"Integrity: "
+            f"{'✓ All content blocks preserved' if summary.integrity_ok else 'Incomplete: some content blocks are missing or unverified'}",
+        ]
+        if summary.warnings:
+            lines.extend(("", "Warnings:"))
+            for warning in summary.warnings:
+                detail = (
+                    warning.get("reason")
+                    or warning.get("message")
+                    or warning.get("code")
+                    or "unknown warning"
+                )
+                lines.append(f"- {detail}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _summary_budget_label(summary: ContextPackSummary) -> str:
+        return summary.budget_label
+
+    def _open_context_report(self) -> None:
+        if not self.last_outputs:
+            return
+        report = Path(self.last_outputs[0]) / "context-report.json"
+        if report.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(report)))
+
+    def _open_source_map(self) -> None:
+        if self._source_map_pack_dir is None:
+            return
+        try:
+            source_map = self.controller.load_source_map(self._source_map_pack_dir)
+        except (OSError, ValueError) as exc:
+            self.source_map_view.set_source_map(None)
+            QMessageBox.critical(self, "Source Map unavailable", str(exc))
+            return
+        self.source_map_view.set_source_map(
+            source_map,
+            source_paths_by_id(source_map.sources, self._source_map_source_paths),
+        )
+        self.content_stack.setCurrentWidget(self.source_map_view)
+
+    def _open_source_target(self, target: SourceOpenTarget) -> None:
+        if not target.available or target.path is None:
+            QMessageBox.information(self, "Source unavailable", target.reason)
+            return
+        url = QUrl.fromLocalFile(str(target.path))
+        if target.capability is SourceOpenCapability.PAGE_LEVEL and target.page is not None:
+            url.setFragment(f"page={target.page}")
+            if QDesktopServices.openUrl(url):
+                return
+            url = QUrl.fromLocalFile(str(target.path))
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(
+                self,
+                "Unable to open source",
+                "Windows could not open the source with its associated application.",
+            )
+
+    def _reset_source_map(self) -> None:
+        self._source_map_pack_dir = None
+        self._source_map_source_paths = ()
+        self.source_map_button.setVisible(False)
+        self.copy_for_ai_button.setVisible(False)
+        self.copy_for_ai_button.setText("Copy for AI")
+        self.source_map_view.set_source_map(None)
+        self.content_stack.setCurrentIndex(0)
+
+    def _close_source_map(self) -> None:
+        self.content_stack.setCurrentIndex(0)
+
+    def _copy_for_ai(self) -> None:
+        if self._source_map_pack_dir is None:
+            return
+        try:
+            text = build_context_copy(self._source_map_pack_dir)
+        except (OSError, ValueError) as exc:
+            QMessageBox.critical(self, "Copy for AI unavailable", str(exc))
+            return
+        QApplication.clipboard().setText(text)
+        self.copy_for_ai_button.setText("Copied ✓")
+        QTimer.singleShot(2000, lambda: self.copy_for_ai_button.setText("Copy for AI"))
 
     def _show_technical_details(self) -> None:
         if self._technical_details:

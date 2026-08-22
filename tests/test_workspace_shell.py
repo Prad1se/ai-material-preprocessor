@@ -72,6 +72,12 @@ def test_switching_workspace_keeps_both_workspace_state_and_active_worker(
     video.touch()
     window.document_workspace.add_inputs([str(document)])
     window.video_workspace.add_inputs([str(video)])
+    window.document_workspace.operation.setCurrentIndex(
+        window.document_workspace.operation.findData(Operation.DOCUMENT_CONTEXT_PACK.value)
+    )
+    window.document_workspace.context_budget.setCurrentIndex(
+        window.document_workspace.context_budget.findData(64000)
+    )
     marker = object()
     window.worker = marker  # type: ignore[assignment]
 
@@ -80,6 +86,10 @@ def test_switching_workspace_keeps_both_workspace_state_and_active_worker(
 
     assert window.worker is marker
     assert window.document_workspace.paths == [document.resolve()]
+    assert (
+        window.document_workspace.operation.currentData() == Operation.DOCUMENT_CONTEXT_PACK.value
+    )
+    assert window.document_workspace._context_budget_value() == 64000
     assert window.video_workspace.paths == [video.resolve()]
 
 
@@ -100,7 +110,11 @@ def test_document_and_video_workspaces_only_expose_their_operations(qtbot, tmp_p
 
     document_operations = operations(window.document_workspace.operation)
     video_operations = operations(window.video_workspace.operation)
-    assert document_operations == [Operation.TO_MARKDOWN, Operation.TO_PDF]
+    assert document_operations == [
+        Operation.TO_MARKDOWN,
+        Operation.DOCUMENT_CONTEXT_PACK,
+        Operation.TO_PDF,
+    ]
     assert set(document_operations).isdisjoint(
         {Operation.COMPRESS_VIDEO, Operation.EXTRACT_AUDIO, Operation.STANDARDIZE_MP4}
     )

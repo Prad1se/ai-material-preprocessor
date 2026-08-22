@@ -40,6 +40,9 @@ class PersistentTaskQueue:
             "source": str(task.job.source),
             "operation": task.job.operation.name,
             "output_root": str(task.job.output_root),
+            "sources": [str(path) for path in task.job.sources],
+            "context_budget": task.job.context_budget,
+            "context_ocr_enabled": task.job.context_ocr_enabled,
             "location": task.job.location,
             "project": task.job.project,
             "status": task.status.value,
@@ -68,8 +71,17 @@ class PersistentTaskQueue:
                 return default
         return default
 
+    @staticmethod
+    def _parse_optional_bool(value: object) -> bool | None:
+        if value is None or isinstance(value, bool):
+            return value
+        raise TypeError("invalid optional boolean")
+
     @classmethod
     def _deserialize(cls, payload: dict[str, object]) -> QueuedTask:
+        raw_sources = payload.get("sources", [])
+        if not isinstance(raw_sources, list):
+            raise TypeError("invalid task sources")
         return QueuedTask(
             task_id=str(payload["task_id"]),
             job=Job(
@@ -78,6 +90,13 @@ class PersistentTaskQueue:
                 output_root=Path(str(payload["output_root"])),
                 location=str(payload.get("location", "")),
                 project=str(payload.get("project", "")),
+                sources=tuple(Path(str(path)) for path in raw_sources),
+                context_budget=(
+                    cls._parse_int(payload["context_budget"])
+                    if payload.get("context_budget") is not None
+                    else None
+                ),
+                context_ocr_enabled=cls._parse_optional_bool(payload.get("context_ocr_enabled")),
             ),
             status=TaskStatus(str(payload.get("status", TaskStatus.WAITING.value))),
             progress=cls._parse_int(payload.get("progress", 0)),

@@ -39,21 +39,24 @@ class DiskSpacePreflight:
         Operation.KEYFRAMES_CONTACT_SHEET: 0.5,
         Operation.RENAME_VIDEO: 1.0,
         Operation.ORGANIZE_VIDEO: 1.0,
+        Operation.DOCUMENT_CONTEXT_PACK: 1.5,
     }
 
     def __init__(self, *, free_space: Callable[[Path], int] | None = None) -> None:
         self._free_space = free_space or (lambda path: shutil.disk_usage(path).free)
 
     def estimate(self, job: Job) -> int:
-        try:
-            source_size = job.source.stat().st_size
-        except OSError as exc:
-            raise UserFacingError(
-                ErrorCode.FILE_SYSTEM,
-                f"无法读取“{job.source.name}”的大小，请检查文件是否仍然存在。",
-                technical_detail=f"{type(exc).__name__}: {exc}",
-                retryable=True,
-            ) from exc
+        source_size = 0
+        for source in job.input_sources:
+            try:
+                source_size += source.stat().st_size
+            except OSError as exc:
+                raise UserFacingError(
+                    ErrorCode.FILE_SYSTEM,
+                    f"无法读取“{source.name}”的大小，请检查文件是否仍然存在。",
+                    technical_detail=f"{type(exc).__name__}: {exc}",
+                    retryable=True,
+                ) from exc
         return max(1, round(source_size * self.FACTORS[job.operation]))
 
     def check(

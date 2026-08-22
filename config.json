@@ -37,7 +37,8 @@
     "split_enabled": true,
     "target_tokens": 4000,
     "max_tokens": 6000,
-    "ocr_enabled": false
+    "ocr_enabled": false,
+    "context_pack_default_budget": null
   },
   "task_center": {
     "state_directory": "",

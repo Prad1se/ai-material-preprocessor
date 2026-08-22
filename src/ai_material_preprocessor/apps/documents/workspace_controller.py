@@ -11,6 +11,8 @@ from ...converters.markdown import SUPPORTED_EXTENSIONS as MARKDOWN_EXTENSIONS
 from ...converters.office_pdf import POWERPOINT_EXTENSIONS, WORD_EXTENSIONS
 from ...converters.video import VIDEO_EXTENSIONS
 from ...models import Job, Operation, ToolStatus
+from ...services.source_map import SourceMap
+from ...services.source_map import load_source_map as load_context_pack_source_map
 from .policy import DOCUMENT_INPUT_EXTENSIONS, DOCUMENT_OPERATIONS
 
 
@@ -30,6 +32,10 @@ class DocumentWorkspaceController:
 
     def update_tools(self, tools: dict[str, ToolStatus]) -> None:
         self.tools = tools
+
+    @staticmethod
+    def load_source_map(pack_dir: Path) -> SourceMap:
+        return load_context_pack_source_map(pack_dir)
 
     def classify_inputs(self, paths: list[str]) -> WorkspaceInputSelection:
         return classify_workspace_inputs(
@@ -55,7 +61,7 @@ class DocumentWorkspaceController:
         suffixes = {path.suffix.lower() for path in paths}
         candidates: list[Operation] = []
         if suffixes <= MARKDOWN_EXTENSIONS:
-            candidates.append(Operation.TO_MARKDOWN)
+            candidates.extend((Operation.TO_MARKDOWN, Operation.DOCUMENT_CONTEXT_PACK))
         if suffixes <= (WORD_EXTENSIONS | POWERPOINT_EXTENSIONS):
             candidates.append(Operation.TO_PDF)
 
@@ -70,7 +76,7 @@ class DocumentWorkspaceController:
         ]
 
     def _missing_reason(self, operation: Operation, suffixes: set[str]) -> str:
-        if operation is Operation.TO_MARKDOWN:
+        if operation in {Operation.TO_MARKDOWN, Operation.DOCUMENT_CONTEXT_PACK}:
             return "Microsoft MarkItDown is required. Open Documents Settings to set it up."
         missing: list[str] = []
         libreoffice = self.tools.get("libreoffice", ToolStatus("libreoffice", None)).available
@@ -93,7 +99,23 @@ class DocumentWorkspaceController:
         paths: list[Path],
         operation: Operation,
         output_for: Callable[[Path], Path],
+        *,
+        context_budget: int | None = None,
+        context_ocr_enabled: bool | None = None,
     ) -> list[Job]:
         if operation not in DOCUMENT_OPERATIONS:
             raise ValueError(f"{operation.name} is not a document operation.")
+        if not paths:
+            return []
+        if operation is Operation.DOCUMENT_CONTEXT_PACK:
+            return [
+                Job(
+                    paths[0],
+                    operation,
+                    output_for(paths[0]),
+                    sources=tuple(paths),
+                    context_budget=context_budget,
+                    context_ocr_enabled=context_ocr_enabled,
+                )
+            ]
         return [Job(path, operation, output_for(path)) for path in paths]
