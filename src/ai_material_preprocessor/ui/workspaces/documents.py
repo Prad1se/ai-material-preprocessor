@@ -229,6 +229,7 @@ class DocumentWorkspace(WorkspaceView):
         self.input_description_label = QLabel(self.input_description)
         self.input_description_label.setObjectName("sectionDescription")
         self.input_description_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.input_description_label.setWordWrap(True)
         self.document_list = DocumentSelectionView()
         self.file_list = self.document_list
         actions = QGridLayout()
