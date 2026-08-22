@@ -154,8 +154,6 @@ def test_manifest_write_keeps_previous_manifest_when_temp_write_fails(
         created_at=datetime(2026, 8, 1, 2, 3, tzinfo=UTC),
         task_id="task-first",
     )
-    original_payload = first.read_text(encoding="utf-8")
-
     real_write_text = Path.write_text
 
     def failing_write_text(self: Path, data: str, *args: object, **kwargs: object) -> int:
