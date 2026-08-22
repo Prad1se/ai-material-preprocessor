@@ -146,5 +146,8 @@ def write_task_manifest(
         ],
     }
     manifest = task_folder / "manifest.json"
-    manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    payload_text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    temporary = manifest.with_suffix(manifest.suffix + ".tmp")
+    temporary.write_text(payload_text, encoding="utf-8")
+    os.replace(temporary, manifest)
     return manifest
