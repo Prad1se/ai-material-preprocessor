@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from ..preview_models import VideoPreview
 from ..services.source_map import SourceMap
 from .source_map_view import SourceMapView
+from .window_sizing import fit_dialog_to_available_space
 
 
 def format_bytes(value: int) -> str:
@@ -102,7 +103,7 @@ class DocumentReportDialog(QDialog):
         self.setWindowTitle(
             "AI 上下文包与来源映射" if is_context_pack else "转换质量与 AI 阅读预览"
         )
-        self.resize(980, 720)
+        fit_dialog_to_available_space(self, 980, 720, minimum_width=620, minimum_height=480)
         root = QVBoxLayout(self)
         root.addWidget(QLabel("报告仅显示在应用中；不会在输出目录额外生成 Markdown 或 JSON 报告。"))
         tabs = QTabWidget()
@@ -266,7 +267,7 @@ class VideoPreviewDialog(QDialog):
     def __init__(self, previews: list[VideoPreview], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("视频处理预览（不会修改文件）")
-        self.resize(1120, 520)
+        fit_dialog_to_available_space(self, 1120, 520, minimum_width=640, minimum_height=420)
         layout = QVBoxLayout(self)
         self.table = QTableWidget(len(previews), 12)
         self.table.setHorizontalHeaderLabels(
@@ -344,7 +345,7 @@ class SourcePlanDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(720, 460)
+        fit_dialog_to_available_space(self, 720, 460, minimum_width=520, minimum_height=380)
         layout = QVBoxLayout(self)
         table = QTableWidget(len(sources), 3)
         table.setHorizontalHeaderLabels(["源文件", "类型", "体积"])
@@ -373,7 +374,7 @@ class ContactSheetPreviewDialog(QDialog):
     def __init__(self, source_name: str, image_path: Path, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("联系表预览")
-        self.resize(980, 720)
+        fit_dialog_to_available_space(self, 980, 720, minimum_width=520, minimum_height=400)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(f"来源：{source_name} · 联系表：{image_path.name}"))
         self.image_label = QLabel()

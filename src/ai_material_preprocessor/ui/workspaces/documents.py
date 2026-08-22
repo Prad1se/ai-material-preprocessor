@@ -133,6 +133,7 @@ class DocumentWorkspace(WorkspaceView):
         page = QWidget()
         page.setObjectName("workspacePage")
         root = QVBoxLayout(page)
+        self.page_layout = root
         root.setContentsMargins(30, 24, 34, 32)
         root.setSpacing(16)
         root.addWidget(self._create_hero())
@@ -165,6 +166,7 @@ class DocumentWorkspace(WorkspaceView):
         hero = QFrame()
         hero.setObjectName("documentHero")
         layout = QHBoxLayout(hero)
+        self.hero_layout = layout
         layout.setContentsMargins(24, 18, 18, 18)
         copy = QVBoxLayout()
         eyebrow = QLabel("DORO 文档  ·  仅保存在本机")
@@ -183,6 +185,26 @@ class DocumentWorkspace(WorkspaceView):
         layout.addLayout(copy, 1)
         layout.addWidget(self.mascot_view)
         return hero
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if not hasattr(self, "page_layout"):
+            return
+        compact = self.width() < 720
+        self.page_layout.setContentsMargins(
+            14 if compact else 30,
+            12 if compact else 24,
+            14 if compact else 34,
+            18 if compact else 32,
+        )
+        self.page_layout.setSpacing(12 if compact else 16)
+        self.hero_layout.setContentsMargins(
+            16 if compact else 24,
+            14 if compact else 18,
+            16 if compact else 18,
+            14 if compact else 18,
+        )
+        self.mascot_view.setVisible(not compact)
 
     def _create_input_panel(self) -> QWidget:
         panel = QFrame()

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from .theme import stylesheet_for_theme
+from .window_sizing import fit_dialog_to_available_space
 
 
 class WelcomeDialog(QDialog):
@@ -30,8 +31,7 @@ class WelcomeDialog(QDialog):
         self._examples_dir = examples_dir
         self.setWindowTitle("欢迎")
         self.setModal(False)
-        self.resize(720, 400)
-        self.setMinimumSize(600, 360)
+        fit_dialog_to_available_space(self, 720, 400, minimum_width=520, minimum_height=340)
         self._build_ui()
         self.setStyleSheet(stylesheet_for_theme(theme))
 

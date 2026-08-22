@@ -33,6 +33,7 @@ from ..services.tool_versions import detect_tools_with_versions
 from .theme import ThemeMode, stylesheet_for_theme
 from .tool_installation import ToolInstallationCoordinator
 from .tool_status_table import ToolStatusTable
+from .window_sizing import fit_dialog_to_available_space
 
 ConfigSaver = Callable[[dict], object]
 ToolDetector = Callable[[dict], dict[str, ToolStatus]]
@@ -60,8 +61,7 @@ class SettingsDialog(QDialog):
         self.document_tool_paths: dict[str, QLineEdit] = {}
         self.video_tool_paths: dict[str, QLineEdit] = {}
         self.setWindowTitle("设置")
-        self.resize(900, 680)
-        self.setMinimumSize(760, 580)
+        fit_dialog_to_available_space(self, 900, 680, minimum_width=640, minimum_height=500)
         self._build_ui()
         if initial_tab:
             tab_index = {"documents": 1, "video": 2}.get(initial_tab)
@@ -132,7 +132,12 @@ class SettingsDialog(QDialog):
         install_row.addWidget(self.tool_install_directory, 1)
         install_row.addWidget(install_browse)
         general_form.addRow("工具补充目录", install_row)
-        tabs.addTab(general, "常规")
+        general_scroll = QScrollArea()
+        general_scroll.setWidgetResizable(True)
+        general_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        general_scroll.setWidget(general)
+        self.general_scroll = general_scroll
+        tabs.addTab(general_scroll, "常规")
 
         documents_page, self.document_tool_table, document_scroll = self._tool_page(
             DOCUMENT_TOOL_NAMES, self.document_tool_paths, "文档工具"

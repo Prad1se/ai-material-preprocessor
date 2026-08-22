@@ -25,6 +25,7 @@ from ..application.workspaces import WorkspaceId, operations_for_workspace
 from ..models import Operation, TaskStatus
 from ..services.history_repository import HistoryEntry, HistoryRepository
 from .theme import APP_STYLESHEET
+from .window_sizing import fit_dialog_to_available_space
 
 STATUS_LABELS = {
     TaskStatus.WAITING: "等待",
@@ -40,7 +41,7 @@ class HistoryDetailsDialog(QDialog):
     def __init__(self, payload: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("任务详情与质量摘要")
-        self.resize(760, 600)
+        fit_dialog_to_available_space(self, 760, 600, minimum_width=520, minimum_height=420)
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("详情来自应用数据目录中的处理记录，不包含文档正文。"))
         self.details = QPlainTextEdit(self._details_text(payload))
@@ -102,7 +103,7 @@ class HistoryDialog(QDialog):
         super().__init__(parent)
         self.repository = repository
         self.setWindowTitle("处理历史")
-        self.resize(980, 560)
+        fit_dialog_to_available_space(self, 980, 560, minimum_width=640, minimum_height=480)
         # Inherit the active light/dark shell theme when opened from MainWindow.
         # Standalone tests and utility use still receive the default stylesheet.
         if parent is None:

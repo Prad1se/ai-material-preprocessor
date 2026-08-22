@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from PySide6.QtWidgets import QLabel, QScrollArea, QSplitter
+from PySide6.QtWidgets import QApplication, QBoxLayout, QLabel, QScrollArea, QSplitter
 
+from ai_material_preprocessor.gui import MainWindow
 from ai_material_preprocessor.models import ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
 from ai_material_preprocessor.services.source_map import (
@@ -16,6 +17,7 @@ from ai_material_preprocessor.ui.preview_dialog import DocumentReportDialog
 from ai_material_preprocessor.ui.settings_dialog import SettingsDialog
 from ai_material_preprocessor.ui.source_map_view import SourceMapView
 from ai_material_preprocessor.ui.theme import stylesheet_for_theme
+from ai_material_preprocessor.ui.window_sizing import fit_dialog_to_available_space
 
 
 def _tools() -> dict[str, ToolStatus]:
@@ -80,3 +82,95 @@ def test_dark_primary_color_is_dark_enough_for_light_foreground() -> None:
     assert "background: #8f3348" in dark
     assert "QPushButton#documentChooseFiles, QPushButton#documentPrimary" in dark
     assert "color: #17211c" in dark
+
+
+def test_shell_compacts_navigation_for_small_windows(qtbot) -> None:
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=_tools(),
+        config_saver=lambda _: None,
+    )
+    qtbot.addWidget(window)
+
+    window.resize(760, 600)
+    window.show()
+    QApplication.processEvents()
+
+    assert window.minimumWidth() <= 760
+    assert window.navigation.width() <= 150
+    assert window.document_workspace.width() >= 600
+
+    window.resize(900, 680)
+    QApplication.processEvents()
+    assert window.navigation.width() == 180
+    assert window.document_workspace.mascot_view.isVisibleTo(window.document_workspace)
+
+    window.resize(1180, 760)
+    QApplication.processEvents()
+    assert window.navigation.width() == 218
+
+
+def test_document_workspace_hides_mascot_without_horizontal_overflow(qtbot) -> None:
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=_tools(),
+        config_saver=lambda _: None,
+    )
+    qtbot.addWidget(window)
+    window.resize(760, 600)
+    window.show()
+    QApplication.processEvents()
+
+    workspace = window.document_workspace
+    scroll = workspace.content_stack.widget(0)
+    assert not workspace.mascot_view.isVisibleTo(workspace)
+    assert scroll.horizontalScrollBar().maximum() == 0
+
+
+def test_video_workspace_stacks_panels_at_small_width(qtbot) -> None:
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=_tools(),
+        config_saver=lambda _: None,
+    )
+    qtbot.addWidget(window)
+    window.resize(760, 600)
+    window.show()
+    window.video_workspace.show()
+    QApplication.processEvents()
+
+    assert window.video_workspace.content_layout.direction() is QBoxLayout.Direction.TopToBottom
+
+
+def test_settings_dialog_accepts_small_window_with_scrollable_general_page(qtbot) -> None:
+    dialog = SettingsDialog(
+        deepcopy(DEFAULT_CONFIG),
+        _tools(),
+        save_callback=lambda _: None,
+        detector=lambda _: _tools(),
+    )
+    qtbot.addWidget(dialog)
+
+    dialog.resize(640, 500)
+    dialog.show()
+    QApplication.processEvents()
+
+    assert dialog.minimumWidth() <= 640
+    assert dialog.minimumHeight() <= 500
+    assert isinstance(dialog.general_scroll, QScrollArea)
+    assert dialog.general_scroll.widgetResizable()
+
+
+def test_dialog_size_is_bounded_by_small_parent_window(qtbot) -> None:
+    from PySide6.QtWidgets import QDialog, QWidget
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    parent.resize(760, 600)
+    dialog = QDialog(parent)
+    qtbot.addWidget(dialog)
+
+    fit_dialog_to_available_space(dialog, 1120, 720, minimum_width=640, minimum_height=420)
+
+    assert dialog.width() == 728
+    assert dialog.height() == 568

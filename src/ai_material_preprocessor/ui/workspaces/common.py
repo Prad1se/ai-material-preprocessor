@@ -3,10 +3,11 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QBoxLayout,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -104,13 +105,16 @@ class WorkspaceView(QWidget):
         page = QWidget()
         page.setObjectName("workspacePage")
         root = QVBoxLayout(page)
+        self.page_layout = root
         root.setContentsMargins(28, 24, 32, 30)
         root.setSpacing(16)
         root.addWidget(self._create_hero())
 
         content = QHBoxLayout()
+        self.content_layout = content
         content.setSpacing(16)
         input_panel = QFrame()
+        self.input_panel = input_panel
         input_panel.setObjectName("panel")
         input_layout = QVBoxLayout(input_panel)
         input_layout.setContentsMargins(22, 20, 22, 22)
@@ -136,7 +140,8 @@ class WorkspaceView(QWidget):
         input_layout.addWidget(description)
         input_layout.addWidget(self.file_list, 1)
         content.addWidget(input_panel, 5)
-        content.addWidget(self._create_options_panel(), 4)
+        self.options_panel = self._create_options_panel()
+        content.addWidget(self.options_panel, 4)
         root.addLayout(content)
 
         actions = QHBoxLayout()
@@ -182,8 +187,10 @@ class WorkspaceView(QWidget):
         root.addWidget(self.state_label)
 
         scroll = QScrollArea()
+        self.workspace_scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(page)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -203,6 +210,25 @@ class WorkspaceView(QWidget):
             lambda: self.history_requested.emit(self.workspace_id.value)
         )
         self.set_presentation_state(WorkspacePresentationState.EMPTY)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if not hasattr(self, "content_layout"):
+            return
+        compact = self.width() < 720
+        self.content_layout.setDirection(
+            QBoxLayout.Direction.TopToBottom if compact else QBoxLayout.Direction.LeftToRight
+        )
+        self.page_layout.setContentsMargins(
+            14 if compact else 28,
+            12 if compact else 24,
+            14 if compact else 32,
+            18 if compact else 30,
+        )
+        self.page_layout.setSpacing(12 if compact else 16)
+        mascot = getattr(self, "mouse_mascot", None)
+        if mascot is not None:
+            mascot.setVisible(not compact)
 
     def _create_hero(self) -> QWidget:
         raise NotImplementedError

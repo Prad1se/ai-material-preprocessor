@@ -91,8 +91,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("AI 素材预处理工具")
         self.resize(1280, 820)
-        self.setMinimumSize(980, 700)
+        self.setMinimumSize(760, 560)
         self._build_ui()
+        self._update_responsive_layout()
         self._apply_style()
         self._show_workspace(self._configured_workspace(), persist=False)
         if self.task_repository is not None:
@@ -119,19 +120,20 @@ class MainWindow(QMainWindow):
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
 
-        navigation = QFrame()
-        navigation.setObjectName("workspaceNavigation")
-        navigation.setFixedWidth(218)
-        nav = QVBoxLayout(navigation)
+        self.navigation = QFrame()
+        self.navigation.setObjectName("workspaceNavigation")
+        self.navigation.setFixedWidth(218)
+        nav = QVBoxLayout(self.navigation)
+        self.navigation_layout = nav
         nav.setContentsMargins(20, 24, 20, 20)
         nav.setSpacing(9)
-        brand = QLabel("AI 素材\n预处理工具")
-        brand.setObjectName("shellBrand")
-        nav.addWidget(brand)
-        tagline = QLabel("两个工作区 · 一个本地核心")
-        tagline.setObjectName("navHint")
-        tagline.setWordWrap(True)
-        nav.addWidget(tagline)
+        self.brand = QLabel("AI 素材\n预处理工具")
+        self.brand.setObjectName("shellBrand")
+        nav.addWidget(self.brand)
+        self.tagline = QLabel("两个工作区 · 一个本地核心")
+        self.tagline.setObjectName("navHint")
+        self.tagline.setWordWrap(True)
+        nav.addWidget(self.tagline)
         nav.addSpacing(20)
         self.documents_nav = self._nav_button("▤  文档")
         self.video_nav = self._nav_button("▶  视频")
@@ -152,7 +154,7 @@ class MainWindow(QMainWindow):
         nav.addWidget(self.history_button)
         nav.addWidget(self.settings_button)
         nav.addWidget(self.about_button)
-        shell.addWidget(navigation)
+        shell.addWidget(self.navigation)
 
         self.workspace_stack = QStackedWidget()
         self.document_workspace = DocumentWorkspace(self.config, self.tools, self.preview_registry)
@@ -181,6 +183,29 @@ class MainWindow(QMainWindow):
             workspace.history_requested.connect(lambda raw: self._open_history(WorkspaceId(raw)))
             workspace.open_output_requested.connect(self._open_output)
             workspace.settings_requested.connect(self._open_workspace_settings)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "navigation"):
+            self._update_responsive_layout()
+
+    def _update_responsive_layout(self) -> None:
+        width = self.width()
+        if width < 840:
+            self.navigation.setFixedWidth(136)
+            self.navigation_layout.setContentsMargins(12, 18, 12, 16)
+            self.brand.setText("AI 素材\n预处理")
+            self.tagline.hide()
+        elif width < 1080:
+            self.navigation.setFixedWidth(180)
+            self.navigation_layout.setContentsMargins(16, 22, 16, 18)
+            self.brand.setText("AI 素材\n预处理工具")
+            self.tagline.show()
+        else:
+            self.navigation.setFixedWidth(218)
+            self.navigation_layout.setContentsMargins(20, 24, 20, 20)
+            self.brand.setText("AI 素材\n预处理工具")
+            self.tagline.show()
 
     @staticmethod
     def _nav_button(text: str, *, checkable: bool = True) -> QPushButton:

@@ -22,6 +22,7 @@ from .mascot import mouse_asset_path
 from .theme import stylesheet_for_theme
 from .tool_installation import ToolInstallationCoordinator
 from .tool_status_table import ToolStatusTable
+from .window_sizing import fit_dialog_to_available_space
 
 ConfigSaver = Callable[[dict], object]
 ToolDetector = Callable[[dict], dict[str, ToolStatus]]
@@ -45,8 +46,7 @@ class OnboardingDialog(QDialog):
         self.save_callback = save_callback
         self.detector = detector
         self.setWindowTitle("欢迎使用 AI 素材预处理工具")
-        self.resize(860, 680)
-        self.setMinimumSize(720, 580)
+        fit_dialog_to_available_space(self, 860, 680, minimum_width=640, minimum_height=500)
         self._build_ui()
         self.tool_installation = ToolInstallationCoordinator(
             self,

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 
 from .. import __version__
 from ..services.updates import UpdateCheckResult, UpdateState, check_for_updates
+from .window_sizing import fit_dialog_to_available_space
 
 
 class UpdateCheckThread(QThread):
@@ -27,11 +28,12 @@ class AboutDialog(QDialog):
         self.update_thread: UpdateCheckThread | None = None
         self.release_url = ""
         self.setWindowTitle("关于")
-        self.setMinimumWidth(520)
+        fit_dialog_to_available_space(self, 520, 280, minimum_width=420, minimum_height=240)
         root = QVBoxLayout(self)
         title = QLabel("AI 素材预处理工具")
         title.setObjectName("sectionTitle")
         self.version_label = QLabel(f"版本 {__version__} · Windows 2.0 发布候选版")
+        self.version_label.setWordWrap(True)
         self.privacy_label = QLabel(
             "文件默认只在本地处理，不上传源文档、视频、GPS 或历史记录；原文件永不覆盖。"
         )
