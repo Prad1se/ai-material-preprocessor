@@ -60,7 +60,10 @@ class ProcessRunner:
             process.wait(timeout=1)
         except subprocess.TimeoutExpired:
             process.kill()
-            process.wait(timeout=1)
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
 
     def run(
         self,
