@@ -1,0 +1,65 @@
+{
+  "context_pack_version": 1,
+  "created_at": "2026-08-22T12:50:11+08:00",
+  "estimator": {
+    "name": "model-independent-heuristic",
+    "version": 1
+  },
+  "budget": {
+    "requested_tokens": null,
+    "soft_target_tokens": null,
+    "unit": "estimated_tokens"
+  },
+  "total_estimated_tokens": 73,
+  "pack_count": 1,
+  "source_count": 1,
+  "sources": [
+    {
+      "source_id": "source-001",
+      "order": 1,
+      "display_name": "sample-paper.pdf",
+      "format": ".pdf",
+      "estimated_tokens": 73,
+      "processing_result": "success",
+      "provenance_level": "page",
+      "sha256": null,
+      "warnings": [],
+      "content": "sources/source-001/content.md"
+    }
+  ],
+  "packs": [
+    {
+      "index": 1,
+      "file": "packs/001-context.md",
+      "estimated_tokens": 212,
+      "source_ids": [
+        "source-001"
+      ],
+      "block_ids": [
+        "source-001-block-0001",
+        "source-001-block-0002",
+        "source-001-block-0003",
+        "source-001-block-0004",
+        "source-001-block-0005",
+        "source-001-block-0006",
+        "source-001-block-0007",
+        "source-001-block-0008",
+        "source-001-block-0009",
+        "source-001-block-0010"
+      ],
+      "status": "within_budget",
+      "overflow_reason": null
+    }
+  ],
+  "warnings": [],
+  "integrity": {
+    "input_blocks": 10,
+    "packed_blocks": 10,
+    "missing_blocks": 0,
+    "missing_block_ids": [],
+    "duplicate_blocks": 0,
+    "duplicate_block_ids": [],
+    "order_preserved": true,
+    "status": "complete"
+  }
+}

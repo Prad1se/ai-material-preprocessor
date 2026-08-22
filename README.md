@@ -18,6 +18,22 @@
 
 <!-- release-version: 2.0.0 -->
 
+<!-- 待补充截图：assets/gallery/welcome.png —— 首次运行的欢迎页 -->
+
+## 30 秒上手（Try it in 30 seconds）
+
+1. **拖入文档**：把 PDF、Word、PPT、Excel 或笔记拖进 Document Workspace。
+2. **生成 AI Context Pack**：选择 *AI Context Pack*（或用 *Research Paper*、*Course Notes* 预设），设置 Context Budget 后生成。
+3. **Copy for AI**：生成后点击 **Copy for AI**，把带来源引用的上下文直接粘贴给 AI 对话。
+4. **追踪来源**：点击 **View Source Map**，从任意 block 一路回溯到源文件、PDF 页码或幻灯片。
+
+想立刻体验、不用准备数据？仓库内置了合成示例 [examples/](examples/)：
+
+- **研究论文**：合成 PDF → 带 **PDF page 页码追溯** 的 Context Pack
+- **课程资料**：合成 DOCX → **Document-level fallback**（不伪造页码）
+
+每个 `sample-context-pack/` 都是应用真实管线生成的输出，含 `START_HERE.md`、`content.md`、`context-report.json`、`packs/` 与 `sources/`。
+
 <!-- 待补充图片：assets/gallery/hero.png —— Hero 图：Before（混乱的原始文件）→ After（规整的 AI 资料包） -->
 
 ## 为什么需要它（Why）

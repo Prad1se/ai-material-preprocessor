@@ -18,6 +18,22 @@ A local Windows desktop app that turns raw documents (PDF, Word, PowerPoint, Exc
 
 <!-- release-version: 2.0.0 -->
 
+<!-- TODO: screenshot at assets/gallery/welcome.png — first-run welcome -->
+
+## Try it in 30 seconds
+
+1. **Drop documents**: drag PDF, Word, PowerPoint, Excel, or note files into the Document Workspace.
+2. **Generate an AI Context Pack**: choose *AI Context Pack* (or a preset such as *Research Paper* / *Course Notes*), set a Context Budget, and generate.
+3. **Copy for AI**: after generation, click **Copy for AI** and paste the context, with source references, straight into an AI chat.
+4. **Trace sources**: click **View Source Map** to trace any block back to its source file, PDF page, or slide.
+
+Want to try it without preparing data? The repository ships synthetic examples in [examples/](examples/):
+
+- **Research paper**: synthetic PDF → Context Pack with **PDF page-level provenance**
+- **Course material**: synthetic DOCX → **Document-level fallback** (no fabricated page numbers)
+
+Every `sample-context-pack/` is a real output of the app's own pipeline and includes `START_HERE.md`, `content.md`, `context-report.json`, `packs/`, and `sources/`.
+
 <!-- TODO: hero image at assets/gallery/hero.png — Before (messy raw files) → After (a clean AI-ready package) -->
 
 ## Why

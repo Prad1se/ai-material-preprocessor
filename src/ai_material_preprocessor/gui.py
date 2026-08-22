@@ -6,7 +6,8 @@ from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -50,6 +51,7 @@ from .ui.preview_dialog import (
 from .ui.settings_dialog import SettingsDialog
 from .ui.task_center_panel import TaskCenterPanel
 from .ui.theme import stylesheet_for_theme
+from .ui.welcome_dialog import WelcomeDialog
 from .ui.workers import Worker
 from .ui.workspaces.common import WorkspacePresentationState, WorkspaceView
 from .ui.workspaces.documents import DocumentWorkspace
@@ -484,6 +486,34 @@ class MainWindow(QMainWindow):
     def show_onboarding_if_needed(self) -> None:
         if bool(self.config["app"].get("onboarding_completed", False)):
             return
+        self.welcome_dialog = WelcomeDialog(
+            examples_dir=self._examples_dir(),
+            theme=str(self.config["app"].get("theme", "system")),
+            parent=self,
+        )
+        self.welcome_dialog.import_documents.connect(self._welcome_import_documents)
+        self.welcome_dialog.view_example.connect(self._welcome_view_example)
+        self.welcome_dialog.continue_setup.connect(self._show_onboarding)
+        self.welcome_dialog.show()
+
+    def _examples_dir(self) -> Path | None:
+        candidate = Path(__file__).resolve().parents[2] / "examples"
+        return candidate if candidate.is_dir() else None
+
+    def _welcome_import_documents(self) -> None:
+        self.switch_workspace(WorkspaceId.DOCUMENTS)
+        self.document_workspace.add_button.click()
+
+    def _welcome_view_example(self) -> None:
+        examples = self._examples_dir()
+        if examples is None:
+            QMessageBox.information(
+                self, "Examples", "Run from the source repository to open the examples folder."
+            )
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(examples)))
+
+    def _show_onboarding(self) -> None:
         self.tools = detect_tools_with_versions(self.config)
         self.onboarding_dialog = OnboardingDialog(self.config, self.tools, self)
         self.onboarding_dialog.onboarding_completed.connect(self._settings_applied)

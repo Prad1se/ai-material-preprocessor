@@ -1,0 +1,12 @@
+{
+  "source_id": "source-001",
+  "order": 1,
+  "display_name": "sample-lecture.docx",
+  "format": ".docx",
+  "estimated_tokens": 53,
+  "processing_result": "success",
+  "provenance_level": "document",
+  "sha256": null,
+  "warnings": [],
+  "content": "sources/source-001/content.md"
+}
