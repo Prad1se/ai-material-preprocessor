@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QBoxLayout, QLabel, QScrollArea, QSplitter
 
 from ai_material_preprocessor.application.workspaces import WorkspaceId
 from ai_material_preprocessor.gui import MainWindow
-from ai_material_preprocessor.models import ToolStatus
+from ai_material_preprocessor.models import TaskStatus, ToolStatus
 from ai_material_preprocessor.services.config import DEFAULT_CONFIG
 from ai_material_preprocessor.services.source_map import (
     SourceLocation,
@@ -240,3 +239,26 @@ def test_open_output_survives_startfile_failure(qtbot, monkeypatch, tmp_path) ->
 
     assert len(warnings) == 2
     assert all("无法打开" in title for title, _text in warnings)
+
+
+def test_recent_task_rows_localize_status_labels(qtbot) -> None:
+    """最近任务表的状态列与任务中心共用同一份中文标签，不再直出英文枚举原值。"""
+
+    window = MainWindow(
+        config=deepcopy(DEFAULT_CONFIG),
+        tools=_tools(),
+        config_saver=lambda _: None,
+    )
+    qtbot.addWidget(window)
+
+    window.document_workspace.upsert_task(
+        "task-1", "lesson.docx", "生成 AI 资料包 / Markdown", TaskStatus.SUCCESS, 100
+    )
+    window.video_workspace.upsert_task(
+        "task-2", "clip.mp4", "压缩视频", TaskStatus.CANCELLED, 40
+    )
+
+    document_table = window.document_workspace.recent_tasks
+    video_table = window.video_workspace.recent_tasks
+    assert document_table.item(0, 2).text() == "成功"
+    assert video_table.item(0, 2).text() == "已取消"

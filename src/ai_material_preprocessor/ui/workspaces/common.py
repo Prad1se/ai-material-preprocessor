@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from ...application.preview_registry import PreviewProviderRegistry
 from ...application.workspaces import WorkspaceId
 from ...models import TaskStatus, ToolStatus
+from ..task_center_panel import STATUS_LABELS
 
 
 class WorkspacePresentationState(StrEnum):
@@ -364,5 +365,8 @@ class WorkspaceView(QWidget):
             row = self.recent_tasks.rowCount()
             self.recent_tasks.insertRow(row)
             self._task_rows[task_id] = row
-        for column, value in enumerate((filename, operation, status.value, f"{progress}%")):
+        # 状态列与任务中心共用同一份中文标签，避免同一界面出现英文枚举原值。
+        for column, value in enumerate(
+            (filename, operation, STATUS_LABELS[status], f"{progress}%")
+        ):
             self.recent_tasks.setItem(row, column, QTableWidgetItem(value))
