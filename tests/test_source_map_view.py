@@ -104,7 +104,7 @@ def test_source_map_view_empty_state(qtbot) -> None:
 
     assert view._stack.currentWidget() is view._empty_page
     assert view.empty_label.isVisibleTo(view)
-    assert view.empty_label.text() == "No Source Map available"
+    assert view.empty_label.text() == "暂无来源映射"
     assert view.blocks_table.rowCount() == 0
 
 
@@ -117,11 +117,11 @@ def test_source_map_view_loads_entries_and_renders_source_card(qtbot, tmp_path: 
 
     assert view._stack.currentWidget() is view._body_page
     assert view.blocks_table.rowCount() == len(load_source_map(result.output_dir).entries)
-    assert "blocks" in view.block_count.text()
+    assert "内容块" in view.block_count.text()
     assert view.card_file_value.text() == "lecture.pdf"
     assert view.card_format_value.text() == ".pdf"
     assert view.card_source_id_value.text() == "source-001"
-    assert view.card_location_value.text() == "PDF page 37"
+    assert view.card_location_value.text() == "第 37 页"
     assert not view.card_fallback_note.isVisibleTo(view)
     assert view.content_edit.toPlainText()
 
@@ -142,7 +142,7 @@ def test_source_map_view_renders_document_level_fallback(qtbot, tmp_path: Path) 
 
     view.set_source_map(load_source_map(result.output_dir))
 
-    assert view.card_location_value.text() == "Document-level fallback"
+    assert view.card_location_value.text() == "文档级定位"
     assert view.card_fallback_note.isVisibleTo(view)
 
 
@@ -162,7 +162,7 @@ def test_source_map_view_shows_open_capability_and_emits_runtime_target(
 
     view.set_source_map(source_map, {"source-001": source_path})
 
-    assert view.card_capability_value.text() == "Page-level (viewer permitting)"
+    assert view.card_capability_value.text() == "页级定位（取决于查看器）"
     assert view.open_source_button.isEnabled()
     view.open_source_button.click()
     assert emitted[0].capability is SourceOpenCapability.PAGE_LEVEL
@@ -177,9 +177,9 @@ def test_source_map_view_disables_open_when_runtime_path_is_missing(qtbot, tmp_p
 
     view.set_source_map(load_source_map(result.output_dir))
 
-    assert view.card_capability_value.text() == "Unavailable"
+    assert view.card_capability_value.text() == "不可用"
     assert not view.open_source_button.isEnabled()
-    assert "unavailable" in view.open_source_note.text().casefold()
+    assert "原始来源位置" in view.open_source_note.text()
 
 
 def test_source_map_view_selection_syncs_content_and_source_card(qtbot, tmp_path: Path) -> None:
@@ -202,7 +202,7 @@ def test_source_map_view_selection_syncs_content_and_source_card(qtbot, tmp_path
     assert view.content_edit.toPlainText() == "Beta."
     assert view.card_file_value.text() == "b.pdf"
     assert view.card_source_id_value.text() == "source-002"
-    assert view.card_location_value.text() == "PDF page 2"
+    assert view.card_location_value.text() == "第 2 页"
 
 
 def test_source_map_view_shows_degraded_content_without_fake_data(qtbot, tmp_path: Path) -> None:
@@ -220,7 +220,7 @@ def test_source_map_view_shows_degraded_content_without_fake_data(qtbot, tmp_pat
     view.set_source_map(load_source_map(result.output_dir))
 
     assert view.content_edit.toPlainText() == DEGRADED_CONTENT
-    assert view.card_location_value.text() == "PDF page 37"
+    assert view.card_location_value.text() == "第 37 页"
     assert view.integrity_notice.isVisibleTo(view)
 
 
@@ -239,7 +239,7 @@ def test_document_workspace_opens_source_map_page_from_context_pack_result(
     view.source_map_button.click()
     assert view.content_stack.currentWidget() is view.source_map_view
     assert view.source_map_view.blocks_table.rowCount() >= 1
-    assert view.source_map_view.card_location_value.text() == "PDF page 37"
+    assert view.source_map_view.card_location_value.text() == "第 37 页"
 
 
 def test_document_workspace_keeps_verified_source_open_target_after_inputs_clear(
@@ -262,7 +262,7 @@ def test_document_workspace_keeps_verified_source_open_target_after_inputs_clear
 
     view.source_map_button.click()
 
-    assert view.source_map_view.card_capability_value.text() == "Page-level (viewer permitting)"
+    assert view.source_map_view.card_capability_value.text() == "页级定位（取决于查看器）"
     assert view.source_map_view.open_source_button.isEnabled()
 
 
@@ -308,7 +308,7 @@ def test_document_workspace_copy_for_ai_copies_pack_text(qtbot, tmp_path: Path) 
     view.copy_for_ai_button.click()
 
     assert QApplication.clipboard().text() == build_context_copy(result.output_dir)
-    assert view.copy_for_ai_button.text() == "Copied ✓"
+    assert view.copy_for_ai_button.text() == "已复制 ✓"
 
 
 def test_document_workspace_copy_for_ai_hidden_without_context_pack(qtbot, tmp_path: Path) -> None:
@@ -353,7 +353,7 @@ def test_document_workspace_context_pack_experience_actions_integration(
     qtbot.addWidget(view)
     view.set_completed([str(result.output_dir)], [], [_context_report()])
 
-    assert view.result_heading.text() == "AI Context Pack Ready"
+    assert view.result_heading.text() == "AI 上下文包已准备好"
     assert view.copy_for_ai_button.isVisibleTo(view)
     assert view.source_map_button.isVisibleTo(view)
     assert view.open_button.isEnabled()
@@ -366,7 +366,7 @@ def test_document_workspace_context_pack_experience_actions_integration(
 
     view.copy_for_ai_button.click()
     assert QApplication.clipboard().text() == build_context_copy(result.output_dir)
-    assert view.copy_for_ai_button.text() == "Copied ✓"
+    assert view.copy_for_ai_button.text() == "已复制 ✓"
 
     view.set_completed([str(tmp_path / "result.md")], [], [])
     assert not view.copy_for_ai_button.isVisibleTo(view)

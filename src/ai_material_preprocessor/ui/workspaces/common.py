@@ -160,7 +160,7 @@ class WorkspaceView(QWidget):
         recent.setObjectName("workspaceRecent")
         recent_layout = QVBoxLayout(recent)
         recent_title = QLabel(
-            "Recent document tasks" if self.workspace_id is WorkspaceId.DOCUMENTS else "Media queue"
+            "最近的文档任务" if self.workspace_id is WorkspaceId.DOCUMENTS else "媒体队列"
         )
         recent_title.setObjectName("sectionTitle")
         self.recent_tasks = QTableWidget(0, 4)
@@ -292,7 +292,7 @@ class WorkspaceView(QWidget):
             WorkspacePresentationState.EMPTY: "等待素材",
             WorkspacePresentationState.INPUTS_SELECTED: f"已选择 {len(self.paths)} 个素材",
             WorkspacePresentationState.PREVIEW: "已生成处理预览，尚未开始任务",
-            WorkspacePresentationState.PROCESSING: "正在处理，切换 Workspace 不会取消任务",
+            WorkspacePresentationState.PROCESSING: "正在处理，切换工作区不会取消任务",
             WorkspacePresentationState.SUCCESS: "处理完成，原文件未改动",
             WorkspacePresentationState.WARNING: "处理完成，但有需要检查的项目",
             WorkspacePresentationState.ERROR: "处理未完成，原文件未改动",

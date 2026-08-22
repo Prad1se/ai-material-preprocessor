@@ -28,7 +28,7 @@ class WelcomeDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._examples_dir = examples_dir
-        self.setWindowTitle("Welcome")
+        self.setWindowTitle("欢迎")
         self.setModal(False)
         self.resize(720, 400)
         self.setMinimumSize(600, 360)
@@ -42,13 +42,12 @@ class WelcomeDialog(QDialog):
 
         hero = QHBoxLayout()
         copy = QVBoxLayout()
-        eyebrow = QLabel("AI MATERIAL PREPROCESSOR  ·  LOCAL FIRST")
+        eyebrow = QLabel("AI 素材预处理工具  ·  本地优先")
         eyebrow.setObjectName("eyebrow")
-        title = QLabel("Welcome")
+        title = QLabel("欢迎使用")
         title.setObjectName("title")
         subtitle = QLabel(
-            "Prepare documents for AI — turn PDFs, Office files, and notes into clean, "
-            "traceable AI-ready context packs."
+            "为 AI 准备文档——将 PDF、Office 文件和笔记整理为清晰、可追踪的 AI 上下文包。"
         )
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
@@ -58,14 +57,12 @@ class WelcomeDialog(QDialog):
         hero.addLayout(copy, 1)
         root.addLayout(hero)
 
-        steps = QLabel("Drop documents → Generate AI Context Pack → Copy for AI → Trace sources")
+        steps = QLabel("导入文档 → 生成 AI 上下文包 → 复制给 AI → 追踪来源")
         steps.setObjectName("sectionDescription")
         steps.setWordWrap(True)
         root.addWidget(steps)
 
-        privacy = QLabel(
-            "Local-first: files stay on this device, and originals are never overwritten."
-        )
+        privacy = QLabel("本地优先：文件保留在本机，且永远不会覆盖原文件。")
         privacy.setObjectName("outputHint")
         privacy.setWordWrap(True)
         root.addWidget(privacy)
@@ -73,12 +70,12 @@ class WelcomeDialog(QDialog):
         root.addStretch()
 
         actions = QHBoxLayout()
-        self.setup_button = QPushButton("Continue to setup")
+        self.setup_button = QPushButton("继续设置")
         self.setup_button.setObjectName("linkButton")
-        self.example_button = QPushButton("View example")
+        self.example_button = QPushButton("查看示例")
         self.example_button.setObjectName("secondary")
         self.example_button.setVisible(self._examples_dir is not None)
-        self.import_button = QPushButton("Import documents")
+        self.import_button = QPushButton("导入文档")
         self.import_button.setObjectName("primary")
         actions.addWidget(self.setup_button)
         actions.addStretch()

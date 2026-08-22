@@ -160,13 +160,13 @@ def test_document_report_dialog_embeds_source_map_tab(qtbot) -> None:
     )
     qtbot.addWidget(dialog)
 
-    assert "Source Map" in dialog.windowTitle()
+    assert "来源映射" in dialog.windowTitle()
     tabs = dialog.findChild(QTabWidget)
     assert tabs is not None
-    assert "Source Map" in [tabs.tabText(index) for index in range(tabs.count())]
+    assert "来源映射" in [tabs.tabText(index) for index in range(tabs.count())]
     assert dialog.source_map_view.blocks_table.rowCount() == 1
     assert dialog.source_map_view.card_file_value.text() == "lecture.pdf"
-    assert dialog.source_map_view.card_location_value.text() == "PDF page 37"
+    assert dialog.source_map_view.card_location_value.text() == "第 37 页"
     assert not dialog.source_map_view.back_button.isVisibleTo(dialog)
 
 
@@ -218,7 +218,7 @@ def test_document_report_dialog_source_map_tab_shows_fallback_and_confidence(
     )
     qtbot.addWidget(dialog)
 
-    assert dialog.source_map_view.card_location_value.text() == "OCR 第 2 页 (65% confidence)"
+    assert dialog.source_map_view.card_location_value.text() == "OCR：第 2 页（置信度 65%）"
     assert not dialog.source_map_view.card_fallback_note.isVisibleTo(dialog)
 
 

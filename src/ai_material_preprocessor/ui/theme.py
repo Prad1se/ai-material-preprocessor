@@ -211,7 +211,10 @@ _DARK_COLORS = {
     "#e7cac5": "#55474a",
     "#ffffff": "#202124",
     "#fff4f5": "#272124",
-    "#ef6f82": "#ff8fa1",
+    # Dark-mode primary actions use a deeper pink so the light foreground
+    # remains readable (the former pastel value had insufficient contrast).
+    "#ef6f82": "#8f3348",
+    "#f38293": "#a34a60",
     "#ffe7eb": "#3b292e",
     "#ffd2da": "#5a3039",
     "#1d1d1f": "#f5f5f7",
@@ -251,6 +254,11 @@ _DARK_PATTERN = re.compile("|".join(re.escape(color) for color in _DARK_COLORS),
 DARK_STYLESHEET = _DARK_PATTERN.sub(
     lambda match: _DARK_COLORS[match.group(0).lower()], LIGHT_STYLESHEET
 )
+DARK_STYLESHEET += """
+QPushButton#documentChooseFiles, QPushButton#documentPrimary {
+    color: #17211c;
+}
+"""
 
 
 def system_uses_dark_palette() -> bool:

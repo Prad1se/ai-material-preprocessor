@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         self.active_job_workspace: WorkspaceId | None = None
         self.last_outputs: list[str] = []
 
-        self.setWindowTitle("AI Material Preprocessor")
+        self.setWindowTitle("AI 素材预处理工具")
         self.resize(1280, 820)
         self.setMinimumSize(980, 700)
         self._build_ui()
@@ -125,17 +125,17 @@ class MainWindow(QMainWindow):
         nav = QVBoxLayout(navigation)
         nav.setContentsMargins(20, 24, 20, 20)
         nav.setSpacing(9)
-        brand = QLabel("AI Material\nPreprocessor")
+        brand = QLabel("AI 素材\n预处理工具")
         brand.setObjectName("shellBrand")
         nav.addWidget(brand)
-        tagline = QLabel("Two workspaces · one private core")
+        tagline = QLabel("两个工作区 · 一个本地核心")
         tagline.setObjectName("navHint")
         tagline.setWordWrap(True)
         nav.addWidget(tagline)
         nav.addSpacing(20)
-        self.documents_nav = self._nav_button("▤  Documents")
-        self.video_nav = self._nav_button("▶  Video")
-        self.tasks_nav = self._nav_button("☷  Tasks")
+        self.documents_nav = self._nav_button("▤  文档")
+        self.video_nav = self._nav_button("▶  视频")
+        self.tasks_nav = self._nav_button("☷  任务")
         self.workspace_group = QButtonGroup(self)
         self.workspace_group.setExclusive(True)
         for button in (self.documents_nav, self.video_nav, self.tasks_nav):
@@ -146,9 +146,9 @@ class MainWindow(QMainWindow):
         separator.setFrameShape(QFrame.Shape.HLine)
         separator.setObjectName("navSeparator")
         nav.addWidget(separator)
-        self.history_button = self._nav_button("History", checkable=False)
-        self.settings_button = self._nav_button("Settings", checkable=False)
-        self.about_button = self._nav_button("About", checkable=False)
+        self.history_button = self._nav_button("历史", checkable=False)
+        self.settings_button = self._nav_button("设置", checkable=False)
+        self.about_button = self._nav_button("关于", checkable=False)
         nav.addWidget(self.history_button)
         nav.addWidget(self.settings_button)
         nav.addWidget(self.about_button)
@@ -195,9 +195,9 @@ class MainWindow(QMainWindow):
         page.setObjectName("tasksPage")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(34, 30, 34, 30)
-        title = QLabel("Shared Task Center")
+        title = QLabel("共享任务中心")
         title.setObjectName("title")
-        subtitle = QLabel("Document 与 Video 任务共享同一运行时；切换 Workspace 不会取消任务。")
+        subtitle = QLabel("文档与视频任务共享同一运行环境；切换工作区不会取消任务。")
         subtitle.setObjectName("sectionDescription")
         self.task_panel = TaskCenterPanel()
         self.task_table = self.task_panel.table
@@ -207,9 +207,7 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.status = QLabel("没有正在运行的任务")
         self.status.setObjectName("status")
-        self.history_label = QLabel(
-            "任务与历史继续使用共享 repository；workspace 由 operation 推断。"
-        )
+        self.history_label = QLabel("任务与历史使用共享存储；所属工作区由处理类型判断。")
         self.history_label.setObjectName("historyLabel")
         self.history_label.setToolTip(str(resolve_history_root(self.config)))
         layout.addWidget(title)
@@ -308,9 +306,9 @@ class MainWindow(QMainWindow):
             return
         self.task_panel.upsert(
             task_id,
-            "Documents"
+            "文档"
             if workspace_for_operation(task.job.operation) is WorkspaceId.DOCUMENTS
-            else "Video",
+            else "视频",
             task.job.source.name,
             task.job.operation.value,
             status,
@@ -387,7 +385,7 @@ class MainWindow(QMainWindow):
                     source_map = None
             DocumentReportDialog(context_pack_reports, outputs, self, source_map=source_map).exec()
             if errors:
-                QMessageBox.warning(self, "Context Pack 完成但需要检查", "\n".join(errors[:6]))
+                QMessageBox.warning(self, "AI 上下文包已完成，但需要检查", "\n".join(errors[:6]))
         elif errors:
             QMessageBox.warning(
                 self,
@@ -507,9 +505,7 @@ class MainWindow(QMainWindow):
     def _welcome_view_example(self) -> None:
         examples = self._examples_dir()
         if examples is None:
-            QMessageBox.information(
-                self, "Examples", "Run from the source repository to open the examples folder."
-            )
+            QMessageBox.information(self, "示例", "请从源代码仓库运行应用，以打开示例文件夹。")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(examples)))
 

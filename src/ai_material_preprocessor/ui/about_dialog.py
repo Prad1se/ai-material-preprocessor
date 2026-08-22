@@ -31,7 +31,7 @@ class AboutDialog(QDialog):
         root = QVBoxLayout(self)
         title = QLabel("AI 素材预处理工具")
         title.setObjectName("sectionTitle")
-        self.version_label = QLabel(f"版本 {__version__} · Windows 2.0 Release Candidate")
+        self.version_label = QLabel(f"版本 {__version__} · Windows 2.0 发布候选版")
         self.privacy_label = QLabel(
             "文件默认只在本地处理，不上传源文档、视频、GPS 或历史记录；原文件永不覆盖。"
         )

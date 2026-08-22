@@ -89,7 +89,7 @@ def test_resolve_missing_source_is_unavailable(tmp_path: Path) -> None:
 
     assert target.capability is SourceOpenCapability.UNAVAILABLE
     assert target.path is None
-    assert "no longer available" in target.reason
+    assert "不可用" in target.reason
 
 
 def test_resolve_changed_source_is_unavailable(tmp_path: Path) -> None:
@@ -102,7 +102,7 @@ def test_resolve_changed_source_is_unavailable(tmp_path: Path) -> None:
 
     assert target.capability is SourceOpenCapability.UNAVAILABLE
     assert target.path is None
-    assert "changed" in target.reason
+    assert "发生变化" in target.reason
 
 
 def test_resolve_rejects_candidate_with_wrong_filename(tmp_path: Path) -> None:
@@ -114,7 +114,7 @@ def test_resolve_rejects_candidate_with_wrong_filename(tmp_path: Path) -> None:
 
     assert target.capability is SourceOpenCapability.UNAVAILABLE
     assert target.path is None
-    assert "does not match" in target.reason
+    assert "不匹配" in target.reason
 
 
 def test_source_paths_are_paired_by_stable_order_even_with_duplicate_names(

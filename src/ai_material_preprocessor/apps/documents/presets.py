@@ -20,33 +20,24 @@ class DocumentPreset:
 DOCUMENT_PRESETS = (
     DocumentPreset(
         preset_id="research_paper",
-        label="Research Paper",
-        description=(
-            "Create a traceable AI Context Pack with local OCR when available and a 128K "
-            "Context Budget."
-        ),
+        label="研究论文",
+        description=("创建可追溯的 AI 上下文包；如果本地 OCR 可用则启用，并使用 128K 上下文预算。"),
         operation=Operation.DOCUMENT_CONTEXT_PACK,
         context_budget=128000,
         ocr_enabled=True,
     ),
     DocumentPreset(
         preset_id="course_notes",
-        label="Course Notes",
-        description=(
-            "Prepare structured notes as AI-ready Markdown inside upload packs with a 64K "
-            "Context Budget."
-        ),
+        label="课程笔记",
+        description=("将结构化笔记整理为 AI 就绪 Markdown，并按 64K 上下文预算分包。"),
         operation=Operation.DOCUMENT_CONTEXT_PACK,
         context_budget=64000,
         ocr_enabled=False,
     ),
     DocumentPreset(
         preset_id="coding_documents",
-        label="Coding Documents",
-        description=(
-            "Preserve fenced code blocks with the existing atomic-block pipeline, disable OCR, "
-            "and create 64K upload packs."
-        ),
+        label="编程文档",
+        description=("保留围栏代码块，关闭 OCR，并按 64K 上下文预算创建上传包。"),
         operation=Operation.DOCUMENT_CONTEXT_PACK,
         context_budget=64000,
         ocr_enabled=False,

@@ -9,9 +9,9 @@ def test_welcome_dialog_shows_primary_actions(qtbot) -> None:
     dialog = WelcomeDialog(examples_dir=Path("examples"))
     qtbot.addWidget(dialog)
 
-    assert dialog.import_button.text() == "Import documents"
+    assert dialog.import_button.text() == "导入文档"
     assert dialog.example_button.isVisibleTo(dialog)
-    assert dialog.setup_button.text() == "Continue to setup"
+    assert dialog.setup_button.text() == "继续设置"
     assert dialog.example_button.isVisibleTo(dialog)
     assert dialog.example_button.isEnabled()
 

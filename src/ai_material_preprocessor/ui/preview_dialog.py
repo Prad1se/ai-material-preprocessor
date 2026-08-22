@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -44,6 +45,48 @@ def _close_buttons(dialog: QDialog) -> QDialogButtonBox:
     return buttons
 
 
+def _wrapped_value(text: object) -> QLabel:
+    """Create a form value that cannot force a dialog wider than the screen."""
+    label = QLabel(str(text))
+    label.setWordWrap(True)
+    label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    return label
+
+
+def _integrity_label(value: object) -> str:
+    labels = {
+        True: "通过",
+        False: "未通过",
+        "ok": "通过",
+        "pass": "通过",
+        "passed": "通过",
+        "degraded": "已降级",
+        "unknown": "未知",
+    }
+    return labels.get(value, str(value) if value not in (None, "") else "未知")
+
+
+def _risk_level_label(value: object) -> str:
+    normalized = str(value or "info").casefold()
+    return {
+        "info": "信息",
+        "warning": "提醒",
+        "error": "错误",
+    }.get(normalized, normalized)
+
+
+def _context_warning_text(warning: object) -> str:
+    if not isinstance(warning, dict):
+        return str(warning)
+    code = str(warning.get("code") or "")
+    localized = {
+        "context_pack_over_budget": "某个内容块无法安全拆分，因此对应分包超出预算。",
+        "privacy_path_redacted": "已从输出中移除私有文件路径。",
+    }.get(code)
+    return localized or str(warning.get("reason") or warning.get("message") or code or "未知提醒")
+
+
 class DocumentReportDialog(QDialog):
     """Application-only document quality report; it never writes report files."""
 
@@ -57,7 +100,7 @@ class DocumentReportDialog(QDialog):
         super().__init__(parent)
         is_context_pack = any(report.get("context_pack_version") == 1 for report in reports)
         self.setWindowTitle(
-            "AI Context Pack 与 Source Map" if is_context_pack else "转换质量与 AI 阅读预览"
+            "AI 上下文包与来源映射" if is_context_pack else "转换质量与 AI 阅读预览"
         )
         self.resize(980, 720)
         root = QVBoxLayout(self)
@@ -74,7 +117,7 @@ class DocumentReportDialog(QDialog):
         for index, report in enumerate(reports):
             page, widgets = self._report_page(report, outputs)
             tab_title = (
-                "AI Context Pack"
+                "AI 上下文包"
                 if report.get("context_pack_version") == 1
                 else str(report.get("source") or f"文档 {index + 1}")
             )
@@ -90,7 +133,7 @@ class DocumentReportDialog(QDialog):
         if source_map is not None:
             self.source_map_view.back_button.setVisible(False)
             self.source_map_view.set_source_map(source_map)
-            tabs.addTab(self.source_map_view, "Source Map")
+            tabs.addTab(self.source_map_view, "来源映射")
             tabs.setCurrentWidget(self.source_map_view)
         root.addWidget(tabs)
         root.addWidget(_close_buttons(self))
@@ -102,16 +145,16 @@ class DocumentReportDialog(QDialog):
         layout = QVBoxLayout(page)
         summary = QLabel(
             f"质量分 {report.get('score', 0)}/100 · "
-            f"约 {report.get('estimated_tokens', 0)} tokens · "
+            f"约 {report.get('estimated_tokens', 0)} 个估算令牌 · "
             f"{len(report.get('chunks') or [])} 个拆分"
         )
         summary.setObjectName("previewSummary")
         layout.addWidget(summary)
         parameters = QFormLayout()
         for key, value in (report.get("parameters") or {}).items():
-            parameters.addRow(str(key), QLabel(str(value)))
+            parameters.addRow(str(key), _wrapped_value(value))
         if outputs:
-            parameters.addRow("输出", QLabel("\n".join(outputs[:3])))
+            parameters.addRow("输出", _wrapped_value("\n".join(outputs[:3])))
         layout.addLayout(parameters)
 
         tabs = QTabWidget()
@@ -138,7 +181,7 @@ class DocumentReportDialog(QDialog):
         chunk_table = QTableWidget(len(chunks), 3)
         chunk_table.setHorizontalHeaderLabels(["顺序", "标题", "预计长度"])
         for row, chunk in enumerate(chunks):
-            values = [chunk["index"], chunk["title"], f"{chunk['estimated_tokens']} tokens"]
+            values = [chunk["index"], chunk["title"], f"{chunk['estimated_tokens']} 个估算令牌"]
             for column, value in enumerate(values):
                 chunk_table.setItem(row, column, QTableWidgetItem(str(value)))
         chunk_table.horizontalHeader().setStretchLastSection(True)
@@ -174,7 +217,7 @@ class DocumentReportDialog(QDialog):
                 )
                 location = f"{location} · " if location else ""
                 risk_list.addItem(
-                    f"[{str(risk.get('level') or risk.get('severity', 'info')).upper()}] "
+                    f"[{_risk_level_label(risk.get('level') or risk.get('severity'))}] "
                     f"{location}{risk['message']}"
                 )
         else:
@@ -187,8 +230,8 @@ class DocumentReportDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
         self.context_pack_summary = QLabel(
-            f"完整性 {report.get('integrity', 'unknown')} · "
-            f"约 {report.get('estimated_tokens', 0):,} tokens · "
+            f"完整性 {_integrity_label(report.get('integrity', 'unknown'))} · "
+            f"约 {report.get('estimated_tokens', 0):,} 个估算令牌 · "
             f"{report.get('source_count', 0)} 个来源 · "
             f"{report.get('pack_count', 0)} 个包"
         )
@@ -197,13 +240,13 @@ class DocumentReportDialog(QDialog):
         form = QFormLayout()
         budget = report.get("requested_budget")
         form.addRow(
-            "Context Budget",
-            QLabel(f"{int(budget):,} 估算 tokens" if budget else "无限制"),
+            "上下文预算",
+            _wrapped_value(f"{int(budget):,} 个估算令牌" if budget else "无限制"),
         )
         soft = report.get("soft_target")
         form.addRow("软目标", QLabel(f"{int(soft):,}" if soft else "—"))
         form.addRow("超出预算包数", QLabel(str(report.get("overflow_packs", 0))))
-        form.addRow("完整性", QLabel(str(report.get("integrity", "未知"))))
+        form.addRow("完整性", _wrapped_value(_integrity_label(report.get("integrity", "未知"))))
         layout.addLayout(form)
         if outputs:
             output_label = QLabel("输出目录：\n" + "\n".join(outputs[:3]))
@@ -211,12 +254,7 @@ class DocumentReportDialog(QDialog):
             layout.addWidget(output_label)
         self.warning_list = QListWidget()
         for warning in report.get("warnings") or []:
-            if isinstance(warning, dict):
-                self.warning_list.addItem(
-                    str(warning.get("reason") or warning.get("message") or warning)
-                )
-            else:
-                self.warning_list.addItem(str(warning))
+            self.warning_list.addItem(_context_warning_text(warning))
         if self.warning_list.count() == 0:
             self.warning_list.addItem("未发现警告。")
         layout.addWidget(QLabel("处理警告"))
@@ -285,7 +323,7 @@ class VideoPreviewDialog(QDialog):
         for preview in previews:
             for risk in preview.risks:
                 self.risk_list.addItem(
-                    f"{preview.source.name} · [{risk.level.value.upper()}] {risk.message}"
+                    f"{preview.source.name} · [{_risk_level_label(risk.level.value)}] {risk.message}"
                 )
         if self.risk_list.count() == 0:
             self.risk_list.addItem("未发现明显风险。")

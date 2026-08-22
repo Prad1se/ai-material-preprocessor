@@ -52,7 +52,7 @@ class TaskCenterPanel(QFrame):
         header.addWidget(self.retry_button)
 
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Workspace", "文件", "操作", "状态", "进度", "详情"])
+        self.table.setHorizontalHeaderLabels(["工作区", "文件", "操作", "状态", "进度", "详情"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

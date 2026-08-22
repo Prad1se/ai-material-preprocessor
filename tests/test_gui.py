@@ -308,7 +308,7 @@ def test_window_exposes_central_history_location(qtbot, tmp_path: Path, monkeypa
     qtbot.addWidget(window)
 
     assert str(tmp_path) in window.history_label.toolTip()
-    assert window.history_button.text() == "History"
+    assert window.history_button.text() == "历史"
     assert window.findChild(QFrame, "capabilityBar") is None
 
 
@@ -328,7 +328,7 @@ def test_window_exposes_visible_task_center_controls(qtbot) -> None:
     assert [
         window.task_table.horizontalHeaderItem(index).text()
         for index in range(window.task_table.columnCount())
-    ] == ["Workspace", "文件", "操作", "状态", "进度", "详情"]
+    ] == ["工作区", "文件", "操作", "状态", "进度", "详情"]
     assert window.cancel_task_button.text() == "取消所选任务"
     assert window.retry_task_button.text() == "重试失败任务"
     assert not window.cancel_task_button.isEnabled()
@@ -363,7 +363,7 @@ def test_window_restores_interrupted_tasks_for_explicit_retry(qtbot, tmp_path: P
     qtbot.addWidget(window)
 
     assert window.task_table.rowCount() == 1
-    assert window.task_table.item(0, 0).text() == "Documents"
+    assert window.task_table.item(0, 0).text() == "文档"
     assert window.task_table.item(0, 3).text() == "已中断"
     window.task_table.selectRow(0)
     assert window.retry_task_button.isEnabled()
@@ -444,8 +444,8 @@ def test_window_exposes_settings_without_capability_bar(qtbot, tmp_path: Path, m
     window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
     qtbot.addWidget(window)
 
-    assert window.settings_button.text() == "Settings"
-    assert window.about_button.text() == "About"
+    assert window.settings_button.text() == "设置"
+    assert window.about_button.text() == "关于"
     assert window.findChild(QFrame, "capabilityBar") is None
 
 
@@ -550,7 +550,7 @@ def test_context_pack_completion_opens_report_dialog_with_source_map(
     assert loaded_paths == [pack_dir]
     assert len(shown) == 1
     assert shown[0].source_map_view.blocks_table.rowCount() == 1
-    assert shown[0].source_map_view.card_location_value.text() == "PDF page 37"
+    assert shown[0].source_map_view.card_location_value.text() == "第 37 页"
 
 
 def test_document_completion_opens_report_dialog_without_source_map_tab(

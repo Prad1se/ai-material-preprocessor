@@ -77,21 +77,21 @@ class DocumentWorkspaceController:
 
     def _missing_reason(self, operation: Operation, suffixes: set[str]) -> str:
         if operation in {Operation.TO_MARKDOWN, Operation.DOCUMENT_CONTEXT_PACK}:
-            return "Microsoft MarkItDown is required. Open Documents Settings to set it up."
+            return "需要 Microsoft MarkItDown。请打开文档设置完成配置。"
         missing: list[str] = []
         libreoffice = self.tools.get("libreoffice", ToolStatus("libreoffice", None)).available
         if suffixes & WORD_EXTENSIONS and not (
             libreoffice or self.tools.get("winword", ToolStatus("winword", None)).available
         ):
-            missing.append("Microsoft Word or LibreOffice")
+            missing.append("Microsoft Word 或 LibreOffice")
         if suffixes & POWERPOINT_EXTENSIONS and not (
             libreoffice or self.tools.get("powerpoint", ToolStatus("powerpoint", None)).available
         ):
-            missing.append("Microsoft PowerPoint or LibreOffice")
+            missing.append("Microsoft PowerPoint 或 LibreOffice")
         return (
-            " and ".join(missing) + " required. Open Documents Settings to set it up."
+            "、".join(missing) + "。请打开文档设置完成配置。"
             if missing
-            else "A required document tool is unavailable."
+            else "所需的文档工具不可用。"
         )
 
     @staticmethod

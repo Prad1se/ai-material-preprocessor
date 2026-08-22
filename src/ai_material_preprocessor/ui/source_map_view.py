@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QSplitter,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -25,8 +26,30 @@ from ..services.source_open import (
     resolve_source_open_target,
 )
 
-EMPTY_MESSAGE = "No Source Map available"
-DEGRADED_CONTENT = "(processed content unavailable; manifest-only record)"
+EMPTY_MESSAGE = "暂无来源映射"
+DEGRADED_CONTENT = "（已处理内容不可用；仅有清单记录）"
+
+
+def _location_display(location: object | None) -> str:
+    """Localize persisted provenance labels without changing the schema."""
+    if location is None:
+        return "文档级定位"
+    kind = str(getattr(location, "kind", "document"))
+    ordinal = getattr(location, "ordinal", None)
+    label = str(getattr(location, "label", "") or "")
+    confidence = getattr(location, "confidence", None)
+    if kind == "page" and ordinal is not None:
+        return f"第 {ordinal} 页"
+    if kind == "slide" and ordinal is not None:
+        return f"第 {ordinal} 张幻灯片"
+    if kind == "worksheet" and label:
+        return f"工作表：{label}"
+    if kind == "ocr":
+        value = f"OCR：{label}" if label else "OCR"
+        if confidence is not None:
+            value += f"（置信度 {confidence:.0%}）"
+        return value
+    return "文档级定位"
 
 
 class SourceMapView(QWidget):
@@ -57,14 +80,15 @@ class SourceMapView(QWidget):
         layout = QHBoxLayout(header)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
-        self.back_button = QPushButton("← Back to documents")
+        self.back_button = QPushButton("← 返回文档")
         self.back_button.setObjectName("linkButton")
         self.back_button.clicked.connect(lambda: self.back_requested.emit())
         copy = QVBoxLayout()
-        title = QLabel("Source Map")
+        title = QLabel("来源映射")
         title.setObjectName("title")
-        subtitle = QLabel("Trace each Context Pack block back to its original document location.")
+        subtitle = QLabel("追踪上下文包中每个内容块对应的原始文档位置。")
         subtitle.setObjectName("subtitle")
+        subtitle.setWordWrap(True)
         copy.addWidget(title)
         copy.addWidget(subtitle)
         layout.addWidget(self.back_button)
@@ -77,9 +101,7 @@ class SourceMapView(QWidget):
         self.empty_label = QLabel(EMPTY_MESSAGE)
         self.empty_label.setObjectName("sectionTitle")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_hint = QLabel(
-            "Generate an AI Context Pack first; the Source Map appears after processing."
-        )
+        self.empty_hint = QLabel("请先生成 AI 上下文包；处理完成后会显示来源映射。")
         self.empty_hint.setObjectName("sectionDescription")
         self.empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_hint.setWordWrap(True)
@@ -93,10 +115,16 @@ class SourceMapView(QWidget):
         page = QWidget()
         layout = QHBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
-        layout.addWidget(self._create_blocks_pane(), 3)
-        layout.addWidget(self._create_content_pane(), 4)
-        layout.addWidget(self._create_source_card(), 3)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(True)
+        splitter.setHandleWidth(8)
+        splitter.addWidget(self._create_blocks_pane())
+        splitter.addWidget(self._create_content_pane())
+        splitter.addWidget(self._create_source_card())
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 4)
+        splitter.setStretchFactor(2, 3)
+        layout.addWidget(splitter)
         return page
 
     def _create_blocks_pane(self) -> QWidget:
@@ -105,7 +133,7 @@ class SourceMapView(QWidget):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(18, 16, 18, 16)
         header = QHBoxLayout()
-        title = QLabel("Blocks")
+        title = QLabel("内容块")
         title.setObjectName("sectionTitle")
         self.block_count = QLabel()
         self.block_count.setObjectName("fieldLabel")
@@ -114,7 +142,7 @@ class SourceMapView(QWidget):
         header.addWidget(self.block_count)
         self.blocks_table = QTableWidget(0, 4)
         self.blocks_table.setObjectName("sourceMapBlocks")
-        self.blocks_table.setHorizontalHeaderLabels(["Block", "Source", "Section", "Order"])
+        self.blocks_table.setHorizontalHeaderLabels(["内容块", "来源", "章节", "顺序"])
         self.blocks_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.blocks_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.blocks_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -127,12 +155,10 @@ class SourceMapView(QWidget):
         self.blocks_table.horizontalHeader().setSectionResizeMode(
             3, QHeaderView.ResizeMode.ResizeToContents
         )
-        self.blocks_table.setMinimumWidth(280)
+        self.blocks_table.setMinimumWidth(0)
         self.blocks_table.currentCellChanged.connect(self._on_current_cell_changed)
-        self.blocks_table.setAccessibleName("Source Map blocks")
-        self.integrity_notice = QLabel(
-            "Integrity check incomplete. Some block content may be unavailable or inconsistent."
-        )
+        self.blocks_table.setAccessibleName("来源映射内容块")
+        self.integrity_notice = QLabel("完整性检查未完成，部分内容块可能不可用或不一致。")
         self.integrity_notice.setObjectName("sectionDescription")
         self.integrity_notice.setWordWrap(True)
         self.integrity_notice.setVisible(False)
@@ -146,7 +172,7 @@ class SourceMapView(QWidget):
         panel.setObjectName("panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(18, 16, 18, 16)
-        title = QLabel("Processed content")
+        title = QLabel("已处理内容")
         title.setObjectName("sectionTitle")
         meta = QHBoxLayout()
         self.heading_label = QLabel()
@@ -157,8 +183,8 @@ class SourceMapView(QWidget):
         meta.addWidget(self.token_label)
         self.content_edit = QPlainTextEdit()
         self.content_edit.setReadOnly(True)
-        self.content_edit.setPlaceholderText("Select a block to view its processed content.")
-        self.content_edit.setAccessibleName("Processed content")
+        self.content_edit.setPlaceholderText("选择内容块后查看已处理内容。")
+        self.content_edit.setAccessibleName("已处理内容")
         layout.addWidget(title)
         layout.addLayout(meta)
         layout.addWidget(self.content_edit, 1)
@@ -169,17 +195,15 @@ class SourceMapView(QWidget):
         panel.setObjectName("panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(18, 16, 18, 16)
-        title = QLabel("Source")
+        title = QLabel("来源")
         title.setObjectName("sectionTitle")
         layout.addWidget(title)
-        self.card_file_value = self._card_row(layout, "File")
-        self.card_format_value = self._card_row(layout, "Format")
-        self.card_source_id_value = self._card_row(layout, "Source ID")
-        self.card_location_value = self._card_row(layout, "Location")
-        self.card_capability_value = self._card_row(layout, "Open capability")
-        self.card_fallback_note = QLabel(
-            "Document-level fallback: no reliable page, slide, or sheet location."
-        )
+        self.card_file_value = self._card_row(layout, "文件")
+        self.card_format_value = self._card_row(layout, "格式")
+        self.card_source_id_value = self._card_row(layout, "来源 ID")
+        self.card_location_value = self._card_row(layout, "位置")
+        self.card_capability_value = self._card_row(layout, "定位能力")
+        self.card_fallback_note = QLabel("文档级回退：没有可靠的页码、幻灯片或工作表位置。")
         self.card_fallback_note.setObjectName("sectionDescription")
         self.card_fallback_note.setWordWrap(True)
         self.card_fallback_note.setVisible(False)
@@ -187,7 +211,7 @@ class SourceMapView(QWidget):
         self.open_source_note = QLabel()
         self.open_source_note.setObjectName("sectionDescription")
         self.open_source_note.setWordWrap(True)
-        self.open_source_button = QPushButton("Open source location")
+        self.open_source_button = QPushButton("打开来源位置")
         self.open_source_button.setObjectName("secondary")
         self.open_source_button.setEnabled(False)
         self.open_source_button.clicked.connect(self._request_source_open)
@@ -255,7 +279,7 @@ class SourceMapView(QWidget):
                 item = QTableWidgetItem(value)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.blocks_table.setItem(row, column, item)
-        self.block_count.setText(f"{len(self._entries)} blocks")
+        self.block_count.setText(f"{len(self._entries)} 个内容块")
         self._stack.setCurrentWidget(self._body_page)
         self.blocks_table.setCurrentCell(0, 0)
 
@@ -265,26 +289,26 @@ class SourceMapView(QWidget):
         entry = self._entries[row]
         source = self._sources.get(entry.source_id)
         self.heading_label.setText(" > ".join(entry.heading_context) or "—")
-        self.token_label.setText(f"~{entry.estimated_tokens:,} tokens")
+        self.token_label.setText(f"约 {entry.estimated_tokens:,} 个估算令牌")
         self.content_edit.setPlainText(entry.content or DEGRADED_CONTENT)
         self.card_file_value.setText(source.display_name if source is not None else entry.source_id)
         self.card_format_value.setText(source.source_format if source is not None else "")
         self.card_source_id_value.setText(entry.source_id)
-        self.card_location_value.setText(entry.effective_display)
+        self.card_location_value.setText(_location_display(entry.primary_location))
         fallback = entry.primary_location is None or entry.primary_location.fallback
         self.card_fallback_note.setVisible(fallback)
         if source is None:
-            self.card_capability_value.setText("Unavailable")
-            self.open_source_note.setText("Source metadata is unavailable.")
+            self.card_capability_value.setText("不可用")
+            self.open_source_note.setText("来源元数据不可用。")
             self.open_source_button.setEnabled(False)
             self._active_target = None
             return
         target = resolve_source_open_target(source, entry, self._source_paths.get(source.source_id))
         self._active_target = target
         labels = {
-            SourceOpenCapability.PAGE_LEVEL: "Page-level (viewer permitting)",
-            SourceOpenCapability.DOCUMENT_LEVEL: "Document-level",
-            SourceOpenCapability.UNAVAILABLE: "Unavailable",
+            SourceOpenCapability.PAGE_LEVEL: "页级定位（取决于查看器）",
+            SourceOpenCapability.DOCUMENT_LEVEL: "文档级定位",
+            SourceOpenCapability.UNAVAILABLE: "不可用",
         }
         self.card_capability_value.setText(labels[target.capability])
         self.open_source_note.setText(target.reason)

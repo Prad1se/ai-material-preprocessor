@@ -26,9 +26,9 @@ from .common import WorkspacePresentationState, WorkspaceView
 
 class VideoWorkspace(WorkspaceView):
     workspace_id = WorkspaceId.VIDEO
-    input_title = "Media Queue"
+    input_title = "媒体队列"
     input_description = "MP4 · MOV · MKV · AVI · WebM · M4V"
-    input_accessible_description = "只接受视频格式；文档会建议转交 Documents Workspace"
+    input_accessible_description = "只接受视频格式；文档会建议转交到文档工作区"
 
     def __init__(self, config: dict, tools: dict[str, ToolStatus], preview_registry) -> None:
         super().__init__(config, tools, VideoWorkspaceController(tools), preview_registry)
@@ -39,9 +39,9 @@ class VideoWorkspace(WorkspaceView):
         hero.setObjectName("videoHero")
         layout = QHBoxLayout(hero)
         copy = QVBoxLayout()
-        eyebrow = QLabel("鼠鼠 VIDEO  ·  MEDIA WORKSHOP")
+        eyebrow = QLabel("鼠鼠视频  ·  媒体工作台")
         eyebrow.setObjectName("videoEyebrow")
-        title = QLabel("鼠鼠 Video Workshop")
+        title = QLabel("鼠鼠视频工作台")
         title.setObjectName("title")
         subtitle = QLabel("压缩、标准化、音频、关键帧与素材整理继续使用稳定的 v2.0 工作流。")
         subtitle.setObjectName("subtitle")
@@ -63,9 +63,9 @@ class VideoWorkspace(WorkspaceView):
         panel.setObjectName("panel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(22, 20, 22, 22)
-        title = QLabel("Actions")
+        title = QLabel("操作")
         title.setObjectName("sectionTitle")
-        description = QLabel("这里只显示 Video operation 与媒体参数")
+        description = QLabel("这里只显示视频处理方式与媒体参数")
         description.setObjectName("sectionDescription")
         self.operation = QComboBox()
         self.operation.currentIndexChanged.connect(self._operation_changed)
