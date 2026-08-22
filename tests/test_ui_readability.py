@@ -254,9 +254,7 @@ def test_recent_task_rows_localize_status_labels(qtbot) -> None:
     window.document_workspace.upsert_task(
         "task-1", "lesson.docx", "生成 AI 资料包 / Markdown", TaskStatus.SUCCESS, 100
     )
-    window.video_workspace.upsert_task(
-        "task-2", "clip.mp4", "压缩视频", TaskStatus.CANCELLED, 40
-    )
+    window.video_workspace.upsert_task("task-2", "clip.mp4", "压缩视频", TaskStatus.CANCELLED, 40)
 
     document_table = window.document_workspace.recent_tasks
     video_table = window.video_workspace.recent_tasks
