@@ -36,7 +36,8 @@ def format_source_citation(source: SourceMapSource | None, entry: SourceMapEntry
 
     name = source.display_name if source is not None else (entry.source_id or "未知来源")
     location = entry.primary_location
-    if location is None:
+    # 没有可靠位置（文档级回退）时只输出文件名，不伪造页码。
+    if location is None or str(getattr(location, "kind", "document")) == "document":
         return name
     return f"{name} · {_location_display(location)}"
 

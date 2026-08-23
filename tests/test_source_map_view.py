@@ -507,10 +507,7 @@ def test_format_source_citation_covers_slide_worksheet_and_fallback() -> None:
         )
 
     assert format_source_citation(source_pptx, entry_for(slide)) == "课件.pptx · 第 4 张幻灯片"
-    assert (
-        format_source_citation(source_xlsx, entry_for(worksheet))
-        == "数据.xlsx · 工作表：成绩表"
-    )
+    assert format_source_citation(source_xlsx, entry_for(worksheet)) == "数据.xlsx · 工作表：成绩表"
     # 文档级回退只输出文件名，不伪造页码。
     assert format_source_citation(None, entry_for(document_fallback)).count("·") == 0
 
