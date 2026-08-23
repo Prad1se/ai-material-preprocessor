@@ -19,6 +19,37 @@ class Operation(StrEnum):
     DOCUMENT_CONTEXT_PACK = "生成 Context Pack"
 
 
+# 唯一的用户可见操作中文标签：历史、任务中心、工作区共用这一份映射。
+OPERATION_LABELS: dict[Operation, str] = {
+    Operation.TO_MARKDOWN: "AI 就绪 Markdown",
+    Operation.TO_PDF: "创建 PDF 副本",
+    Operation.COMPRESS_VIDEO: "压缩视频",
+    Operation.EXTRACT_AUDIO: "提取音频",
+    Operation.STANDARDIZE_MP4: "标准化为 MP4",
+    Operation.KEYFRAMES_CONTACT_SHEET: "提取关键帧和联系表",
+    Operation.RENAME_VIDEO: "按拍摄时间/地点命名",
+    Operation.ORGANIZE_VIDEO: "按日期/地点整理",
+    Operation.DOCUMENT_CONTEXT_PACK: "AI 上下文包",
+}
+
+# 旧枚举原值到新标签的反查，兼容历史记录或调用方仍传入原值的情况。
+_OPERATION_LABELS_BY_VALUE = {
+    operation.value: label for operation, label in OPERATION_LABELS.items()
+}
+
+
+def operation_display(operation: Operation | str) -> str:
+    """Return the unified Chinese display label for an operation.
+
+    Accepts an ``Operation`` member, its ``name``, or its legacy enum value so
+    persisted records and stale callers keep rendering the current wording.
+    """
+
+    if isinstance(operation, Operation):
+        return OPERATION_LABELS.get(operation, operation.value)
+    return _OPERATION_LABELS_BY_VALUE.get(operation, operation)
+
+
 class TaskStatus(StrEnum):
     WAITING = "waiting"
     RUNNING = "running"
@@ -30,6 +61,27 @@ class TaskStatus(StrEnum):
     @property
     def is_terminal(self) -> bool:
         return self not in {TaskStatus.WAITING, TaskStatus.RUNNING}
+
+
+# 唯一的任务状态中文标签：历史、任务中心、工作区共用这一份映射。
+STATUS_LABELS: dict[TaskStatus, str] = {
+    TaskStatus.WAITING: "等待",
+    TaskStatus.RUNNING: "运行中",
+    TaskStatus.SUCCESS: "成功",
+    TaskStatus.FAILED: "失败",
+    TaskStatus.CANCELLED: "已取消",
+    TaskStatus.INTERRUPTED: "已中断",
+}
+
+_STATUS_LABELS_BY_VALUE = {status.value: label for status, label in STATUS_LABELS.items()}
+
+
+def status_display(status: TaskStatus | str) -> str:
+    """Return the unified Chinese display label for a task status."""
+
+    if isinstance(status, TaskStatus):
+        return STATUS_LABELS.get(status, status.value)
+    return _STATUS_LABELS_BY_VALUE.get(status, status)
 
 
 @dataclass(frozen=True)

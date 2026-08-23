@@ -11,6 +11,7 @@ from ..services.config import coerce_int
 from ..services.disk_space import DiskSpacePreflight
 from ..services.history_repository import HistoryRepository
 from ..services.job_executor import JobExecutor, TaskExecutionResult
+from ..services.observability import DiagnosticLogger
 from ..services.task_center import TaskCenter
 from ..services.task_manifest import TaskRecord, resolve_history_root, write_task_manifest
 from ..services.task_repository import PersistentTaskQueue, resolve_task_queue_path
@@ -104,10 +105,11 @@ class ApplicationTaskRunner:
         history_writer: HistoryWriter = write_task_manifest,
         on_task_changed: TaskCallback | None = None,
         on_progress: ProgressCallback | None = None,
+        logger: DiagnosticLogger | None = None,
     ) -> None:
         self.config = config
         self.tools = tools
-        self.executor = executor or JobExecutor(tools=tools, config=config)
+        self.executor = executor or JobExecutor(tools=tools, config=config, logger=logger)
         self.task_repository = task_repository or PersistentTaskQueue(
             resolve_task_queue_path(config)
         )

@@ -6,6 +6,7 @@ datas = [
     ("assets/mouse/mouse-grin.png", "assets/mouse"),
     ("assets/mouse/mouse-strong.png", "assets/mouse"),
     ("assets/mouse/mouse-thinking.png", "assets/mouse"),
+    ("assets/app-icon.ico", "assets"),
     ("assets/doro/orange.png", "assets/doro"),
     ("assets/doro/ready.png", "assets/doro"),
     ("assets/doro/processing.gif", "assets/doro"),
@@ -51,7 +52,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
-    icon="assets/app.ico",
+    icon="assets/app-icon.ico",
 )
 
 coll = COLLECT(

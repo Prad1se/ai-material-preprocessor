@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -22,19 +22,11 @@ from PySide6.QtWidgets import (
 )
 
 from ..application.workspaces import WorkspaceId, operations_for_workspace
-from ..models import Operation, TaskStatus
+from ..models import STATUS_LABELS, Operation, TaskStatus, operation_display, status_display
 from ..services.history_repository import HistoryEntry, HistoryRepository
+from .background_tasks import BackgroundCall, start_background_call
 from .theme import APP_STYLESHEET
 from .window_sizing import fit_dialog_to_available_space
-
-STATUS_LABELS = {
-    TaskStatus.WAITING: "等待",
-    TaskStatus.RUNNING: "运行中",
-    TaskStatus.SUCCESS: "成功",
-    TaskStatus.FAILED: "失败",
-    TaskStatus.CANCELLED: "已取消",
-    TaskStatus.INTERRUPTED: "已中断",
-}
 
 
 class HistoryDetailsDialog(QDialog):
@@ -102,6 +94,14 @@ class HistoryDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.repository = repository
+        self._search: BackgroundCall | None = None
+        self._pending_search: (
+            tuple[str, TaskStatus | None, Operation | None, WorkspaceId | None] | None
+        ) = None
+        self._search_workspace: WorkspaceId | None = None
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self._start_search)
         self.setWindowTitle("处理历史")
         fit_dialog_to_available_space(self, 980, 560, minimum_width=640, minimum_height=480)
         # Inherit the active light/dark shell theme when opened from MainWindow.
@@ -130,7 +130,7 @@ class HistoryDialog(QDialog):
         self.operation_filter = QComboBox()
         self.operation_filter.addItem("全部操作", None)
         for operation in Operation:
-            self.operation_filter.addItem(operation.value, operation.name)
+            self.operation_filter.addItem(operation_display(operation), operation.name)
         filters.addWidget(self.search_input, 2)
         filters.addWidget(self.workspace_filter, 1)
         filters.addWidget(self.status_filter, 1)
@@ -146,6 +146,10 @@ class HistoryDialog(QDialog):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
+        # 长路径与长摘要按省略号截断，完整内容放入单元格工具提示，避免撑破窄窗口。
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.table.setWordWrap(False)
+        self.table.horizontalHeader().setMinimumSectionSize(56)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
@@ -201,7 +205,7 @@ class HistoryDialog(QDialog):
         self.operation_filter.addItem("全部操作", None)
         for operation in Operation:
             if operation in allowed:
-                self.operation_filter.addItem(operation.value, operation.name)
+                self.operation_filter.addItem(operation_display(operation), operation.name)
         restored = self.operation_filter.findData(selected_operation)
         self.operation_filter.setCurrentIndex(max(0, restored))
         self.operation_filter.blockSignals(False)
@@ -209,7 +213,9 @@ class HistoryDialog(QDialog):
 
     @staticmethod
     def _joined_status(entry: HistoryEntry) -> str:
-        return "、".join(STATUS_LABELS[status] for status in TaskStatus if status in entry.statuses)
+        return "、".join(
+            status_display(status) for status in TaskStatus if status in entry.statuses
+        )
 
     @staticmethod
     def _quality_summary(entry: HistoryEntry) -> str:
@@ -254,22 +260,60 @@ class HistoryDialog(QDialog):
     def refresh(self) -> None:
         raw_status = self.status_filter.currentData()
         raw_operation = self.operation_filter.currentData()
-        entries = self.repository.search(
-            query=self.search_input.text(),
-            status=TaskStatus(raw_status) if raw_status else None,
-            operation=Operation[raw_operation] if raw_operation else None,
-        )
         raw_workspace = self.workspace_filter.currentData()
-        if raw_workspace:
-            allowed = operations_for_workspace(WorkspaceId(raw_workspace))
-            entries = [entry for entry in entries if entry.operations & allowed]
+        workspace = WorkspaceId(raw_workspace) if raw_workspace else None
+        query = self.search_input.text()
+        status = TaskStatus(raw_status) if raw_status else None
+        operation = Operation[raw_operation] if raw_operation else None
+        if self._search is not None:
+            self._search.cancel()
         self.table.setRowCount(0)
+        self._update_actions()
+        self._pending_search = (query, status, operation, workspace)
+        self._search_timer.start(120)
+
+    def _start_search(self) -> None:
+        if self._pending_search is None:
+            return
+        query, status, operation, workspace = self._pending_search
+        self._pending_search = None
+        repository = self.repository
+        worker = BackgroundCall(
+            lambda: repository.search(
+                query=query,
+                status=status,
+                operation=operation,
+            )
+        )
+        self._search = worker
+        self._search_workspace = workspace
+        worker.succeeded.connect(self._search_succeeded)
+        worker.failed.connect(self._search_failed)
+        start_background_call(worker)
+
+    def _search_succeeded(self, raw_entries: object) -> None:
+        if self.sender() is not self._search or not isinstance(raw_entries, list):
+            return
+        self._search = None
+        entries = raw_entries
+        if self._search_workspace is not None:
+            allowed = operations_for_workspace(self._search_workspace)
+            entries = [entry for entry in entries if entry.operations & allowed]
+        self._render_entries(entries)
+
+    def _search_failed(self, _message: str) -> None:
+        if self.sender() is self._search:
+            self._search = None
+
+    def _render_entries(self, entries: list[HistoryEntry]) -> None:
         for entry in entries:
             row = self.table.rowCount()
             self.table.insertRow(row)
             source_names = "、".join(path.name for path in entry.sources) or "—"
             operations = "、".join(
-                operation.value for operation in Operation if operation in entry.operations
+                operation_display(operation)
+                for operation in Operation
+                if operation in entry.operations
             )
             outputs = "、".join(str(path) for path in entry.outputs) or "—"
             values = [
@@ -282,11 +326,29 @@ class HistoryDialog(QDialog):
             ]
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
+                item.setToolTip(value)
                 if column == 0:
                     item.setData(Qt.ItemDataRole.UserRole, entry.task_id)
                     item.setData(Qt.ItemDataRole.UserRole + 1, bool(entry.cache_paths))
                 self.table.setItem(row, column, item)
         self._update_actions()
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() is QEvent.Type.Close:
+            self._cancel_search()
+        return super().event(event)
+
+    def reject(self) -> None:
+        self._cancel_search()
+        super().reject()
+
+    def _cancel_search(self) -> None:
+        self._search_timer.stop()
+        self._pending_search = None
+        self._search_workspace = None
+        if self._search is not None:
+            self._search.cancel()
+            self._search = None
 
     def _selected_rows(self) -> list[int]:
         return sorted({index.row() for index in self.table.selectedIndexes()})
@@ -360,7 +422,7 @@ class HistoryDialog(QDialog):
             self.refresh()
 
     def _clear_all(self) -> None:
-        task_ids = [entry.task_id for entry in self.repository.all()]
+        task_ids = [entry.task_id for entry in self.repository.all(include_size=False)]
         if not task_ids:
             return
         answer = QMessageBox.question(

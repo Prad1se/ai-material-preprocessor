@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
 
 from PySide6.QtGui import QColor, QImage, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QTableWidget, QTabWidget
@@ -391,13 +392,16 @@ def test_history_dialog_searches_and_filters_records(qtbot, tmp_path: Path) -> N
     dialog = HistoryDialog(HistoryRepository(history))
     qtbot.addWidget(dialog)
 
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 2)
     assert dialog.table.rowCount() == 2
     dialog.search_input.setText("课程")
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 1)
     assert dialog.table.rowCount() == 1
     assert dialog.table.item(0, 1).text() == "课程资料.docx"
     dialog.search_input.clear()
     failed_index = dialog.status_filter.findData(TaskStatus.FAILED.value)
     dialog.status_filter.setCurrentIndex(failed_index)
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 1 and dialog.table.item(0, 3) is not None)
     assert dialog.table.rowCount() == 1
     assert dialog.table.item(0, 3).text() == "失败"
     assert dialog.delete_records_button.text() == "删除所选记录"
@@ -405,6 +409,28 @@ def test_history_dialog_searches_and_filters_records(qtbot, tmp_path: Path) -> N
     assert dialog.close_button.text() == "关闭"
     assert not dialog.table.verticalHeader().isVisible()
     assert "QComboBox QAbstractItemView" in dialog.styleSheet()
+
+
+def test_history_dialog_cancel_discards_pending_search(qtbot, tmp_path: Path) -> None:
+    started = Event()
+    release = Event()
+
+    class BlockingRepository(HistoryRepository):
+        def search(self, **_kwargs):
+            started.set()
+            assert release.wait(1)
+            return []
+
+    dialog = HistoryDialog(BlockingRepository(tmp_path / "History"))
+    qtbot.addWidget(dialog)
+    qtbot.waitUntil(started.is_set)
+
+    dialog.reject()
+    release.set()
+    qtbot.wait(50)
+
+    assert dialog._search is None
+    assert dialog.table.rowCount() == 0
 
 
 def test_file_rows_and_combo_items_stay_readable_with_dark_system_palette(
@@ -509,7 +535,7 @@ def test_completed_onboarding_is_not_shown(qtbot) -> None:
     assert not hasattr(window, "onboarding_dialog")
 
 
-def test_open_output_opens_pack_directory_but_parent_for_files(
+def test_open_output_opens_pack_directory_and_file_with_default_application(
     qtbot, tmp_path: Path, monkeypatch
 ) -> None:
     window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
@@ -524,7 +550,7 @@ def test_open_output_opens_pack_directory_but_parent_for_files(
     window._open_output(str(pack))
     window._open_output(str(file_output))
 
-    assert opened == [str(pack), str(tmp_path)]
+    assert opened == [str(pack), str(file_output)]
 
 
 def test_context_pack_completion_opens_report_dialog_with_source_map(

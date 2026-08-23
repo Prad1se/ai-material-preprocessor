@@ -13,16 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..models import TaskStatus
-
-STATUS_LABELS = {
-    TaskStatus.WAITING: "等待",
-    TaskStatus.RUNNING: "运行中",
-    TaskStatus.SUCCESS: "成功",
-    TaskStatus.FAILED: "失败",
-    TaskStatus.CANCELLED: "已取消",
-    TaskStatus.INTERRUPTED: "已中断",
-}
+from ..models import STATUS_LABELS, TaskStatus
 
 
 class TaskCenterPanel(QFrame):
@@ -59,6 +50,10 @@ class TaskCenterPanel(QFrame):
         self.table.setAlternatingRowColors(True)
         self.table.setMinimumHeight(170)
         self.table.verticalHeader().setVisible(False)
+        # 长文件名与长消息在窄窗口下省略显示，完整内容放入工具提示。
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.table.setWordWrap(False)
+        self.table.horizontalHeader().setMinimumSectionSize(48)
         for column, mode in (
             (0, QHeaderView.ResizeMode.ResizeToContents),
             (1, QHeaderView.ResizeMode.Stretch),
@@ -93,9 +88,22 @@ class TaskCenterPanel(QFrame):
             self.table.setItem(row, 1, source_item)
             self.table.setItem(row, 2, QTableWidgetItem(operation_label))
             self.rows[task_id] = row
-        self.table.setItem(row, 3, QTableWidgetItem(STATUS_LABELS[status]))
-        self.table.setItem(row, 4, QTableWidgetItem(f"{progress}%"))
-        self.table.setItem(row, 5, QTableWidgetItem(message))
+        values = (
+            workspace_label,
+            source_name,
+            operation_label,
+            STATUS_LABELS[status],
+            f"{progress}%",
+            message,
+        )
+        for column, value in enumerate(values):
+            item = self.table.item(row, column)
+            if item is None:
+                item = QTableWidgetItem(value)
+                self.table.setItem(row, column, item)
+            else:
+                item.setText(value)
+            item.setToolTip(value)
         self.table.item(row, 1).setData(Qt.ItemDataRole.UserRole + 1, status.value)
 
     def selected_task_ids(self) -> list[str]:

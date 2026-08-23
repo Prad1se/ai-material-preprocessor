@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from ...application.preview_registry import PreviewRequest
 from ...application.workspaces import WorkspaceId
 from ...apps.video.workspace_controller import VideoWorkspaceController
-from ...models import Operation, ToolStatus
+from ...models import OPERATION_LABELS, Operation, ToolStatus
 from ..mascot import MOUSE_STATE_ASSETS, mouse_asset_path
 from .common import WorkspacePresentationState, WorkspaceView
 
@@ -175,7 +175,8 @@ class VideoWorkspace(WorkspaceView):
         self.operation.blockSignals(True)
         self.operation.clear()
         for operation in common:
-            self.operation.addItem(operation.value, operation.value)
+            # 与历史、任务中心共用统一操作标签；数据仍保存枚举原值。
+            self.operation.addItem(OPERATION_LABELS[operation], operation.value)
         if previous is not None:
             index = self.operation.findData(previous)
             if index >= 0:

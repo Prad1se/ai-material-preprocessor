@@ -12,6 +12,7 @@ from ..errors import ErrorCode, UserFacingError, explain_error
 from ..infrastructure.processes import CancellationToken
 from ..models import Job, TaskStatus, ToolStatus
 from .document_service import DocumentConversionService
+from .observability import DiagnosticLogger
 from .task_manifest import TaskRecord
 from .video_service import VideoProcessingService
 
@@ -42,12 +43,14 @@ class JobExecutor:
         document_service: DocumentService | None = None,
         video_service: VideoService | None = None,
         registry: OperationExecutorRegistry | None = None,
+        logger: DiagnosticLogger | None = None,
     ) -> None:
+        self.logger = logger or DiagnosticLogger()
         if registry is not None:
             self.registry = registry
             return
-        documents = document_service or DocumentConversionService(tools, config)
-        video = video_service or VideoProcessingService(tools, config)
+        documents = document_service or DocumentConversionService(tools, config, logger=self.logger)
+        video = video_service or VideoProcessingService(tools, config, logger=self.logger)
         self.registry = build_default_executor_registry(documents, video)
 
     @staticmethod
@@ -70,12 +73,21 @@ class JobExecutor:
         self._raise_if_cancelled(cancellation)
         if on_progress:
             on_progress(5, f"正在处理：{job.source.name}")
-        result = self.registry.execute(
-            job,
-            index,
-            cancellation=cancellation,
-            on_progress=on_progress,
-        )
+        try:
+            result = self.registry.execute(
+                job,
+                index,
+                cancellation=cancellation,
+                on_progress=on_progress,
+            )
+        except Exception as exc:
+            self.logger.record_failure(
+                "jobs.execution_failed",
+                exc,
+                operation=job.operation.name,
+                source_suffix=job.source.suffix,
+            )
+            raise
         self._raise_if_cancelled(cancellation)
         if on_progress:
             on_progress(95, f"正在完成：{job.source.name}")

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 
 from .. import __version__
 from ..services.updates import UpdateCheckResult, UpdateState, check_for_updates
+from .diagnostics_dialog import DiagnosticsDialog
 from .window_sizing import fit_dialog_to_available_space
 
 
@@ -56,10 +57,13 @@ class AboutDialog(QDialog):
         self.open_release_button = QPushButton("打开发布页")
         self.open_release_button.setEnabled(False)
         self.open_release_button.clicked.connect(self._open_release)
+        self.run_diagnostics_button = QPushButton("运行本地诊断")
+        self.run_diagnostics_button.clicked.connect(self._show_diagnostics)
         close = QPushButton("关闭")
         close.clicked.connect(self.accept)
         actions.addWidget(self.check_updates_button)
         actions.addWidget(self.open_release_button)
+        actions.addWidget(self.run_diagnostics_button)
         actions.addStretch()
         actions.addWidget(close)
         root.addLayout(actions)
@@ -82,3 +86,6 @@ class AboutDialog(QDialog):
     def _open_release(self) -> None:
         if self.release_url:
             webbrowser.open(self.release_url)
+
+    def _show_diagnostics(self) -> None:
+        DiagnosticsDialog(self.config, self).exec()

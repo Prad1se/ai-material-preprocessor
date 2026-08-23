@@ -60,7 +60,7 @@ class HistoryRepository:
         parsed = datetime.fromisoformat(str(value))
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
-    def _read(self, manifest: Path) -> HistoryEntry | None:
+    def _read(self, manifest: Path, *, include_size: bool = True) -> HistoryEntry | None:
         try:
             payload = json.loads(manifest.read_text(encoding="utf-8"))
             items = payload.get("items", [])
@@ -101,15 +101,17 @@ class HistoryRepository:
                 outputs=outputs,
                 cache_paths=cache_paths,
                 quality_summaries=quality_summaries,
-                total_bytes=_directory_size(manifest.parent),
+                total_bytes=_directory_size(manifest.parent) if include_size else 0,
             )
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             return None
 
-    def all(self) -> list[HistoryEntry]:
+    def all(self, *, include_size: bool = True) -> list[HistoryEntry]:
         if not self.root.is_dir():
             return []
-        entries = [self._read(path) for path in self.root.rglob("manifest.json")]
+        entries = [
+            self._read(path, include_size=include_size) for path in self.root.rglob("manifest.json")
+        ]
         return sorted(
             (entry for entry in entries if entry is not None),
             key=lambda entry: entry.created_at,
@@ -117,7 +119,9 @@ class HistoryRepository:
         )
 
     def details(self, task_id: str) -> dict | None:
-        entry = next((item for item in self.all() if item.task_id == task_id), None)
+        entry = next(
+            (item for item in self.all(include_size=False) if item.task_id == task_id), None
+        )
         if entry is None:
             return None
         try:
@@ -161,7 +165,7 @@ class HistoryRepository:
     def delete_records(self, task_ids: list[str]) -> int:
         selected = set(task_ids)
         removed = 0
-        for entry in self.all():
+        for entry in self.all(include_size=False):
             if entry.task_id not in selected:
                 continue
             folder = self._safe_record_folder(entry)
@@ -175,7 +179,7 @@ class HistoryRepository:
             return 0
         selected = set(task_ids)
         removed = 0
-        for entry in self.all():
+        for entry in self.all(include_size=False):
             if entry.task_id not in selected:
                 continue
             for raw_path in entry.cache_paths:

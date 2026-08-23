@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -28,6 +29,16 @@ from ..services.source_open import (
 
 EMPTY_MESSAGE = "暂无来源映射"
 DEGRADED_CONTENT = "（已处理内容不可用；仅有清单记录）"
+
+
+def format_source_citation(source: SourceMapSource | None, entry: SourceMapEntry) -> str:
+    """构建可分享的来源引用：仅包含文件名与页码/幻灯片/工作表，不含绝对路径。"""
+
+    name = source.display_name if source is not None else (entry.source_id or "未知来源")
+    location = entry.primary_location
+    if location is None:
+        return name
+    return f"{name} · {_location_display(location)}"
 
 
 def _location_display(location: object | None) -> str:
@@ -63,6 +74,7 @@ class SourceMapView(QWidget):
         self._sources: dict[str, SourceMapSource] = {}
         self._source_paths: dict[str, Path] = {}
         self._active_target: SourceOpenTarget | None = None
+        self._citation = ""
         root = QVBoxLayout(self)
         root.setContentsMargins(30, 24, 34, 32)
         root.setSpacing(16)
@@ -217,6 +229,13 @@ class SourceMapView(QWidget):
         self.open_source_button.clicked.connect(self._request_source_open)
         layout.addWidget(self.open_source_note)
         layout.addWidget(self.open_source_button)
+        # 复制来源引用：输出文件名与页码/幻灯片/工作表，不包含绝对路径。
+        self.copy_citation_button = QPushButton("复制引用")
+        self.copy_citation_button.setObjectName("secondary")
+        self.copy_citation_button.setEnabled(False)
+        self.copy_citation_button.setAccessibleName("复制来源引用")
+        self.copy_citation_button.clicked.connect(self._copy_citation)
+        layout.addWidget(self.copy_citation_button)
         layout.addStretch()
         return panel
 
@@ -255,6 +274,9 @@ class SourceMapView(QWidget):
         self.card_capability_value.clear()
         self.open_source_note.clear()
         self.open_source_button.setEnabled(False)
+        self.copy_citation_button.setEnabled(False)
+        self.copy_citation_button.setText("复制引用")
+        self._citation = ""
         self._active_target = None
         self.card_fallback_note.setVisible(False)
         self.integrity_notice.setVisible(bool(source_map and source_map.degraded))
@@ -297,6 +319,9 @@ class SourceMapView(QWidget):
         self.card_location_value.setText(_location_display(entry.primary_location))
         fallback = entry.primary_location is None or entry.primary_location.fallback
         self.card_fallback_note.setVisible(fallback)
+        # 引用只依赖文件名与位置信息，即使来源元数据缺失也可复制。
+        self._citation = format_source_citation(source, entry)
+        self.copy_citation_button.setEnabled(True)
         if source is None:
             self.card_capability_value.setText("不可用")
             self.open_source_note.setText("来源元数据不可用。")
@@ -317,3 +342,13 @@ class SourceMapView(QWidget):
     def _request_source_open(self) -> None:
         if self._active_target is not None and self._active_target.available:
             self.open_source_requested.emit(self._active_target)
+
+    def _copy_citation(self) -> None:
+        if not self._citation:
+            return
+        QApplication.clipboard().setText(self._citation)
+        self.copy_citation_button.setText("已复制")
+        QTimer.singleShot(1600, self._restore_copy_citation_label)
+
+    def _restore_copy_citation_label(self) -> None:
+        self.copy_citation_button.setText("复制引用")

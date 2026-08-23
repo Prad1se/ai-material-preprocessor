@@ -16,6 +16,7 @@ from ..services.tool_installer import (
     configured_tool_install_root,
 )
 from ..services.tool_versions import detect_tools_with_versions
+from .background_tasks import BackgroundCall, start_background_call
 
 ConfigSaver = Callable[[dict], object]
 ToolDetector = Callable[[dict], dict[str, ToolStatus]]
@@ -74,6 +75,9 @@ class ToolInstallationCoordinator(QObject):
         self.detector = detector
         self.changed_callback = changed_callback
         self.worker: ToolInstallWorker | None = None
+        self.detection_worker: BackgroundCall | None = None
+        self._detection_parent_destroyed = False
+        self._installed_result: ToolInstallResult | None = None
         self.progress_dialog: QProgressDialog | None = None
 
     def update_config(self, config: dict) -> None:
@@ -125,16 +129,44 @@ class ToolInstallationCoordinator(QObject):
         candidate = apply_install_result(self.config, raw_result)
         try:
             self.save_callback(candidate)
-            tools = self.detector(candidate)
         except OSError as exc:
             self._failed(f"工具已补充，但保存设置失败：{exc}")
             return
-        self.config = candidate
-        self.changed_callback(copy.deepcopy(candidate), dict(tools))
+        detector = self.detector
+        worker = BackgroundCall(lambda: detector(copy.deepcopy(candidate)))
+        self.detection_worker = worker
+        self._detection_parent_destroyed = False
+        self._installed_result = raw_result
+        self.parent_widget.destroyed.connect(self._cancel_detection_after_parent_close)
+        worker.succeeded.connect(self._detection_succeeded)
+        worker.failed.connect(self._detection_failed)
+        start_background_call(worker)
+
+    def _cancel_detection_after_parent_close(self) -> None:
+        self._detection_parent_destroyed = True
+        self.cancel_detection()
+
+    def cancel_detection(self) -> None:
+        if self.detection_worker is not None:
+            self.detection_worker.cancel()
+            self.detection_worker = None
+
+    def _detection_succeeded(self, raw_tools: object) -> None:
+        result = self._installed_result
+        if (
+            self._detection_parent_destroyed
+            or self.sender() is not self.detection_worker
+            or not isinstance(raw_tools, dict)
+            or result is None
+        ):
+            return
+        self.detection_worker = None
+        self.config = apply_install_result(self.config, result)
+        self.changed_callback(copy.deepcopy(self.config), dict(raw_tools))
         if self.progress_dialog is not None:
             self.progress_dialog.setValue(100)
         restart_note = ""
-        if raw_result.restart_required:
+        if result.restart_required:
             restart_note = (
                 "\n\nWindows 安装程序要求重启。请保存工作并在方便时重启电脑，然后重新检测。"
             )
@@ -143,6 +175,12 @@ class ToolInstallationCoordinator(QObject):
             "本机能力已更新",
             "工具补充完成，能力列表已重新检测。" + restart_note,
         )
+
+    def _detection_failed(self, message: str) -> None:
+        if self._detection_parent_destroyed or self.sender() is not self.detection_worker:
+            return
+        self.detection_worker = None
+        self._failed(message or "工具已补充，但重新检测未完成。")
 
     def _failed(self, message: str) -> None:
         if self.progress_dialog is not None:

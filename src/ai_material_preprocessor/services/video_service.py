@@ -14,12 +14,16 @@ from ..converters.video import (
 )
 from ..infrastructure.processes import CancellationToken
 from ..models import Job, Operation, ToolStatus
+from .observability import DiagnosticLogger
 
 
 class VideoProcessingService:
-    def __init__(self, tools: dict[str, ToolStatus], config: dict) -> None:
+    def __init__(
+        self, tools: dict[str, ToolStatus], config: dict, *, logger: DiagnosticLogger | None = None
+    ) -> None:
         self.tools = tools
         self.config = config
+        self.logger = logger
 
     def _path(self, name: str) -> str | None:
         status = self.tools.get(name)
@@ -42,7 +46,14 @@ class VideoProcessingService:
                     job.source,
                     cancellation=cancellation,
                 )
-            except Exception:
+            except Exception as exc:
+                if self.logger is not None:
+                    self.logger.record_failure(
+                        "ffprobe.duration_probe_failed",
+                        exc,
+                        source_suffix=job.source.suffix,
+                        tool="ffprobe",
+                    )
                 if cancellation and cancellation.is_cancelled:
                     raise
         if job.operation is Operation.COMPRESS_VIDEO:
@@ -87,6 +98,7 @@ class VideoProcessingService:
                 cancellation=cancellation,
                 duration_seconds=duration,
                 progress_callback=on_progress,
+                logger=self.logger,
             )
         if job.operation is Operation.RENAME_VIDEO:
             return rename_copy(
@@ -101,6 +113,7 @@ class VideoProcessingService:
                 project_name=job.project or str(video.get("project_name", "")),
                 location_dictionary=dict(video.get("location_dictionary", {})),
                 cancellation=cancellation,
+                logger=self.logger,
             )
         if job.operation is Operation.ORGANIZE_VIDEO:
             return organize_copy(
@@ -116,5 +129,6 @@ class VideoProcessingService:
                 organize_mode=str(video.get("organize_mode", "date_location")),
                 location_dictionary=dict(video.get("location_dictionary", {})),
                 cancellation=cancellation,
+                logger=self.logger,
             )
         raise ValueError(f"Video service cannot execute {job.operation.name}")

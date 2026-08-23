@@ -9,6 +9,7 @@ from pathlib import Path
 from ..infrastructure.processes import CommandRequest, ProcessRunner
 from ..models import ToolStatus
 from .environment import detect_tools
+from .observability import DiagnosticLogger
 
 PACKAGE_NAMES = {"markitdown": "markitdown", "rapidocr": "rapidocr"}
 VERSION_ARGUMENTS = {
@@ -47,6 +48,7 @@ def inspect_tool_versions(
     *,
     runner: ProcessRunner | None = None,
     package_lookup: Callable[[str], str] = package_version,
+    logger: DiagnosticLogger | None = None,
 ) -> dict[str, ToolStatus]:
     """Enrich detected tools without changing their executable selection."""
     active_runner = runner or ProcessRunner()
@@ -78,9 +80,17 @@ def inspect_tool_versions(
                 raw_version = lines[0] if lines else ""
                 if not raw_version:
                     detail = "版本检测失败：工具未返回版本信息"
+                    if logger is not None:
+                        logger.record(
+                            "tools.version_unavailable",
+                            level="warning",
+                            tool=name,
+                        )
             elif name in {"winword", "powerpoint"}:
                 raw_version = "由 Microsoft Office 管理"
         except (OSError, RuntimeError, PackageNotFoundError) as exc:
+            if logger is not None:
+                logger.record_failure("tools.version_probe_failed", exc, tool=name)
             try:
                 message = str(exc)
             except Exception:
@@ -98,5 +108,7 @@ def inspect_tool_versions(
     return enriched
 
 
-def detect_tools_with_versions(config: dict) -> dict[str, ToolStatus]:
-    return inspect_tool_versions(detect_tools(config))
+def detect_tools_with_versions(
+    config: dict, *, logger: DiagnosticLogger | None = None
+) -> dict[str, ToolStatus]:
+    return inspect_tool_versions(detect_tools(config, logger=logger), logger=logger)

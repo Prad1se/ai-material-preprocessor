@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog,
@@ -18,6 +18,7 @@ from ..models import ToolStatus
 from ..services.config import save_config
 from ..services.tool_capabilities import build_tool_capabilities
 from ..services.tool_versions import detect_tools_with_versions
+from .background_tasks import BackgroundCall, start_background_call
 from .mascot import mouse_asset_path
 from .theme import stylesheet_for_theme
 from .tool_installation import ToolInstallationCoordinator
@@ -45,6 +46,7 @@ class OnboardingDialog(QDialog):
         self.tools = dict(tools)
         self.save_callback = save_callback
         self.detector = detector
+        self._detection: BackgroundCall | None = None
         self.setWindowTitle("欢迎使用 AI 素材预处理工具")
         fit_dialog_to_available_space(self, 860, 680, minimum_width=640, minimum_height=500)
         self._build_ui()
@@ -125,8 +127,31 @@ class OnboardingDialog(QDialog):
         self.tool_table.set_capabilities(build_tool_capabilities(self.tools))
 
     def _redetect(self) -> None:
-        self.tools = self.detector(copy.deepcopy(self.config))
+        if self._detection is not None:
+            self._detection.cancel()
+        self.redetect_button.setEnabled(False)
+        detector = self.detector
+        config = copy.deepcopy(self.config)
+        worker = BackgroundCall(lambda: detector(config))
+        self._detection = worker
+        worker.succeeded.connect(self._detection_succeeded)
+        worker.failed.connect(self._detection_failed)
+        start_background_call(worker)
+
+    def _detection_succeeded(self, raw_tools: object) -> None:
+        if self.sender() is not self._detection or not isinstance(raw_tools, dict):
+            return
+        self._detection = None
+        self.tools = raw_tools
         self._render_tools()
+        self.redetect_button.setEnabled(True)
+
+    def _detection_failed(self, message: str) -> None:
+        if self.sender() is not self._detection:
+            return
+        self._detection = None
+        self.redetect_button.setEnabled(True)
+        QMessageBox.warning(self, "无法检测工具", message or "工具检测未完成，请稍后重试。")
 
     def _tools_changed(self, config: dict, tools: dict[str, ToolStatus]) -> None:
         self.config = copy.deepcopy(config)
@@ -145,3 +170,18 @@ class OnboardingDialog(QDialog):
         self.tool_installation.update_config(candidate)
         self.onboarding_completed.emit(copy.deepcopy(candidate), dict(self.tools))
         self.accept()
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() is QEvent.Type.Close:
+            self._cancel_detection()
+        return super().event(event)
+
+    def reject(self) -> None:
+        self._cancel_detection()
+        super().reject()
+
+    def _cancel_detection(self) -> None:
+        self.tool_installation.cancel_detection()
+        if self._detection is not None:
+            self._detection.cancel()
+            self._detection = None

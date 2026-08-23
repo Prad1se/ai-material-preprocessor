@@ -13,6 +13,8 @@ from .gui import MainWindow
 from .services.config import load_config
 from .services.startup_maintenance import perform_startup_maintenance
 from .services.task_repository import PersistentTaskQueue, resolve_task_queue_path
+from .ui.app_icon import load_app_icon
+from .ui.system_tray import AppSystemTray
 
 
 def configure_high_dpi() -> None:
@@ -35,12 +37,17 @@ def main() -> int:
     app = QApplication([sys.argv[0], *qt_args])
     app.setApplicationName("AI 素材预处理工具")
     app.setOrganizationName("AI Material Preprocessor")
+    app_icon = load_app_icon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
     config = load_config()
     with suppress(OSError):
         perform_startup_maintenance(config)
     task_repository = PersistentTaskQueue(resolve_task_queue_path(config))
     window = MainWindow(config=config, task_repository=task_repository)
     window.show()
+    tray = AppSystemTray(app, window, app.windowIcon())
+    tray.show()
     if not args.skip_onboarding:
         QTimer.singleShot(0, window.show_onboarding_if_needed)
     return app.exec()

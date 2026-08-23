@@ -15,6 +15,7 @@ from ..infrastructure.processes import CancellationToken
 from ..services.files import unique_path
 from ..services.metadata import read_media_metadata
 from ..services.naming import preview_video_rename
+from ..services.observability import DiagnosticLogger
 from ..services.video_management import (
     OrganizationMode,
     copy_organized_video,
@@ -393,6 +394,7 @@ def keyframes_contact_sheet(
     cancellation: CancellationToken | None = None,
     duration_seconds: float = 0.0,
     progress_callback: Callable[[int, str], None] | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     _ensure_video(source)
     exe = _require(ffmpeg, "FFmpeg")
@@ -428,6 +430,13 @@ def keyframes_contact_sheet(
         except ConversionError as exc:
             if exc.code is ErrorCode.CANCELLED:
                 raise
+            if logger is not None:
+                logger.record_failure(
+                    "keyframes.scene_detection_failed",
+                    exc,
+                    source_suffix=source.suffix,
+                    tool="ffmpeg",
+                )
         frames = sorted(frames_dir.glob("frame_*.jpg"))
         if not frames:
             fallback = frames_dir / "frame_001.jpg"
@@ -469,7 +478,11 @@ def keyframes_contact_sheet(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         return contact_sheet
-    except Exception:
+    except Exception as exc:
+        if logger is not None:
+            logger.record_failure(
+                "keyframes.contact_sheet_failed", exc, source_suffix=source.suffix, tool="ffmpeg"
+            )
         if package.exists():
             shutil.rmtree(package, ignore_errors=True)
         raise
@@ -488,6 +501,7 @@ def rename_copy(
     project_name: str = "",
     location_dictionary: dict[str, str] | None = None,
     cancellation: CancellationToken | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     _ensure_video(source)
     _raise_if_cancelled(cancellation)
@@ -497,6 +511,7 @@ def rename_copy(
         ffprobe,
         ffmpeg=ffmpeg,
         cancellation=cancellation,
+        logger=logger,
     )
     output_root.mkdir(parents=True, exist_ok=True)
     destination = output_root
@@ -540,6 +555,7 @@ def organize_copy(
     organize_mode: str = "date_location",
     location_dictionary: dict[str, str] | None = None,
     cancellation: CancellationToken | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     _ensure_video(source)
     _raise_if_cancelled(cancellation)
@@ -549,6 +565,7 @@ def organize_copy(
         ffprobe,
         ffmpeg=ffmpeg,
         cancellation=cancellation,
+        logger=logger,
     )
     plan = plan_video_organization(
         source,

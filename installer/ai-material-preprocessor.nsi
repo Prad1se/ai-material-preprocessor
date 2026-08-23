@@ -31,8 +31,8 @@ VIAddVersionKey /LANG=2052 "FileDescription" "Windows 本地 AI 素材预处理�
 VIAddVersionKey /LANG=2052 "LegalCopyright" "Copyright (c) 2026 Prad1se"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "${PROJECT_ROOT}\assets\app.ico"
-!define MUI_UNICON "${PROJECT_ROOT}\assets\app.ico"
+!define MUI_ICON "${PROJECT_ROOT}\assets\app-icon.ico"
+!define MUI_UNICON "${PROJECT_ROOT}\assets\app-icon.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${PROJECT_ROOT}\LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY

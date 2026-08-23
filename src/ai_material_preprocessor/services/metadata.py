@@ -9,6 +9,7 @@ from typing import Any
 
 from ..converters.common import run_command
 from ..infrastructure.processes import CancellationToken
+from .observability import DiagnosticLogger
 
 ISO6709 = re.compile(r"(?P<lat>[+-]\d+(?:\.\d+)?)(?P<lon>[+-]\d+(?:\.\d+)?)")
 
@@ -170,6 +171,7 @@ def read_media_metadata(
     ffmpeg: str | None = None,
     runner=run_command,
     cancellation: CancellationToken | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> MediaMetadata:
     if exiftool:
         try:
@@ -207,7 +209,11 @@ def read_media_metadata(
                 cancellation=cancellation,
             )
             return metadata_from_exiftool(json.loads(result.stdout or "[]"), source)
-        except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            if logger is not None:
+                logger.record_failure(
+                    "metadata.exiftool_failed", exc, tool="exiftool", source_suffix=source.suffix
+                )
             pass
 
     if ffprobe:
@@ -227,7 +233,11 @@ def read_media_metadata(
                 cancellation=cancellation,
             )
             return metadata_from_ffprobe(json.loads(result.stdout or "{}"), source)
-        except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            if logger is not None:
+                logger.record_failure(
+                    "metadata.ffprobe_failed", exc, tool="ffprobe", source_suffix=source.suffix
+                )
             pass
 
     if ffmpeg:
@@ -255,7 +265,11 @@ def read_media_metadata(
                 tags[key.strip()] = value.strip()
             parsed = metadata_from_ffprobe({"format": {"tags": tags}}, source)
             return replace(parsed, source="FFmpeg")
-        except (OSError, RuntimeError, ValueError):
+        except (OSError, RuntimeError, ValueError) as exc:
+            if logger is not None:
+                logger.record_failure(
+                    "metadata.ffmpeg_failed", exc, tool="ffmpeg", source_suffix=source.suffix
+                )
             pass
 
     return MediaMetadata(

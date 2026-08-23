@@ -13,6 +13,7 @@ from ..services.document_enhancement import (
     enhance_document,
 )
 from ..services.files import unique_path
+from ..services.observability import DiagnosticLogger
 from .common import ConversionError, run_command
 
 SUPPORTED_EXTENSIONS = {
@@ -49,6 +50,7 @@ def to_markdown(
     quality_callback: Callable[[QualityReport], None] | None = None,
     cancellation: CancellationToken | None = None,
     tool_versions: dict[str, str] | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     cli_output: Path | None = None
 
@@ -114,6 +116,7 @@ def to_markdown(
                 options=enhancement_options or EnhancementOptions(),
                 ocr_engine=ocr_engine,
                 tool_versions=tool_versions,
+                logger=logger,
             )
             ensure_not_cancelled()
         except Exception:

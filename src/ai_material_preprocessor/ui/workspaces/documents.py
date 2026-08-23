@@ -37,7 +37,7 @@ from ...apps.documents.workspace_controller import (
     DocumentOperationAvailability,
     DocumentWorkspaceController,
 )
-from ...models import Operation, ToolStatus
+from ...models import OPERATION_LABELS, Operation, ToolStatus
 from ...services.context_copy import build_context_copy
 from ...services.context_summary import ContextPackSummary, summarize_context_pack
 from ...services.source_open import (
@@ -47,13 +47,11 @@ from ...services.source_open import (
 )
 from ..document_mascot import DocumentMascotState, DocumentMascotView
 from ..source_map_view import SourceMapView
-from .common import WorkspacePresentationState, WorkspaceView
-
-_OPERATION_LABELS = {
-    Operation.TO_MARKDOWN: "AI 就绪 Markdown",
-    Operation.TO_PDF: "创建 PDF 副本",
-    Operation.DOCUMENT_CONTEXT_PACK: "AI 上下文包",
-}
+from .common import (
+    WorkspacePresentationState,
+    WorkspaceView,
+    create_output_action_buttons,
+)
 
 
 def _human_size(size: int) -> str:
@@ -78,6 +76,9 @@ class DocumentSelectionView(QTreeWidget):
         self.setAlternatingRowColors(True)
         self.setMinimumHeight(132)
         self.setMaximumHeight(260)
+        # 长文件名在窄窗口下省略显示；完整路径已在条目工具提示中提供。
+        self.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.header().setMinimumSectionSize(56)
         self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -508,12 +509,12 @@ class DocumentWorkspace(WorkspaceView):
         self.technical_details_button.clicked.connect(self._show_technical_details)
         self.open_button = QPushButton("打开输出")
         self.open_button.setObjectName("secondary")
-        self.open_button.setEnabled(False)
         self.open_button.clicked.connect(
             lambda: (
                 self.open_output_requested.emit(self.last_outputs[0]) if self.last_outputs else None
             )
         )
+        self.reveal_output_button, self.copy_output_button = create_output_action_buttons(self)
         self.report_button = QPushButton("查看上下文报告")
         self.report_button.setObjectName("secondary")
         self.report_button.setVisible(False)
@@ -536,7 +537,9 @@ class DocumentWorkspace(WorkspaceView):
         result_actions.addWidget(self.report_button, 1, 1)
         result_actions.addWidget(self.source_map_button, 2, 0)
         result_actions.addWidget(self.copy_for_ai_button, 2, 1)
-        result_actions.addWidget(self.open_button, 3, 0, 1, 2)
+        result_actions.addWidget(self.open_button, 3, 0)
+        result_actions.addWidget(self.reveal_output_button, 3, 1)
+        result_actions.addWidget(self.copy_output_button, 4, 0, 1, 2)
         result_actions.setColumnStretch(0, 1)
         result_actions.setColumnStretch(1, 1)
         layout.addLayout(header)
@@ -546,6 +549,7 @@ class DocumentWorkspace(WorkspaceView):
         layout.addWidget(self.result_details)
         self.state_label = self.state_message
         self._technical_details = ""
+        self._sync_output_actions()
         return self.state_panel
 
     def _create_recent_tasks(self) -> QWidget:
@@ -568,6 +572,10 @@ class DocumentWorkspace(WorkspaceView):
         self.recent_tasks.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.recent_tasks.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.recent_tasks.verticalHeader().setVisible(False)
+        # 长文件名在窄窗口下省略显示，完整名称放入工具提示。
+        self.recent_tasks.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.recent_tasks.setWordWrap(False)
+        self.recent_tasks.horizontalHeader().setMinimumSectionSize(56)
         self.recent_tasks.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.recent_tasks.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.recent_tasks.setMinimumHeight(150)
@@ -749,7 +757,7 @@ class DocumentWorkspace(WorkspaceView):
                 if self.document_mode.currentData() == "enhanced"
                 else "转换为 Markdown"
             )
-        return _OPERATION_LABELS[operation]
+        return OPERATION_LABELS[operation]
 
     def _operation_changed(self) -> None:
         raw = self.operation.currentData()
@@ -1030,7 +1038,7 @@ class DocumentWorkspace(WorkspaceView):
     ) -> None:
         self._reset_source_map()
         self.last_outputs = outputs
-        self.open_button.setEnabled(bool(outputs))
+        self._sync_output_actions()
         self.workspace_progress.setValue(
             100 if outputs and not errors else self.workspace_progress.value()
         )

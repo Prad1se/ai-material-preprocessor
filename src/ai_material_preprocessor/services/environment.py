@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..models import ToolStatus
+from .observability import DiagnosticLogger
 
 OFFICE_DEFAULTS = {
     "winword": [
@@ -105,7 +106,9 @@ def resolve_ffmpeg(
     return status
 
 
-def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
+def detect_tools(
+    config: dict[str, Any], *, logger: DiagnosticLogger | None = None
+) -> dict[str, ToolStatus]:
     from .config import PROJECT_ROOT
     from .tool_installer import configured_tool_install_root
 
@@ -161,6 +164,14 @@ def detect_tools(config: dict[str, Any]) -> dict[str, ToolStatus]:
             status = ToolStatus(name, status.path, source="本机安装")
         result[name] = status
 
+    if logger is not None:
+        for name, status in sorted(result.items()):
+            logger.record(
+                "tools.probed",
+                tool=name,
+                available=status.available,
+                discovery_source=status.source,
+            )
     return result
 
 

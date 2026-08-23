@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import __version__
-from ..models import Operation, TaskStatus
+from ..models import Operation, TaskStatus, operation_display
 
 
 @dataclass(frozen=True)
@@ -125,7 +125,7 @@ def write_task_manifest(
                 else None,
                 "source_size": _size(record.source),
                 "operation": record.operation.name,
-                "operation_label": record.operation.value,
+                "operation_label": operation_display(record.operation),
                 "status": record.status,
                 "output": str(record.output.resolve()) if record.output else None,
                 "output_size": _size(record.output),

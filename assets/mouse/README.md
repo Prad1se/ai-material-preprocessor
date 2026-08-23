@@ -6,3 +6,7 @@
 - `mouse-grin.png`、`mouse-thinking.png`、`mouse-strong.png`：为桌面界面制作的透明背景版本。
 
 这些素材不是从 FlyingMouse Format 仓库复制的，也不代表该项目作者对本项目的认可或背书。
+
+项目应用图标（`assets/app-icon.png` 与 `assets/app-icon.ico`）包含重新绘制的简化鼠鼠形象，
+并同时包含 Doro 元素。因此图标按 `THIRD_PARTY_NOTICES.md` 与 `assets/doro/README.md`
+记录的非商业分发边界处理，不作为 MIT 代码许可证的一部分。

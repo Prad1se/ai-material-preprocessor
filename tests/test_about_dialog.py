@@ -15,6 +15,7 @@ def test_about_dialog_shows_version_privacy_and_disabled_update_state(qtbot) -> 
     assert "本地" in dialog.privacy_label.text()
     assert not dialog.check_updates_button.isEnabled()
     assert "设置" in dialog.update_status.text()
+    assert dialog.run_diagnostics_button.text() == "运行本地诊断"
 
 
 def test_about_dialog_enables_manual_check_after_explicit_consent(qtbot) -> None:

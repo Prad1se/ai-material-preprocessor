@@ -430,3 +430,92 @@ def test_document_workspace_document_level_open_does_not_fake_fragment(
     assert len(opened) == 1
     assert opened[0].fragment() == ""
     assert Path(opened[0].toLocalFile()) == path
+
+
+class _FakeClipboard:
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    def setText(self, text: str) -> None:
+        self.texts.append(text)
+
+
+def test_source_map_copy_citation_outputs_name_and_page_without_paths(qtbot, monkeypatch) -> None:
+    from ai_material_preprocessor.services.source_map import (
+        SourceLocation,
+        SourceMap,
+        SourceMapEntry,
+        SourceMapSource,
+    )
+    from ai_material_preprocessor.ui.source_map_view import format_source_citation
+
+    view = SourceMapView()
+    qtbot.addWidget(view)
+    location = SourceLocation("page", "第 37 页", "PDF page 37", 37, None, False)
+    source = SourceMapSource("source-001", 1, "课程.pdf", ".pdf", "page", None)
+    entry = SourceMapEntry(
+        "block-001", "source-001", 1, 1, (), 12, True, "内容", "a" * 64, True, (location,), location
+    )
+    view.set_source_map(SourceMap(1, (source,), (entry,), True))
+
+    assert view.copy_citation_button.isEnabled()
+    clipboard = _FakeClipboard()
+    monkeypatch.setattr(
+        "ai_material_preprocessor.ui.source_map_view.QApplication.clipboard",
+        lambda: clipboard,
+    )
+    view.copy_citation_button.click()
+
+    citation = clipboard.texts[-1]
+    assert citation == format_source_citation(source, entry)
+    assert "课程.pdf" in citation
+    assert "第 37 页" in citation
+    # 引用不允许携带绝对路径信息。
+    assert ":" not in citation
+    assert "/" not in citation
+    assert "\\" not in citation
+
+
+def test_format_source_citation_covers_slide_worksheet_and_fallback() -> None:
+    from ai_material_preprocessor.services.source_map import (
+        SourceLocation,
+        SourceMapEntry,
+        SourceMapSource,
+    )
+    from ai_material_preprocessor.ui.source_map_view import format_source_citation
+
+    slide = SourceLocation("slide", "", "Slide 4", 4, None, False)
+    worksheet = SourceLocation("worksheet", "成绩表", "Sheet 成绩表", None, None, False)
+    document_fallback = SourceLocation("document", "", "Document-level fallback", None, None, True)
+    source_pptx = SourceMapSource("source-002", 1, "课件.pptx", ".pptx", "slide", None)
+    source_xlsx = SourceMapSource("source-003", 2, "数据.xlsx", ".xlsx", "worksheet", None)
+
+    def entry_for(location: SourceLocation) -> SourceMapEntry:
+        return SourceMapEntry(
+            "block",
+            "source",
+            1,
+            1,
+            (),
+            10,
+            True,
+            "",
+            "b" * 64,
+            True,
+            (location,),
+            location,
+        )
+
+    assert format_source_citation(source_pptx, entry_for(slide)) == "课件.pptx · 第 4 张幻灯片"
+    assert (
+        format_source_citation(source_xlsx, entry_for(worksheet))
+        == "数据.xlsx · 工作表：成绩表"
+    )
+    # 文档级回退只输出文件名，不伪造页码。
+    assert format_source_citation(None, entry_for(document_fallback)).count("·") == 0
+
+
+def test_source_map_copy_citation_disabled_without_entries(qtbot) -> None:
+    view = SourceMapView()
+    qtbot.addWidget(view)
+    assert not view.copy_citation_button.isEnabled()

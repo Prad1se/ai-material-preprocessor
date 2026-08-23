@@ -5,6 +5,8 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
+from .observability import DiagnosticLogger
+
 
 class OCRUnavailableError(RuntimeError):
     pass
@@ -53,11 +55,15 @@ class RapidOCREngine:
         engine=None,
         importer: Callable[[], object] = _load_rapidocr,
         pdf_renderer: Callable[[Path, Path], list[tuple[str, Path]]] = _render_pdf,
+        logger: DiagnosticLogger | None = None,
     ) -> None:
+        self.logger = logger
         if engine is None:
             try:
                 engine = importer()
             except (ImportError, ModuleNotFoundError) as exc:
+                if self.logger is not None:
+                    self.logger.record_failure("ocr.initialization_failed", exc, tool="rapidocr")
                 raise OCRUnavailableError(
                     "未安装本地 RapidOCR；请安装 rapidocr、onnxruntime 和 pypdfium2。"
                 ) from exc
@@ -65,7 +71,12 @@ class RapidOCREngine:
         self.pdf_renderer = pdf_renderer
 
     def _recognize(self, path: Path) -> tuple[str, float]:
-        result = self.engine(path)
+        try:
+            result = self.engine(path)
+        except Exception as exc:
+            if self.logger is not None:
+                self.logger.record_failure("ocr.recognition_failed", exc, tool="rapidocr")
+            raise
         if hasattr(result, "txts"):
             texts = list(result.txts or ())
             scores = [float(value) for value in (result.scores or ())]
@@ -95,24 +106,35 @@ class RapidOCREngine:
                     destination.write_bytes(archive.read(member))
                     extracted.append((f"内嵌图片 {index}", destination))
         except zipfile.BadZipFile as exc:
+            if self.logger is not None:
+                self.logger.record_failure(
+                    "ocr.office_archive_failed", exc, source_suffix=source.suffix, tool="rapidocr"
+                )
             raise OCRUnavailableError(f"无法读取 Office 文件中的图片：{source.name}") from exc
         return extracted
 
     def extract(self, source: Path) -> list[tuple[str, str, float]]:
         suffix = source.suffix.lower()
-        with tempfile.TemporaryDirectory(prefix="ai-material-ocr-") as temporary:
-            work_dir = Path(temporary)
-            if suffix in self.IMAGE_SUFFIXES:
-                images = [("图片", source)]
-            elif suffix == ".pdf":
-                images = self.pdf_renderer(source, work_dir)
-            elif suffix in self.OFFICE_MEDIA:
-                images = self._office_images(source, work_dir)
-            else:
-                images = []
-            results: list[tuple[str, str, float]] = []
-            for label, image in images:
-                text, confidence = self._recognize(image)
-                if text:
-                    results.append((label, text, confidence))
-            return results
+        try:
+            with tempfile.TemporaryDirectory(prefix="ai-material-ocr-") as temporary:
+                work_dir = Path(temporary)
+                if suffix in self.IMAGE_SUFFIXES:
+                    images = [("图片", source)]
+                elif suffix == ".pdf":
+                    images = self.pdf_renderer(source, work_dir)
+                elif suffix in self.OFFICE_MEDIA:
+                    images = self._office_images(source, work_dir)
+                else:
+                    images = []
+                results: list[tuple[str, str, float]] = []
+                for label, image in images:
+                    text, confidence = self._recognize(image)
+                    if text:
+                        results.append((label, text, confidence))
+                return results
+        except Exception as exc:
+            if self.logger is not None:
+                self.logger.record_failure(
+                    "ocr.extraction_failed", exc, source_suffix=suffix, tool="rapidocr"
+                )
+            raise
