@@ -44,6 +44,44 @@ def test_onboarding_has_mouse_welcome_privacy_and_tool_detection(qtbot) -> None:
     assert libreoffice_action.text() == "通过 WinGet 安装"
 
 
+def test_onboarding_tool_table_fits_medium_window_without_clipping(qtbot) -> None:
+    config = deepcopy(DEFAULT_CONFIG)
+    dialog = OnboardingDialog(config, toolset(), save_callback=lambda _: None)
+    qtbot.addWidget(dialog)
+    dialog.resize(860, 680)
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    table = dialog.tool_table
+    assert table.horizontalScrollBar().maximum() == 0
+    assert table.visualItemRect(table.item(0, 0)).left() >= 0
+    for key in ("ffprobe", "exiftool", "libreoffice"):
+        button = table.action_button(key)
+        assert button is not None
+        assert button.width() >= button.sizeHint().width()
+
+
+def test_onboarding_tool_table_keeps_primary_columns_in_small_window(qtbot) -> None:
+    config = deepcopy(DEFAULT_CONFIG)
+    dialog = OnboardingDialog(config, toolset(), save_callback=lambda _: None)
+    qtbot.addWidget(dialog)
+    dialog.resize(640, 500)
+    dialog.show()
+    qtbot.waitUntil(dialog.isVisible)
+
+    table = dialog.tool_table
+    qtbot.waitUntil(lambda: table.minimumHeight() == 120)
+    assert not table.isColumnHidden(0)
+    assert not table.isColumnHidden(1)
+    assert table.isColumnHidden(2)
+    assert table.isColumnHidden(3)
+    assert not table.isColumnHidden(4)
+    assert not table.isColumnHidden(5)
+    assert table.horizontalScrollBar().maximum() == 0
+    qtbot.waitUntil(lambda: table.geometry().bottom() < dialog.redetect_button.geometry().top())
+    assert dialog.redetect_button.geometry().bottom() <= dialog.contentsRect().bottom()
+
+
 def test_onboarding_finish_persists_completion(qtbot) -> None:
     config = deepcopy(DEFAULT_CONFIG)
     saved: list[dict] = []

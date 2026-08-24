@@ -4,7 +4,7 @@ import copy
 from collections.abc import Callable
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -62,9 +62,9 @@ class OnboardingDialog(QDialog):
         self.setStyleSheet(stylesheet_for_theme(self.config["app"].get("theme", "system")))
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(32, 28, 32, 28)
-        root.setSpacing(16)
+        self.root_layout = QVBoxLayout(self)
+        self.root_layout.setContentsMargins(32, 28, 32, 28)
+        self.root_layout.setSpacing(16)
         hero = QHBoxLayout()
         copy_layout = QVBoxLayout()
         eyebrow = QLabel("第一次见面 · 鼠鼠先检查工作环境")
@@ -82,18 +82,11 @@ class OnboardingDialog(QDialog):
         self.mouse_mascot.setObjectName("mouseMascot")
         self.mouse_mascot.setFixedSize(190, 170)
         self.mouse_mascot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pixmap = QPixmap(str(mouse_asset_path("mouse-grin.png")))
-        if not pixmap.isNull():
-            self.mouse_mascot.setPixmap(
-                pixmap.scaled(
-                    self.mouse_mascot.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
+        self._mouse_pixmap = QPixmap(str(mouse_asset_path("mouse-grin.png")))
+        self._scale_mouse_mascot()
         hero.addLayout(copy_layout, 1)
         hero.addWidget(self.mouse_mascot)
-        root.addLayout(hero)
+        self.root_layout.addLayout(hero)
 
         self.privacy_text = QLabel(
             "隐私承诺：文件默认只在本机处理，不会自动上传；原文件永不覆盖。"
@@ -101,13 +94,13 @@ class OnboardingDialog(QDialog):
         )
         self.privacy_text.setObjectName("outputHint")
         self.privacy_text.setWordWrap(True)
-        root.addWidget(self.privacy_text)
+        self.root_layout.addWidget(self.privacy_text)
 
         capability_title = QLabel("本机能力检查")
         capability_title.setObjectName("sectionTitle")
-        root.addWidget(capability_title)
+        self.root_layout.addWidget(capability_title)
         self.tool_table = ToolStatusTable()
-        root.addWidget(self.tool_table, 1)
+        self.root_layout.addWidget(self.tool_table, 1)
 
         actions = QHBoxLayout()
         self.redetect_button = QPushButton("重新检测")
@@ -121,7 +114,8 @@ class OnboardingDialog(QDialog):
         actions.addStretch()
         actions.addWidget(later)
         actions.addWidget(finish)
-        root.addLayout(actions)
+        self.root_layout.addLayout(actions)
+        self._apply_responsive_layout()
 
     def _render_tools(self) -> None:
         self.tool_table.set_capabilities(build_tool_capabilities(self.tools))
@@ -185,3 +179,34 @@ class OnboardingDialog(QDialog):
         if self._detection is not None:
             self._detection.cancel()
             self._detection = None
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "root_layout"):
+            self._apply_responsive_layout()
+
+    def _apply_responsive_layout(self) -> None:
+        compact = self.height() < 600
+        if compact:
+            self.root_layout.setContentsMargins(20, 16, 20, 16)
+            self.root_layout.setSpacing(10)
+            self.mouse_mascot.setFixedSize(120, 100)
+            self.tool_table.setMinimumHeight(120)
+        else:
+            self.root_layout.setContentsMargins(32, 28, 32, 28)
+            self.root_layout.setSpacing(16)
+            self.mouse_mascot.setFixedSize(190, 170)
+            self.tool_table.setMinimumHeight(260)
+        self._scale_mouse_mascot()
+
+    def _scale_mouse_mascot(self) -> None:
+        if self._mouse_pixmap.isNull():
+            self.mouse_mascot.clear()
+            return
+        self.mouse_mascot.setPixmap(
+            self._mouse_pixmap.scaled(
+                self.mouse_mascot.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
