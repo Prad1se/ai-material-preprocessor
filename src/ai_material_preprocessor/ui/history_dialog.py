@@ -72,11 +72,22 @@ class HistoryDetailsDialog(QDialog):
                 )
             quality = item.get("quality_summary") or {}
             if quality:
-                sections.append(
-                    f"质量：{quality.get('score', '—')}/100；"
-                    f"约 {quality.get('estimated_tokens', '—')} 个估算令牌；"
-                    f"拆分 {quality.get('chunk_count', 0)} 段"
-                )
+                if quality.get("video_ai_pack_version") == 1:
+                    integrity = quality.get("integrity") or {}
+                    sections.append(
+                        "视频 AI 资料包："
+                        f"{quality.get('source_count', 0)} 个视频；"
+                        f"{quality.get('frame_count', 0)} 张关键帧；"
+                        f"{quality.get('audio_count', 0)} 条音频；"
+                        f"{quality.get('proxy_count', 0)} 个 proxy；"
+                        f"完整性 {'通过' if isinstance(integrity, dict) and integrity.get('ok') else '未通过'}"
+                    )
+                else:
+                    sections.append(
+                        f"质量：{quality.get('score', '—')}/100；"
+                        f"约 {quality.get('estimated_tokens', '—')} 个估算令牌；"
+                        f"拆分 {quality.get('chunk_count', 0)} 段"
+                    )
                 for issue in quality.get("issues") or []:
                     sections.append(f"  • {issue.get('message') or issue.get('code')}")
         return "\n".join(sections)
@@ -248,6 +259,19 @@ class HistoryDialog(QDialog):
                 if isinstance(overflow, int) and overflow:
                     context_parts.append(f"{overflow} 个超出预算")
                 return " · ".join(context_parts)
+            if summary.get("video_ai_pack_version") == 1:
+                integrity = summary.get("integrity") or {}
+                return " · ".join(
+                    (
+                        f"{summary.get('source_count', 0)} 个视频",
+                        f"{summary.get('frame_count', 0)} 张关键帧",
+                        f"{summary.get('audio_count', 0)} 条音频",
+                        f"{summary.get('proxy_count', 0)} 个 proxy",
+                        "完整性通过"
+                        if isinstance(integrity, dict) and integrity.get("ok")
+                        else "完整性未通过",
+                    )
+                )
         parts = []
         if scores:
             parts.append(f"{round(sum(scores) / len(scores))}/100")

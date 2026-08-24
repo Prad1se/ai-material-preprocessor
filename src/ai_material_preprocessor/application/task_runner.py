@@ -64,6 +64,20 @@ def _quality_summary(reports: tuple[dict, ...]) -> dict[str, object]:
             )
             if key in report
         }
+    if "video_ai_pack_version" in report:
+        return {
+            key: report[key]
+            for key in (
+                "video_ai_pack_version",
+                "source_count",
+                "frame_count",
+                "audio_count",
+                "proxy_count",
+                "warnings",
+                "integrity",
+            )
+            if key in report
+        }
     summary: dict[str, object] = {
         key: report[key]
         for key in ("score", "estimated_tokens", "heading_count", "image_count")
@@ -202,6 +216,14 @@ class ApplicationTaskRunner:
             ),
             "RENAME_VIDEO": ("rename_template", "project_name"),
             "ORGANIZE_VIDEO": ("rename_template", "project_name", "organize_mode"),
+            "VIDEO_AI_PACK": (
+                "scene_threshold",
+                "max_keyframes",
+                "contact_sheet_columns",
+                "ai_pack_include_audio",
+                "ai_pack_include_proxy",
+                "ai_pack_proxy_crf",
+            ),
         }
         parameters = {
             key: video.get(key) for key in keys_by_operation.get(task.job.operation.name, ())
@@ -210,6 +232,17 @@ class ApplicationTaskRunner:
             parameters["location_override"] = task.job.location
         if task.job.project:
             parameters["project_name"] = task.job.project
+        if task.job.operation.name == "VIDEO_AI_PACK":
+            parameters.update(
+                {
+                    "source_count": len(task.job.input_sources),
+                    "include_audio": task.job.video_ai_pack_include_audio,
+                    "include_proxy": task.job.video_ai_pack_include_proxy,
+                    "proxy_crf": task.job.video_ai_pack_proxy_crf,
+                    "scene_threshold": task.job.video_ai_pack_scene_threshold,
+                    "max_keyframes": task.job.video_ai_pack_max_keyframes,
+                }
+            )
         return parameters
 
     def _tool_versions_for(self, task: QueuedTask) -> dict[str, str]:

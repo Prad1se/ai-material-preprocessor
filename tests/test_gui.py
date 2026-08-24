@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
+import pytest
 from PySide6.QtGui import QColor, QImage, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QTableWidget, QTabWidget
 
@@ -184,6 +185,7 @@ def test_video_exposes_all_creation_operations(qtbot, tmp_path: Path) -> None:
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
+        Operation.VIDEO_AI_PACK,
     ]
 
 
@@ -600,3 +602,44 @@ def test_document_completion_opens_report_dialog_without_source_map_tab(
     assert tab_widget is not None
     labels = [tab_widget.tabText(index) for index in range(tab_widget.count())]
     assert "Source Map" not in labels
+
+
+def test_video_ai_pack_completion_warns_on_failed_integrity_and_shows_safe_details(
+    qtbot, monkeypatch
+) -> None:
+    shown: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.QMessageBox.warning",
+        lambda _parent, title, message: shown.append((title, message)),
+    )
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.QMessageBox.information",
+        lambda *_args: pytest.fail("failed integrity must not show success"),
+    )
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+
+    window._on_completed(
+        ["Video-AI-Pack"],
+        [],
+        [
+            {
+                "video_ai_pack_version": 1,
+                "source_count": 1,
+                "frame_count": 2,
+                "audio_count": 0,
+                "proxy_count": 0,
+                "integrity": {"ok": False},
+                "warnings": [
+                    {
+                        "source_id": "video-001",
+                        "message": "未检测到音轨；未生成空音频文件。",
+                    }
+                ],
+            }
+        ],
+    )
+
+    assert shown
+    assert "完整性：未通过" in shown[0][1]
+    assert "video-001：未检测到音轨" in shown[0][1]

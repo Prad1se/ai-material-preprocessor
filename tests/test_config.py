@@ -28,6 +28,9 @@ def test_load_config_deep_merges_partial_user_values(tmp_path: Path) -> None:
     assert config["video"]["project_name"] == ""
     assert config["video"]["organize_mode"] == "date_location"
     assert config["video"]["location_dictionary"] == {}
+    assert config["video"]["ai_pack_include_audio"] is True
+    assert config["video"]["ai_pack_include_proxy"] is False
+    assert config["video"]["ai_pack_proxy_crf"] == 28
     assert config["task_center"]["disk_space_safety_mb"] == 512
     assert config["history"]["retention_days"] == 90
     assert config["history"]["max_size_mb"] == 512

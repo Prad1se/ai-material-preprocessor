@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -99,6 +102,15 @@ class VideoWorkspace(WorkspaceView):
         self.max_keyframes.setRange(4, 60)
         self.max_keyframes.setSuffix(" 张关键帧上限")
         self.max_keyframes.setValue(int(self.config["video"]["max_keyframes"]))
+        self.include_audio = QCheckBox("提取 WAV / PCM 16-bit 音频")
+        self.include_audio.setChecked(bool(self.config["video"].get("ai_pack_include_audio", True)))
+        self.include_proxy = QCheckBox("生成压缩 proxy（MP4 / H.264 / AAC）")
+        self.include_proxy.setChecked(
+            bool(self.config["video"].get("ai_pack_include_proxy", False))
+        )
+        self.include_audio.toggled.connect(lambda _checked: self._operation_changed())
+        self.include_proxy.toggled.connect(lambda _checked: self._operation_changed())
+        self.max_keyframes.valueChanged.connect(lambda _value: self._operation_changed())
         self.location = QLineEdit()
         self.location.setPlaceholderText("地点（可选）")
         self.project_name = QLineEdit(str(self.config["video"].get("project_name", "")))
@@ -119,6 +131,11 @@ class VideoWorkspace(WorkspaceView):
         self.preview_button = QPushButton("预览视频处理方案")
         self.preview_button.setObjectName("secondary")
         self.preview_button.clicked.connect(self._show_preview)
+        self.timeline_button = QPushButton("查看 Timeline")
+        self.timeline_button.setObjectName("secondary")
+        self.timeline_button.setVisible(False)
+        self.timeline_button.setEnabled(False)
+        self.timeline_button.clicked.connect(self._open_timeline)
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("默认：原视频旁的“AI素材处理结果”")
         output_button = QPushButton("选择…")
@@ -138,11 +155,14 @@ class VideoWorkspace(WorkspaceView):
             self.audio_format,
             self.scene_sensitivity,
             self.max_keyframes,
+            self.include_audio,
+            self.include_proxy,
             self.location,
             self.project_name,
             self.organize_mode,
             self.rename_template,
             self.preview_button,
+            self.timeline_button,
         ):
             layout.addWidget(widget)
         layout.addWidget(QLabel("保存到"))
@@ -191,16 +211,33 @@ class VideoWorkspace(WorkspaceView):
         renaming = operation in {Operation.RENAME_VIDEO, Operation.ORGANIZE_VIDEO}
         self.quality.setVisible(operation is Operation.COMPRESS_VIDEO)
         self.audio_format.setVisible(operation is Operation.EXTRACT_AUDIO)
-        storyboard = operation is Operation.KEYFRAMES_CONTACT_SHEET
+        video_ai_pack = operation is Operation.VIDEO_AI_PACK
+        storyboard = operation in {
+            Operation.KEYFRAMES_CONTACT_SHEET,
+            Operation.VIDEO_AI_PACK,
+        }
         self.scene_sensitivity.setVisible(storyboard)
         self.max_keyframes.setVisible(storyboard)
+        self.include_audio.setVisible(video_ai_pack)
+        self.include_proxy.setVisible(video_ai_pack)
         self.location.setVisible(renaming)
         self.project_name.setVisible(renaming)
         self.organize_mode.setVisible(operation is Operation.ORGANIZE_VIDEO)
         self.rename_template.setVisible(renaming)
         self.preview_button.setVisible(operation is not None)
+        self.timeline_button.setVisible(video_ai_pack and bool(self.last_outputs))
+        self.timeline_button.setEnabled(video_ai_pack and bool(self.last_outputs))
+        self.start_button.setText("创建视频 AI 资料包" if video_ai_pack else "开始处理")
         if operation is Operation.KEYFRAMES_CONTACT_SHEET:
             self.output_hint.setText("输出：现有关键帧包、联系表与 manifest.json。")
+        elif operation is Operation.VIDEO_AI_PACK:
+            self.output_hint.setText(
+                "视频 AI 资料包\n"
+                f"{len(self.paths)} 个视频\n"
+                f"音频：{'提取' if self.include_audio.isChecked() else '不提取'} · "
+                f"关键帧上限：每个视频 {self.max_keyframes.value()} 张 · "
+                f"Proxy：{'生成' if self.include_proxy.isChecked() else '不生成'}"
+            )
         elif operation is Operation.ORGANIZE_VIDEO:
             self.output_hint.setText("输出：按日期/地点生成副本；原视频不移动、不改名。")
         elif operation is None:
@@ -224,6 +261,14 @@ class VideoWorkspace(WorkspaceView):
                 "scene_threshold": float(self.scene_sensitivity.currentData()),
                 "max_keyframes": self.max_keyframes.value(),
                 "columns": int(self.config["video"]["contact_sheet_columns"]),
+            }
+        if operation is Operation.VIDEO_AI_PACK:
+            return {
+                "提取音频": "是" if self.include_audio.isChecked() else "否",
+                "生成 proxy": "是" if self.include_proxy.isChecked() else "否",
+                "scene sensitivity": float(self.scene_sensitivity.currentData()),
+                "每个视频关键帧上限": self.max_keyframes.value(),
+                "实际关键帧数量": "处理后确定",
             }
         if operation in {Operation.RENAME_VIDEO, Operation.ORGANIZE_VIDEO}:
             return {
@@ -274,6 +319,8 @@ class VideoWorkspace(WorkspaceView):
                 "organize_mode": str(self.organize_mode.currentData()),
                 "scene_threshold": float(self.scene_sensitivity.currentData()),
                 "max_keyframes": self.max_keyframes.value(),
+                "ai_pack_include_audio": self.include_audio.isChecked(),
+                "ai_pack_include_proxy": self.include_proxy.isChecked(),
             }
         )
         jobs = self.controller.create_jobs(
@@ -282,8 +329,84 @@ class VideoWorkspace(WorkspaceView):
             self.output_for,
             location=self.location.text(),
             project=self.project_name.text().strip(),
+            include_audio=(
+                self.include_audio.isChecked() if operation is Operation.VIDEO_AI_PACK else None
+            ),
+            include_proxy=(
+                self.include_proxy.isChecked() if operation is Operation.VIDEO_AI_PACK else None
+            ),
+            proxy_crf=(
+                int(self.config["video"].get("ai_pack_proxy_crf", 28))
+                if operation is Operation.VIDEO_AI_PACK
+                else None
+            ),
+            scene_threshold=(
+                float(self.scene_sensitivity.currentData())
+                if operation is Operation.VIDEO_AI_PACK
+                else None
+            ),
+            max_keyframes=(
+                self.max_keyframes.value() if operation is Operation.VIDEO_AI_PACK else None
+            ),
         )
         self.jobs_requested.emit(self.workspace_id.value, jobs)
+
+    def _open_timeline(self) -> None:
+        if not self.last_outputs:
+            return
+        timeline = Path(self.last_outputs[0]) / "timeline.json"
+        if timeline.is_file():
+            self.open_output_requested.emit(str(timeline))
+
+    def set_completed(
+        self,
+        outputs: list[str],
+        errors: list[str],
+        quality_reports: list[dict] | None = None,
+    ) -> None:
+        pack_report = next(
+            (
+                report
+                for report in (quality_reports or [])
+                if report.get("video_ai_pack_version") == 1
+            ),
+            None,
+        )
+        if pack_report is None:
+            super().set_completed(outputs, errors, quality_reports)
+            return
+        self.last_outputs = outputs
+        self._sync_output_actions()
+        warnings = list(pack_report.get("warnings") or [])
+        integrity = pack_report.get("integrity") or {}
+        integrity_ok = bool(integrity.get("ok")) if isinstance(integrity, dict) else False
+        if outputs:
+            self.workspace_progress.setValue(100)
+        if not outputs or errors or not integrity_ok:
+            state = (
+                WorkspacePresentationState.ERROR
+                if not outputs
+                else WorkspacePresentationState.WARNING
+            )
+        elif warnings:
+            state = WorkspacePresentationState.WARNING
+        else:
+            state = WorkspacePresentationState.SUCCESS
+        message = (
+            "视频 AI 资料包已完成\n\n"
+            f"{pack_report.get('source_count', 0)} 个视频\n"
+            f"{pack_report.get('frame_count', 0)} 张关键帧\n"
+            f"{pack_report.get('audio_count', 0)} 条音频\n"
+            f"{pack_report.get('proxy_count', 0)} 个 proxy\n"
+            f"完整性：{'通过' if integrity_ok else '未通过'}"
+        )
+        if warnings:
+            message += f"\n提醒：{len(warnings)} 个"
+        if errors:
+            message += f"\n未完成：{len(errors)} 项"
+        self.set_presentation_state(state, message)
+        self.timeline_button.setVisible(bool(outputs))
+        self.timeline_button.setEnabled(bool(outputs))
 
     def set_presentation_state(self, state, message: str | None = None) -> None:
         super().set_presentation_state(state, message)

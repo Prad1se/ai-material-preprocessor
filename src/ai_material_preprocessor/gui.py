@@ -28,7 +28,7 @@ from .application.default_preview_registry import build_default_preview_registry
 from .application.preview_registry import PreviewProviderRegistry
 from .application.workspaces import WorkspaceId, workspace_for_operation
 from .apps.documents.preview import DocumentPreviewPlan
-from .apps.video.preview import VideoPreviewBatch
+from .apps.video.preview import VideoAIPackPreviewPlan, VideoPreviewBatch
 from .models import Job, TaskStatus, ToolStatus, operation_display
 from .services.config import load_config, save_config
 from .services.environment import detect_tools
@@ -425,10 +425,46 @@ class MainWindow(QMainWindow):
         context_pack_reports = [
             report for report in quality_reports if report.get("context_pack_version") == 1
         ]
-        document_reports = [
-            report for report in quality_reports if report.get("context_pack_version") != 1
+        video_ai_pack_reports = [
+            report for report in quality_reports if report.get("video_ai_pack_version") == 1
         ]
-        if document_reports:
+        document_reports = [
+            report
+            for report in quality_reports
+            if report.get("context_pack_version") != 1 and report.get("video_ai_pack_version") != 1
+        ]
+        if video_ai_pack_reports:
+            report = video_ai_pack_reports[0]
+            warnings = list(report.get("warnings") or [])
+            integrity = report.get("integrity") or {}
+            integrity_ok = bool(integrity.get("ok")) if isinstance(integrity, dict) else False
+            message = (
+                f"{report.get('source_count', 0)} 个视频\n"
+                f"{report.get('frame_count', 0)} 张关键帧\n"
+                f"{report.get('audio_count', 0)} 条音频\n"
+                f"{report.get('proxy_count', 0)} 个 proxy\n"
+                f"完整性：{'通过' if integrity_ok else '未通过'}"
+            )
+            warning_details = []
+            for warning in warnings[:3]:
+                if not isinstance(warning, dict):
+                    continue
+                source_id = str(warning.get("source_id") or "资料包")
+                detail = str(warning.get("message") or "").strip()
+                if detail:
+                    warning_details.append(f"{source_id}：{detail}")
+            if warnings or errors or not integrity_ok:
+                QMessageBox.warning(
+                    self,
+                    "视频 AI 资料包已创建，但需要检查",
+                    message
+                    + f"\n提醒：{len(warnings)} 个"
+                    + ("\n" + "\n".join(warning_details) if warning_details else "")
+                    + ("\n" + "\n".join(errors[:6]) if errors else ""),
+                )
+            else:
+                QMessageBox.information(self, "视频 AI 资料包已完成", message)
+        elif document_reports:
             DocumentReportDialog(document_reports, outputs, self).exec()
             if errors:
                 QMessageBox.warning(self, "部分任务未完成", "\n".join(errors[:6]))
@@ -486,7 +522,7 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "处理失败", message)
 
     def _present_preview(self, result: object) -> None:
-        if isinstance(result, DocumentPreviewPlan):
+        if isinstance(result, (DocumentPreviewPlan, VideoAIPackPreviewPlan)):
             SourcePlanDialog(
                 result.title, list(result.sources), result.parameters, result.note, self
             ).exec()

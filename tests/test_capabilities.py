@@ -55,6 +55,7 @@ def test_video_with_ffmpeg_exposes_all_creation_operations() -> None:
         Operation.EXTRACT_AUDIO,
         Operation.STANDARDIZE_MP4,
         Operation.KEYFRAMES_CONTACT_SHEET,
+        Operation.VIDEO_AI_PACK,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
     ]
@@ -85,6 +86,7 @@ def test_available_operations_can_be_filtered_by_workspace_policy() -> None:
         Operation.EXTRACT_AUDIO,
         Operation.STANDARDIZE_MP4,
         Operation.KEYFRAMES_CONTACT_SHEET,
+        Operation.VIDEO_AI_PACK,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
     ]

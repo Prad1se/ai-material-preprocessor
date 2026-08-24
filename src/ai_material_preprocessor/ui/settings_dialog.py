@@ -275,10 +275,26 @@ class SettingsDialog(QDialog):
         )
         self.video_rename_template = QLineEdit(str(self.config["video"]["rename_template"]))
         self.video_project_name = QLineEdit(str(self.config["video"].get("project_name", "")))
+        self.video_ai_pack_audio = QCheckBox("默认提取 WAV 音频")
+        self.video_ai_pack_audio.setChecked(
+            bool(self.config["video"].get("ai_pack_include_audio", True))
+        )
+        self.video_ai_pack_proxy = QCheckBox("默认生成压缩 proxy")
+        self.video_ai_pack_proxy.setChecked(
+            bool(self.config["video"].get("ai_pack_include_proxy", False))
+        )
+        self.video_ai_pack_proxy_crf = QSpinBox()
+        self.video_ai_pack_proxy_crf.setRange(0, 51)
+        self.video_ai_pack_proxy_crf.setValue(
+            int(self.config["video"].get("ai_pack_proxy_crf", 28))
+        )
         form.addRow("压缩 CRF", self.video_crf)
         form.addRow("音频格式", self.video_audio_format)
         form.addRow("命名模板", self.video_rename_template)
         form.addRow("默认项目", self.video_project_name)
+        form.addRow("Video AI Pack 音频", self.video_ai_pack_audio)
+        form.addRow("Video AI Pack proxy", self.video_ai_pack_proxy)
+        form.addRow("Proxy CRF", self.video_ai_pack_proxy_crf)
         return panel
 
     def _config_from_fields(self) -> dict:
@@ -304,6 +320,9 @@ class SettingsDialog(QDialog):
                 "rename_template": self.video_rename_template.text().strip()
                 or "{date}_{time}_{location}_{index}",
                 "project_name": self.video_project_name.text().strip(),
+                "ai_pack_include_audio": self.video_ai_pack_audio.isChecked(),
+                "ai_pack_include_proxy": self.video_ai_pack_proxy.isChecked(),
+                "ai_pack_proxy_crf": self.video_ai_pack_proxy_crf.value(),
             }
         )
         for key, field in self.tool_path_inputs.items():

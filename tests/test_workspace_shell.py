@@ -125,6 +125,7 @@ def test_document_and_video_workspaces_only_expose_their_operations(qtbot, tmp_p
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
+        Operation.VIDEO_AI_PACK,
     ]
     assert Operation.TO_MARKDOWN not in video_operations
 

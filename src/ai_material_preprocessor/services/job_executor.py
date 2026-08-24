@@ -7,13 +7,14 @@ from pathlib import Path
 from ..application.default_registry import build_default_executor_registry
 from ..application.executor_registry import OperationExecutorRegistry, TaskExecutionResult
 from ..apps.documents.executor import DocumentService
-from ..apps.video.executor import VideoService
+from ..apps.video.executor import VideoAIPackService, VideoService
 from ..errors import ErrorCode, UserFacingError, explain_error
 from ..infrastructure.processes import CancellationToken
 from ..models import Job, TaskStatus, ToolStatus
 from .document_service import DocumentConversionService
 from .observability import DiagnosticLogger
 from .task_manifest import TaskRecord
+from .video_ai_pack import VideoAIPackService as DefaultVideoAIPackService
 from .video_service import VideoProcessingService
 
 
@@ -42,6 +43,7 @@ class JobExecutor:
         config: dict,
         document_service: DocumentService | None = None,
         video_service: VideoService | None = None,
+        video_ai_pack_service: VideoAIPackService | None = None,
         registry: OperationExecutorRegistry | None = None,
         logger: DiagnosticLogger | None = None,
     ) -> None:
@@ -51,7 +53,10 @@ class JobExecutor:
             return
         documents = document_service or DocumentConversionService(tools, config, logger=self.logger)
         video = video_service or VideoProcessingService(tools, config, logger=self.logger)
-        self.registry = build_default_executor_registry(documents, video)
+        video_ai_pack = video_ai_pack_service or DefaultVideoAIPackService(
+            tools, config, logger=self.logger
+        )
+        self.registry = build_default_executor_registry(documents, video, video_ai_pack)
 
     @staticmethod
     def _raise_if_cancelled(cancellation: CancellationToken | None) -> None:

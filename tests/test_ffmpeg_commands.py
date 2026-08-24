@@ -8,6 +8,7 @@ from ai_material_preprocessor.converters.video import (
     build_compress_command,
     build_extract_audio_command,
     build_keyframe_command,
+    build_proxy_command,
     build_standardize_command,
     parse_keyframe_timestamps,
     parse_progress_line,
@@ -40,6 +41,17 @@ def test_standardize_command_preserves_metadata_and_uses_compatible_pixel_format
         "-map_metadata",
         "0",
     ]
+
+
+def test_proxy_command_is_explicitly_lossy_compatible_and_streamable() -> None:
+    command = build_proxy_command("ffmpeg.exe", Path("input.mov"), Path("proxy.mp4"), 28)
+
+    assert command[command.index("-c:v") + 1] == "libx264"
+    assert command[command.index("-pix_fmt") + 1] == "yuv420p"
+    assert command[command.index("-crf") + 1] == "28"
+    assert command[command.index("-c:a") + 1] == "aac"
+    assert command[command.index("-movflags") + 1] == "+faststart"
+    assert "-n" in command
     assert command[command.index("-pix_fmt") : command.index("-pix_fmt") + 2] == [
         "-pix_fmt",
         "yuv420p",

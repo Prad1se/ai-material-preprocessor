@@ -17,6 +17,7 @@ class Operation(StrEnum):
     RENAME_VIDEO = "按拍摄时间/地点命名"
     ORGANIZE_VIDEO = "按日期/地点整理"
     DOCUMENT_CONTEXT_PACK = "生成 Context Pack"
+    VIDEO_AI_PACK = "Video AI Pack"
 
 
 # 唯一的用户可见操作中文标签：历史、任务中心、工作区共用这一份映射。
@@ -30,6 +31,7 @@ OPERATION_LABELS: dict[Operation, str] = {
     Operation.RENAME_VIDEO: "按拍摄时间/地点命名",
     Operation.ORGANIZE_VIDEO: "按日期/地点整理",
     Operation.DOCUMENT_CONTEXT_PACK: "AI 上下文包",
+    Operation.VIDEO_AI_PACK: "视频 AI 资料包",
 }
 
 # 旧枚举原值到新标签的反查，兼容历史记录或调用方仍传入原值的情况。
@@ -107,6 +109,11 @@ class Job:
     sources: tuple[Path, ...] = ()
     context_budget: int | None = None
     context_ocr_enabled: bool | None = None
+    video_ai_pack_include_audio: bool | None = None
+    video_ai_pack_include_proxy: bool | None = None
+    video_ai_pack_proxy_crf: int | None = None
+    video_ai_pack_scene_threshold: float | None = None
+    video_ai_pack_max_keyframes: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.sources, tuple):
@@ -125,6 +132,28 @@ class Job:
             raise ValueError("Job.context_budget must be positive.")
         if self.context_ocr_enabled is not None and not isinstance(self.context_ocr_enabled, bool):
             raise TypeError("Job.context_ocr_enabled must be a boolean or None.")
+        for name in ("video_ai_pack_include_audio", "video_ai_pack_include_proxy"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, bool):
+                raise TypeError(f"Job.{name} must be a boolean or None.")
+        if self.video_ai_pack_proxy_crf is not None and (
+            isinstance(self.video_ai_pack_proxy_crf, bool)
+            or not isinstance(self.video_ai_pack_proxy_crf, int)
+            or not 0 <= self.video_ai_pack_proxy_crf <= 51
+        ):
+            raise ValueError("Job.video_ai_pack_proxy_crf must be an integer from 0 to 51.")
+        if self.video_ai_pack_scene_threshold is not None and (
+            isinstance(self.video_ai_pack_scene_threshold, bool)
+            or not isinstance(self.video_ai_pack_scene_threshold, (int, float))
+            or not 0.05 <= float(self.video_ai_pack_scene_threshold) <= 0.95
+        ):
+            raise ValueError("Job.video_ai_pack_scene_threshold must be from 0.05 to 0.95.")
+        if self.video_ai_pack_max_keyframes is not None and (
+            isinstance(self.video_ai_pack_max_keyframes, bool)
+            or not isinstance(self.video_ai_pack_max_keyframes, int)
+            or self.video_ai_pack_max_keyframes <= 0
+        ):
+            raise ValueError("Job.video_ai_pack_max_keyframes must be positive.")
 
     @property
     def input_sources(self) -> tuple[Path, ...]:
