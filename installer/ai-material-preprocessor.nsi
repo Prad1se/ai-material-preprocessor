@@ -26,6 +26,7 @@ BrandingText "AI Material Preprocessor ${APP_VERSION}"
 
 VIProductVersion "2.0.0.1"
 VIAddVersionKey /LANG=2052 "ProductName" "AI 素材预处理工具"
+VIAddVersionKey /LANG=2052 "FileVersion" "2.0.0.1"
 VIAddVersionKey /LANG=2052 "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey /LANG=2052 "FileDescription" "Windows 本地 AI 素材预处理与创作素材整理工具"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "Copyright (c) 2026 Prad1se"
@@ -52,7 +53,7 @@ Section "主程序" MainSection
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AI Material Preprocessor" "DisplayName" "AI 素材预处理工具"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AI Material Preprocessor" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AI Material Preprocessor" "Publisher" "Prad1se"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AI Material Preprocessor" "UninstallString" '$"$INSTDIR\Uninstall.exe$"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AI Material Preprocessor" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
   CreateDirectory "$SMPROGRAMS\AI 素材预处理工具"
   CreateShortcut "$SMPROGRAMS\AI 素材预处理工具\AI 素材预处理工具.lnk" "$INSTDIR\AI-Material-Preprocessor.exe"
   CreateShortcut "$SMPROGRAMS\AI 素材预处理工具\卸载.lnk" "$INSTDIR\Uninstall.exe"
