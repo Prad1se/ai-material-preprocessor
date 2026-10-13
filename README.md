@@ -2,7 +2,7 @@
 
 # AI Material Preprocessor
 
-### 本地整理文档与视频，生成 AI 更容易使用的素材
+### 把 PDF、Word、PPT、Excel 整理成 Markdown，在 Windows 本地完成
 
 [English](README.en.md) · **简体中文**
 
@@ -16,17 +16,26 @@
 
 </div>
 
-AI Material Preprocessor 是一个面向 Windows 的本地桌面应用。它把 PDF、Word、PowerPoint、Excel、网页、文本和视频素材，整理成结构清晰、可追溯、便于 AI 或后续创作使用的结果。
+课程课件、论文和办公资料分散在不同格式里？AI Material Preprocessor 提供 Windows 图形界面，把文档转换、清洗并整理成 Markdown，供你检查、阅读，再按需要交给 AI。默认不上传文件，不覆盖、移动或删除原始素材。
 
-- **Doro 文档工作区**：转换、清洗、OCR、分块、来源追踪、AI Context Pack 与 Context Budget。
-- **鼠鼠视频工作区**：压缩、标准化、音频提取、元数据命名、去重、素材整理和关键帧联系表。
-- **本地优先**：默认不上传文件，不覆盖、移动或删除原始素材。
+## 先选一个用途
+
+| 你想做什么 | 稳定版 v2.0.0 提供什么 |
+|---|---|
+| 整理课程 PDF、Word 笔记与 PPT 课件 | 文档转 Markdown、标题与正文清洗、结构分块 |
+| 检查转换结果来自哪里 | 文档预览、质量提醒与来源追踪；定位精度取决于格式和可用信息 |
+| 处理扫描资料 | 可选本地 OCR；复杂公式、表格和图示仍需人工核对 |
+| 同时整理视频素材 | 压缩、标准化、音频提取、元数据命名、去重和关键帧联系表 |
+
+这是资料预处理工具；AI 问答与总结由你选择的 AI 工具完成。将输出交给在线 AI 时，仍需自行确认内容是否适合上传。
 
 > **版本说明**：最新正式稳定版为 **v2.0.0**；仓库当前代码处于 **v2.1 开发阶段**，包含尚未发布的双工作区、AI Context Pack 与 Source Map 体验。需要稳定安装包的用户请使用 Releases 页面。
 
 <!-- release-version: 2.0.0 -->
 
-## 两个工作区
+## 两个工作区（v2.1 开发预览）
+
+以下工作区截图和 AI Context Pack 体验属于开发中的 v2.1，**不是当前 v2.0.0 安装包界面**。
 
 | Doro 文档 | 鼠鼠视频 |
 |---|---|
@@ -48,18 +57,25 @@ AI Material Preprocessor 是一个面向 Windows 的本地桌面应用。它把 
   </tr>
 </table>
 
-## 30 秒上手
+## 先看输出，再决定是否下载
 
-1. 从 [Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest) 下载安装版或便携版。
-2. 打开 **文档** 或 **视频** 工作区，拖入素材，也可以使用“选择文件”。
-3. 选择处理方式并检查当前任务选项。
-4. 点击 **准备文档** 或对应的视频处理按钮。
-5. 在结果页打开输出；AI Context Pack 还可使用 **复制给 AI** 和 **查看来源地图**。
+无需安装即可查看[合成 PDF 输入](examples/research-paper/input/sample-paper.pdf)和[处理后的 Markdown](examples/research-paper/sample-context-pack/sources/source-001/content.md)。它们用于了解输出结构，不是复杂论文的准确率测试。
 
-仓库中的 [examples/](examples/) 提供合成输入和真实管线生成的 Context Pack 示例，不包含私人资料：
+仓库中的 [examples/](examples/) 提供合成输入和开发版管线生成的 Context Pack 示例，不包含私人资料；包结构、预算和 Source Map 属于 v2.1 开发预览：
 
 - [研究论文示例](examples/research-paper/)：PDF 页级来源信息。
 - [课程资料示例](examples/course-material/)：DOCX 文档级降级定位，不伪造页码。
+
+## 稳定版上手（v2.0.0）
+
+1. 从 [Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest) 下载 Installer EXE 或 Portable ZIP；Windows x64，安装包约 198 MB，便携包约 264 MB。
+2. 安装，或完整解压便携包，运行 `AI-Material-Preprocessor.exe`。版本未商业签名，首次运行可能出现 SmartScreen 提示；请核对发布页的 SHA-256。
+3. 先用不含私人信息的小文档尝试文档转换或 AI 资料包功能，选择单独的输出位置。
+4. 检查 Markdown、质量提醒和来源信息，再按需要交给 AI；复杂公式与图示请对照原文件。
+
+**从源码体验 v2.1 开发版**：按下方“从源码运行”启动，才可体验本文展示的双工作区、AI Context Pack、Context Budget、复制给 AI 和 Source Map。开发版不等同于稳定安装包。
+
+如果它解决了你的资料整理问题，欢迎 Star 收藏；遇到问题请[提交反馈](https://github.com/Prad1se/ai-material-preprocessor/issues)，说明版本、输入格式、预期和实际结果，避免上传私人资料。
 
 ## 文档能力
 
