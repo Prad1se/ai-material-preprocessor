@@ -2,7 +2,7 @@
 
 # AI Material Preprocessor
 
-### Prepare documents and videos for AI — locally on Windows
+### Turn PDF, Word, PowerPoint, and Excel into Markdown locally on Windows
 
 **English** · [简体中文](README.md)
 
@@ -16,17 +16,26 @@
 
 </div>
 
-AI Material Preprocessor is a local Windows desktop app that turns PDFs, Word documents, PowerPoint decks, spreadsheets, web content, text, and videos into structured, traceable materials for AI or downstream creative work.
+Course slides, papers, and office documents come in different formats. AI Material Preprocessor provides a Windows GUI to convert and clean them into Markdown for inspection, reading, and use with your chosen AI tool. Files are not uploaded by default; source material is never overwritten, moved, or deleted.
 
-- **Doro Documents**: conversion, cleaning, OCR, splitting, provenance, AI Context Packs, and Context Budgets.
-- **Mouse Video Workshop**: compression, normalization, audio extraction, metadata naming, deduplication, organization, and keyframe contact sheets.
-- **Local first**: files are not uploaded by default, and source material is never overwritten, moved, or deleted.
+## Choose a use case
+
+| Your task | Available in stable v2.0.0 |
+|---|---|
+| Organize course PDFs, Word notes, and PowerPoint slides | Markdown conversion, heading and text cleanup, structural chunks |
+| Inspect where converted content came from | Document previews, quality warnings, and provenance; precision depends on format and available evidence |
+| Process scanned material | Optional local OCR; review complex formulas, tables, and diagrams manually |
+| Prepare video material too | Compression, normalization, audio extraction, metadata naming, deduplication, and keyframe contact sheets |
+
+The app prepares material. Your chosen AI tool handles questions and summaries. Review sensitive content before sending outputs to an online AI service.
 
 > **Release status:** the latest stable release is **v2.0.0**. The repository currently contains **v2.1 development work**, including the dual-workspace UI, AI Context Packs, and Source Map experience. Use the Releases page when you need the stable packaged application.
 
 <!-- release-version: 2.0.0 -->
 
-## Two focused workspaces
+## Two focused workspaces (v2.1 development preview)
+
+The workspace screenshots and AI Context Pack experience below show v2.1 development work, **not the current v2.0.0 packaged interface**.
 
 | Doro Documents | Mouse Video Workshop |
 |---|---|
@@ -48,18 +57,25 @@ Both workspaces share one task center, history repository, settings system, and 
   </tr>
 </table>
 
-## Get started in 30 seconds
+## Inspect the output before downloading
 
-1. Download the installer or portable package from [Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest).
-2. Open the **Documents** or **Video** workspace and drop in your files, or use the file picker.
-3. Choose a preparation mode and review the options for the current job.
-4. Select **Prepare documents** or the relevant video action.
-5. Open the result. AI Context Packs also provide **Copy for AI** and **View Source Map** actions.
+Compare a [synthetic PDF input](examples/research-paper/input/sample-paper.pdf) with its [processed Markdown](examples/research-paper/sample-context-pack/sources/source-001/content.md), without installing the app. This illustrates output structure, not accuracy on complex papers.
 
-The repository includes synthetic inputs and real pipeline-generated Context Pack outputs under [examples/](examples/), with no private material:
+The [examples/](examples/) directory contains synthetic inputs and development pipeline-generated Context Packs, with no private material. Pack structure, budgets, and Source Map are v2.1 development previews:
 
 - [Research paper example](examples/research-paper/): PDF page-level provenance.
 - [Course material example](examples/course-material/): honest document-level fallback for DOCX, without fabricated page numbers.
+
+## Get started with stable v2.0.0
+
+1. Download the Installer EXE or Portable ZIP from [Releases](https://github.com/Prad1se/ai-material-preprocessor/releases/latest). Windows x64 is required; the installer is about 198 MB and the portable package about 264 MB.
+2. Install, or extract the entire portable archive, then run `AI-Material-Preprocessor.exe`. The release is not commercially code-signed and SmartScreen may warn; check the published SHA-256.
+3. Try document conversion or AI-ready document packaging with a small, non-private document and a separate output location.
+4. Inspect Markdown, quality warnings, and provenance before using the output with AI. Check complex formulas and diagrams against the original.
+
+**To try v2.1 development work**, follow “Run from source” below. The dual-workspace UI, AI Context Packs, Context Budgets, Copy for AI, and Source Map shown here belong to development work and differ from the stable package.
+
+If the app helps your workflow, Star the repository to bookmark it. For [feedback](https://github.com/Prad1se/ai-material-preprocessor/issues), include the version, input format, expected result, and actual result; avoid uploading private documents.
 
 ## Document capabilities
 
