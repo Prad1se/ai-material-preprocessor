@@ -5,6 +5,10 @@ The selected Doro artwork in this directory is distributed with AI Material Prep
 are **not licensed under the repository's MIT license**. Commercial distributions must remove or
 replace them, or obtain separate permission from the relevant rights holders.
 
+The project application icon (`assets/app-icon.png` and `assets/app-icon.ico`) contains a newly
+generated, simplified Doro likeness alongside the mouse mascot. The icon is treated as mascot
+artwork under this same non-commercial distribution boundary, not as MIT-licensed code.
+
 This notice records the project's usage basis; it does not claim that the repository owns the
 Doro character or the underlying artwork. Copyright, character, and trademark interests remain
 with their respective owners and creators. Inclusion does not imply endorsement.

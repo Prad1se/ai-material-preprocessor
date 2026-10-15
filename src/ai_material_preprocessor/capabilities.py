@@ -44,6 +44,7 @@ def available_operations(
                     Operation.EXTRACT_AUDIO,
                     Operation.STANDARDIZE_MP4,
                     Operation.KEYFRAMES_CONTACT_SHEET,
+                    Operation.VIDEO_AI_PACK,
                 ]
             )
         operations.append(Operation.RENAME_VIDEO)

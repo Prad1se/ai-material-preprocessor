@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
+import subprocess
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
@@ -27,11 +28,12 @@ from .application.default_preview_registry import build_default_preview_registry
 from .application.preview_registry import PreviewProviderRegistry
 from .application.workspaces import WorkspaceId, workspace_for_operation
 from .apps.documents.preview import DocumentPreviewPlan
-from .apps.video.preview import VideoPreviewBatch
-from .models import Job, TaskStatus, ToolStatus
+from .apps.video.preview import VideoAIPackPreviewPlan, VideoPreviewBatch
+from .models import Job, TaskStatus, ToolStatus, operation_display
 from .services.config import load_config, save_config
 from .services.environment import detect_tools
 from .services.history_repository import HistoryRepository, default_cache_root
+from .services.observability import DiagnosticLogger
 from .services.preview import completed_contact_sheet
 from .services.source_map import load_source_map
 from .services.task_manifest import resolve_history_root
@@ -75,11 +77,13 @@ class MainWindow(QMainWindow):
         config_saver: ConfigSaver = save_config,
         handoff_confirmer: HandoffConfirmer | None = None,
         preview_registry: PreviewProviderRegistry | None = None,
+        logger: DiagnosticLogger | None = None,
     ) -> None:
         super().__init__()
         self.config = copy.deepcopy(config) if config is not None else load_config()
         self.config.setdefault("ui", {}).setdefault("last_workspace", WorkspaceId.DOCUMENTS.value)
-        self.tools = tools or detect_tools(self.config)
+        self.logger = logger or DiagnosticLogger()
+        self.tools = tools or detect_tools(self.config, logger=self.logger)
         self.task_repository = task_repository
         self.config_saver = config_saver
         self.handoff_confirmer = handoff_confirmer or self._confirm_handoff
@@ -182,6 +186,7 @@ class MainWindow(QMainWindow):
             workspace.handoff_requested.connect(self._handoff_requested)
             workspace.history_requested.connect(self._open_workspace_history)
             workspace.open_output_requested.connect(self._open_output)
+            workspace.reveal_output_requested.connect(self._reveal_output)
             workspace.settings_requested.connect(self._open_workspace_settings)
 
     def resizeEvent(self, event) -> None:
@@ -306,7 +311,13 @@ class MainWindow(QMainWindow):
         origin.set_running(True)
         self.progress.setValue(0)
         self.status.setText("正在准备任务")
-        self.worker = Worker(jobs, self.tools, self.config, task_repository=self.task_repository)
+        self.worker = Worker(
+            jobs,
+            self.tools,
+            self.config,
+            task_repository=self.task_repository,
+            logger=self.logger,
+        )
         for task in self.worker.tasks:
             if task.task_id in self.worker.tracked_ids:
                 self._upsert_task(task.task_id, task.status, task.progress, task.message)
@@ -318,7 +329,13 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     def _restore_task_queue(self) -> None:
-        recovery_worker = Worker([], self.tools, self.config, task_repository=self.task_repository)
+        recovery_worker = Worker(
+            [],
+            self.tools,
+            self.config,
+            task_repository=self.task_repository,
+            logger=self.logger,
+        )
         recoverable = [
             task
             for task in recovery_worker.tasks
@@ -343,21 +360,21 @@ class MainWindow(QMainWindow):
         task = self._task_for(task_id)
         if task is None:
             return
+        # 任务中心与工作区共用统一的操作中文标签，避免直出枚举原值。
+        operation_label = operation_display(task.job.operation)
         self.task_panel.upsert(
             task_id,
             "文档"
             if workspace_for_operation(task.job.operation) is WorkspaceId.DOCUMENTS
             else "视频",
             task.job.source.name,
-            task.job.operation.value,
+            operation_label,
             status,
             progress,
             message,
         )
         workspace = self.workspaces[workspace_for_operation(task.job.operation)]
-        workspace.upsert_task(
-            task_id, task.job.source.name, task.job.operation.value, status, progress
-        )
+        workspace.upsert_task(task_id, task.job.source.name, operation_label, status, progress)
 
     def _on_progress(self, value: int, message: str) -> None:
         self.progress.setValue(value)
@@ -408,10 +425,46 @@ class MainWindow(QMainWindow):
         context_pack_reports = [
             report for report in quality_reports if report.get("context_pack_version") == 1
         ]
-        document_reports = [
-            report for report in quality_reports if report.get("context_pack_version") != 1
+        video_ai_pack_reports = [
+            report for report in quality_reports if report.get("video_ai_pack_version") == 1
         ]
-        if document_reports:
+        document_reports = [
+            report
+            for report in quality_reports
+            if report.get("context_pack_version") != 1 and report.get("video_ai_pack_version") != 1
+        ]
+        if video_ai_pack_reports:
+            report = video_ai_pack_reports[0]
+            warnings = list(report.get("warnings") or [])
+            integrity = report.get("integrity") or {}
+            integrity_ok = bool(integrity.get("ok")) if isinstance(integrity, dict) else False
+            message = (
+                f"{report.get('source_count', 0)} 个视频\n"
+                f"{report.get('frame_count', 0)} 张关键帧\n"
+                f"{report.get('audio_count', 0)} 条音频\n"
+                f"{report.get('proxy_count', 0)} 个 proxy\n"
+                f"完整性：{'通过' if integrity_ok else '未通过'}"
+            )
+            warning_details = []
+            for warning in warnings[:3]:
+                if not isinstance(warning, dict):
+                    continue
+                source_id = str(warning.get("source_id") or "资料包")
+                detail = str(warning.get("message") or "").strip()
+                if detail:
+                    warning_details.append(f"{source_id}：{detail}")
+            if warnings or errors or not integrity_ok:
+                QMessageBox.warning(
+                    self,
+                    "视频 AI 资料包已创建，但需要检查",
+                    message
+                    + f"\n提醒：{len(warnings)} 个"
+                    + ("\n" + "\n".join(warning_details) if warning_details else "")
+                    + ("\n" + "\n".join(errors[:6]) if errors else ""),
+                )
+            else:
+                QMessageBox.information(self, "视频 AI 资料包已完成", message)
+        elif document_reports:
             DocumentReportDialog(document_reports, outputs, self).exec()
             if errors:
                 QMessageBox.warning(self, "部分任务未完成", "\n".join(errors[:6]))
@@ -469,7 +522,7 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "处理失败", message)
 
     def _present_preview(self, result: object) -> None:
-        if isinstance(result, DocumentPreviewPlan):
+        if isinstance(result, (DocumentPreviewPlan, VideoAIPackPreviewPlan)):
             SourcePlanDialog(
                 result.title, list(result.sources), result.parameters, result.note, self
             ).exec()
@@ -480,13 +533,23 @@ class MainWindow(QMainWindow):
 
     def _open_output(self, raw_output: str) -> None:
         output = Path(raw_output)
-        folder = str(output if output.is_dir() else output.parent)
         if os.name == "nt":
             try:
-                os.startfile(folder)
+                # 直接打开结果本身；目录（如上下文包）交给资源管理器，文件用关联程序打开。
+                os.startfile(str(output))
             except OSError:
-                # 资源管理器拒绝打开（路径失效或权限不足）时给出可见反馈而不是崩溃。
-                QMessageBox.warning(self, "无法打开文件夹", f"系统无法打开：\n{folder}")
+                # 系统拒绝打开（路径失效或权限不足）时给出可见反馈而不是崩溃。
+                QMessageBox.warning(self, "无法打开结果", f"系统无法打开：\n{output}")
+
+    def _reveal_output(self, raw_output: str) -> None:
+        output = Path(raw_output)
+        target = output if output.exists() else output.parent
+        if os.name == "nt":
+            try:
+                # 参数数组 + shell=False；explorer /select, 定位并高亮输出项。
+                subprocess.Popen(["explorer", f"/select,{target}"], shell=False)
+            except OSError:
+                QMessageBox.warning(self, "无法打开资源管理器", f"系统无法定位：\n{target}")
 
     def _open_history(self, workspace: WorkspaceId | None) -> None:
         repository = HistoryRepository(
@@ -501,12 +564,13 @@ class MainWindow(QMainWindow):
         self._show_settings(WorkspaceId(raw_workspace))
 
     def _show_settings(self, workspace: WorkspaceId | None) -> None:
-        detected = detect_tools_with_versions(self.config)
         dialog = SettingsDialog(
             self.config,
-            detected,
+            self.tools,
             self,
             initial_tab=workspace.value if workspace is not None else None,
+            detect_on_open=True,
+            detector=lambda config: detect_tools_with_versions(config, logger=self.logger),
         )
         dialog.settings_saved.connect(self._settings_applied)
         dialog.exec()
@@ -553,8 +617,12 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(examples)))
 
     def _show_onboarding(self) -> None:
-        self.tools = detect_tools_with_versions(self.config)
-        self.onboarding_dialog = OnboardingDialog(self.config, self.tools, self)
+        self.onboarding_dialog = OnboardingDialog(
+            self.config,
+            self.tools,
+            self,
+            detector=lambda config: detect_tools_with_versions(config, logger=self.logger),
+        )
         self.onboarding_dialog.onboarding_completed.connect(self._settings_applied)
         self.onboarding_dialog.setModal(False)
         self.onboarding_dialog.show()

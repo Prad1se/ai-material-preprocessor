@@ -31,6 +31,10 @@ def test_release_pipeline_defines_portable_installer_checksums_and_smoke() -> No
     assert "windows-x64-setup.exe" in installer
     assert "RequestExecutionLevel user" in installer
     assert "AI 素材预处理工具" in installer
+    assert '"UninstallString" "$\\"$INSTDIR\\Uninstall.exe$\\""' in installer
+    assert 'VIProductVersion "2.0.0.1"' in installer
+    assert 'VIAddVersionKey /LANG=2052 "FileVersion" "2.0.0.1"' in installer
+    assert 'VIAddVersionKey /LANG=2052 "ProductVersion" "${APP_VERSION}"' in installer
     assert "绱犳" not in installer
 
 

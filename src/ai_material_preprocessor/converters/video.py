@@ -5,6 +5,7 @@ import math
 import re
 import shutil
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from ..infrastructure.processes import CancellationToken
 from ..services.files import unique_path
 from ..services.metadata import read_media_metadata
 from ..services.naming import preview_video_rename
+from ..services.observability import DiagnosticLogger
 from ..services.video_management import (
     OrganizationMode,
     copy_organized_video,
@@ -24,6 +26,15 @@ from ..services.video_management import (
 from .common import ConversionError, run_command
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
+
+
+@dataclass(frozen=True)
+class KeyframeArtifacts:
+    frames: tuple[Path, ...]
+    timestamps: tuple[float, ...]
+    contact_sheet: Path
+    used_first_frame_fallback: bool
+    scene_detection_failed: bool = False
 
 
 def _progress_prefix(executable: str) -> list[str]:
@@ -102,6 +113,36 @@ def build_standardize_command(executable: str, source: Path, output: Path) -> li
         "aac",
         "-b:a",
         "192k",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
+
+
+def build_proxy_command(
+    executable: str,
+    source: Path,
+    output: Path,
+    crf: int = 28,
+) -> list[str]:
+    return [
+        *_progress_prefix(executable),
+        "-i",
+        str(source),
+        "-map_metadata",
+        "0",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-crf",
+        str(max(0, min(51, int(crf)))),
+        "-preset",
+        "medium",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
         "-movflags",
         "+faststart",
         str(output),
@@ -382,6 +423,31 @@ def standardize(
     return output
 
 
+def create_proxy(
+    source: Path,
+    output_root: Path,
+    ffmpeg: str | None,
+    crf: int = 28,
+    *,
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> Path:
+    _ensure_video(source)
+    exe = _require(ffmpeg, "FFmpeg")
+    output_root.mkdir(parents=True, exist_ok=True)
+    output = output_root / "proxy.mp4"
+    _run_and_cleanup(
+        build_proxy_command(exe, source, output, crf),
+        output,
+        cancellation=cancellation,
+        duration_seconds=duration_seconds,
+        progress_callback=progress_callback,
+        progress_label="正在生成压缩 proxy",
+    )
+    return output
+
+
 def keyframes_contact_sheet(
     source: Path,
     output_root: Path,
@@ -393,6 +459,7 @@ def keyframes_contact_sheet(
     cancellation: CancellationToken | None = None,
     duration_seconds: float = 0.0,
     progress_callback: Callable[[int, str], None] | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     _ensure_video(source)
     exe = _require(ffmpeg, "FFmpeg")
@@ -405,50 +472,23 @@ def keyframes_contact_sheet(
         counter += 1
     frames_dir = package / "frames"
     frames_dir.mkdir(parents=True)
-    pattern = frames_dir / "frame_%03d.jpg"
-    timestamps: tuple[float, ...] = ()
     try:
-        try:
-
-            def keyframe_progress(line: str) -> None:
-                percent = parse_progress_line(line, duration_seconds)
-                if percent is not None and progress_callback is not None:
-                    scaled = min(80, round(percent * 0.8))
-                    progress_callback(scaled, f"正在提取关键帧：{scaled}%")
-
-            result = run_command(
-                build_keyframe_command(
-                    exe, source, pattern, scene_threshold=scene_threshold, max_frames=max_frames
-                ),
-                tool_name="FFmpeg",
-                cancellation=cancellation,
-                stdout_line_callback=keyframe_progress if progress_callback else None,
-            )
-            timestamps = parse_keyframe_timestamps(getattr(result, "stderr", ""))
-        except ConversionError as exc:
-            if exc.code is ErrorCode.CANCELLED:
-                raise
-        frames = sorted(frames_dir.glob("frame_*.jpg"))
-        if not frames:
-            fallback = frames_dir / "frame_001.jpg"
-            run_command(
-                _build_first_frame_command(exe, source, fallback),
-                tool_name="FFmpeg",
-                cancellation=cancellation,
-            )
-            frames = [fallback]
-            timestamps = (0.0,)
-        contact_sheet = create_contact_sheet(
-            frames,
+        artifacts = generate_keyframe_artifacts(
+            source,
+            frames_dir,
             package / "contact-sheet.jpg",
+            exe,
+            scene_threshold=scene_threshold,
+            max_frames=max_frames,
             columns=columns,
             cancellation=cancellation,
-            source_name=source.name,
-            timestamps=timestamps,
+            duration_seconds=duration_seconds,
+            progress_callback=progress_callback,
+            logger=logger,
         )
-        if progress_callback is not None:
-            progress_callback(90, "正在生成联系表")
-        _raise_if_cancelled(cancellation)
+        frames = list(artifacts.frames)
+        timestamps = artifacts.timestamps
+        contact_sheet = artifacts.contact_sheet
         manifest = {
             "package_type": "video_keyframes",
             "source": source.name,
@@ -469,10 +509,100 @@ def keyframes_contact_sheet(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         return contact_sheet
-    except Exception:
+    except Exception as exc:
+        if logger is not None:
+            logger.record_failure(
+                "keyframes.contact_sheet_failed", exc, source_suffix=source.suffix, tool="ffmpeg"
+            )
         if package.exists():
             shutil.rmtree(package, ignore_errors=True)
         raise
+
+
+def generate_keyframe_artifacts(
+    source: Path,
+    frames_dir: Path,
+    contact_sheet: Path,
+    ffmpeg: str | None,
+    *,
+    scene_threshold: float = 0.30,
+    max_frames: int = 24,
+    columns: int = 4,
+    frame_prefix: str = "frame_",
+    cancellation: CancellationToken | None = None,
+    duration_seconds: float = 0.0,
+    progress_callback: Callable[[int, str], None] | None = None,
+    logger: DiagnosticLogger | None = None,
+) -> KeyframeArtifacts:
+    """Generate reusable deterministic keyframe artifacts without publishing a package."""
+
+    _ensure_video(source)
+    exe = _require(ffmpeg, "FFmpeg")
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    pattern = frames_dir / f"{frame_prefix}%03d.jpg"
+    timestamps: tuple[float, ...] = ()
+    scene_detection_failed = False
+    try:
+
+        def keyframe_progress(line: str) -> None:
+            percent = parse_progress_line(line, duration_seconds)
+            if percent is not None and progress_callback is not None:
+                scaled = min(80, round(percent * 0.8))
+                progress_callback(scaled, f"正在提取关键帧：{scaled}%")
+
+        result = run_command(
+            build_keyframe_command(
+                exe,
+                source,
+                pattern,
+                scene_threshold=scene_threshold,
+                max_frames=max_frames,
+            ),
+            tool_name="FFmpeg",
+            cancellation=cancellation,
+            stdout_line_callback=keyframe_progress if progress_callback else None,
+        )
+        timestamps = parse_keyframe_timestamps(getattr(result, "stderr", ""))
+    except ConversionError as exc:
+        if exc.code is ErrorCode.CANCELLED:
+            raise
+        scene_detection_failed = True
+        if logger is not None:
+            logger.record_failure(
+                "keyframes.scene_detection_failed",
+                exc,
+                source_suffix=source.suffix,
+                tool="ffmpeg",
+            )
+    frames = sorted(frames_dir.glob(f"{frame_prefix}*.jpg"))
+    used_fallback = not frames
+    if used_fallback:
+        fallback = frames_dir / f"{frame_prefix}001.jpg"
+        run_command(
+            _build_first_frame_command(exe, source, fallback),
+            tool_name="FFmpeg",
+            cancellation=cancellation,
+        )
+        frames = [fallback]
+        timestamps = (0.0,)
+    generated_sheet = create_contact_sheet(
+        frames,
+        contact_sheet,
+        columns=columns,
+        cancellation=cancellation,
+        source_name=source.name,
+        timestamps=timestamps,
+    )
+    if progress_callback is not None:
+        progress_callback(90, "正在生成联系表")
+    _raise_if_cancelled(cancellation)
+    return KeyframeArtifacts(
+        tuple(frames),
+        timestamps,
+        generated_sheet,
+        used_fallback,
+        scene_detection_failed,
+    )
 
 
 def rename_copy(
@@ -488,6 +618,7 @@ def rename_copy(
     project_name: str = "",
     location_dictionary: dict[str, str] | None = None,
     cancellation: CancellationToken | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     _ensure_video(source)
     _raise_if_cancelled(cancellation)
@@ -497,6 +628,7 @@ def rename_copy(
         ffprobe,
         ffmpeg=ffmpeg,
         cancellation=cancellation,
+        logger=logger,
     )
     output_root.mkdir(parents=True, exist_ok=True)
     destination = output_root
@@ -540,6 +672,7 @@ def organize_copy(
     organize_mode: str = "date_location",
     location_dictionary: dict[str, str] | None = None,
     cancellation: CancellationToken | None = None,
+    logger: DiagnosticLogger | None = None,
 ) -> Path:
     _ensure_video(source)
     _raise_if_cancelled(cancellation)
@@ -549,6 +682,7 @@ def organize_copy(
         ffprobe,
         ffmpeg=ffmpeg,
         cancellation=cancellation,
+        logger=logger,
     )
     plan = plan_video_organization(
         source,

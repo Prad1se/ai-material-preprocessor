@@ -43,6 +43,11 @@ class PersistentTaskQueue:
             "sources": [str(path) for path in task.job.sources],
             "context_budget": task.job.context_budget,
             "context_ocr_enabled": task.job.context_ocr_enabled,
+            "video_ai_pack_include_audio": task.job.video_ai_pack_include_audio,
+            "video_ai_pack_include_proxy": task.job.video_ai_pack_include_proxy,
+            "video_ai_pack_proxy_crf": task.job.video_ai_pack_proxy_crf,
+            "video_ai_pack_scene_threshold": task.job.video_ai_pack_scene_threshold,
+            "video_ai_pack_max_keyframes": task.job.video_ai_pack_max_keyframes,
             "location": task.job.location,
             "project": task.job.project,
             "status": task.status.value,
@@ -97,6 +102,27 @@ class PersistentTaskQueue:
                     else None
                 ),
                 context_ocr_enabled=cls._parse_optional_bool(payload.get("context_ocr_enabled")),
+                video_ai_pack_include_audio=cls._parse_optional_bool(
+                    payload.get("video_ai_pack_include_audio")
+                ),
+                video_ai_pack_include_proxy=cls._parse_optional_bool(
+                    payload.get("video_ai_pack_include_proxy")
+                ),
+                video_ai_pack_proxy_crf=(
+                    cls._parse_int(payload["video_ai_pack_proxy_crf"])
+                    if payload.get("video_ai_pack_proxy_crf") is not None
+                    else None
+                ),
+                video_ai_pack_scene_threshold=(
+                    float(str(payload["video_ai_pack_scene_threshold"]))
+                    if payload.get("video_ai_pack_scene_threshold") is not None
+                    else None
+                ),
+                video_ai_pack_max_keyframes=(
+                    cls._parse_int(payload["video_ai_pack_max_keyframes"])
+                    if payload.get("video_ai_pack_max_keyframes") is not None
+                    else None
+                ),
             ),
             status=TaskStatus(str(payload.get("status", TaskStatus.WAITING.value))),
             progress=cls._parse_int(payload.get("progress", 0)),

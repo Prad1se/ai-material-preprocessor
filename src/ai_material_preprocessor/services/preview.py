@@ -17,10 +17,8 @@ from ..preview_models import (
     SourceFilePreview,
     VideoPreview,
 )
-from .document_enhancement import EnhancementOptions
-from .markdown_cleaning import HEADING_PATTERN, clean_markdown
-from .markdown_quality import check_quality, preserve_original_issues
-from .markdown_splitting import split_markdown
+from .document_analysis import EnhancementOptions, analyze_document
+from .markdown_cleaning import HEADING_PATTERN
 from .metadata import MediaMetadata
 from .naming import preview_video_rename
 from .video_management import (
@@ -70,38 +68,24 @@ def build_document_preview(
     parameters: Mapping[str, object] | None = None,
 ) -> DocumentPreview:
     """Build a read-only preview from converted Markdown and optional OCR observations."""
-    cleaned = clean_markdown(raw_markdown, source_suffix=source.suffix)
-    quality = check_quality(
-        cleaned,
-        base_dir=base_dir,
-        max_tokens=options.max_tokens,
+    analysis = analyze_document(
+        raw_markdown=raw_markdown,
         source_suffix=source.suffix,
-    )
-    original_quality = check_quality(
-        raw_markdown,
         base_dir=base_dir,
-        max_tokens=options.max_tokens,
-        source_suffix=source.suffix,
+        options=options,
+        ocr_pages=tuple(ocr_pages),
     )
-    quality = preserve_original_issues(quality, original_quality, codes={"heading_jump"})
+    cleaned = analysis.cleaned_markdown
+    quality = analysis.quality
     headings: list[HeadingPreview] = []
     for line_number, line in enumerate(cleaned.splitlines(), start=1):
         match = HEADING_PATTERN.match(line)
         if match:
             headings.append(HeadingPreview(len(match.group(1)), match.group(2), line_number))
-    chunks = (
-        split_markdown(
-            cleaned,
-            target_tokens=options.target_tokens,
-            max_tokens=options.max_tokens,
-            source_suffix=source.suffix,
-        )
-        if options.split_enabled
-        else ()
-    )
+    chunks = analysis.chunks
     ocr = tuple(
         OCRPagePreview(label, confidence, confidence < LOW_OCR_CONFIDENCE)
-        for label, _text, confidence in ocr_pages
+        for label, _text, confidence in analysis.ocr_pages
     )
     risks = [
         PreviewRisk(

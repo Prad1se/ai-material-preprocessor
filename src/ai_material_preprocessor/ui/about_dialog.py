@@ -2,33 +2,24 @@ from __future__ import annotations
 
 import webbrowser
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from .. import __version__
 from ..services.updates import UpdateCheckResult, UpdateState, check_for_updates
+from .background_tasks import BackgroundCall, start_background_call
+from .diagnostics_dialog import DiagnosticsDialog
 from .window_sizing import fit_dialog_to_available_space
-
-
-class UpdateCheckThread(QThread):
-    completed = Signal(object)
-
-    def __init__(self, enabled: bool, parent=None) -> None:
-        super().__init__(parent)
-        self.enabled = enabled
-
-    def run(self) -> None:
-        self.completed.emit(check_for_updates(current_version=__version__, enabled=self.enabled))
 
 
 class AboutDialog(QDialog):
     def __init__(self, config: dict, parent=None) -> None:
         super().__init__(parent)
         self.config = config
-        self.update_thread: UpdateCheckThread | None = None
+        self.update_thread: BackgroundCall | None = None
         self.release_url = ""
         self.setWindowTitle("关于")
-        fit_dialog_to_available_space(self, 520, 280, minimum_width=420, minimum_height=240)
+        fit_dialog_to_available_space(self, 520, 280, minimum_width=520, minimum_height=240)
         root = QVBoxLayout(self)
         title = QLabel("AI 素材预处理工具")
         title.setObjectName("sectionTitle")
@@ -56,22 +47,35 @@ class AboutDialog(QDialog):
         self.open_release_button = QPushButton("打开发布页")
         self.open_release_button.setEnabled(False)
         self.open_release_button.clicked.connect(self._open_release)
+        self.run_diagnostics_button = QPushButton("运行本地诊断")
+        self.run_diagnostics_button.clicked.connect(self._show_diagnostics)
         close = QPushButton("关闭")
         close.clicked.connect(self.accept)
         actions.addWidget(self.check_updates_button)
         actions.addWidget(self.open_release_button)
+        actions.addWidget(self.run_diagnostics_button)
         actions.addStretch()
         actions.addWidget(close)
         root.addLayout(actions)
 
     def _check_updates(self) -> None:
+        if self.update_thread is not None:
+            return
         self.check_updates_button.setEnabled(False)
         self.update_status.setText("正在检查 GitHub Releases…")
-        self.update_thread = UpdateCheckThread(True, self)
-        self.update_thread.completed.connect(self._update_completed)
-        self.update_thread.start()
+        worker = BackgroundCall(
+            lambda: check_for_updates(current_version=__version__, enabled=True)
+        )
+        self.update_thread = worker
+        worker.succeeded.connect(self._update_completed)
+        worker.failed.connect(self._update_failed)
+        start_background_call(worker)
 
-    def _update_completed(self, result: UpdateCheckResult) -> None:
+    def _update_completed(self, raw_result: object) -> None:
+        if self.sender() is not self.update_thread or not isinstance(raw_result, UpdateCheckResult):
+            return
+        self.update_thread = None
+        result = raw_result
         self.update_status.setText(result.message)
         self.release_url = result.release_url
         self.open_release_button.setEnabled(
@@ -79,6 +83,34 @@ class AboutDialog(QDialog):
         )
         self.check_updates_button.setEnabled(True)
 
+    def _update_failed(self, _message: str) -> None:
+        if self.sender() is not self.update_thread:
+            return
+        self.update_thread = None
+        self.update_status.setText("暂时无法检查更新，请稍后重试。")
+        self.check_updates_button.setEnabled(True)
+
     def _open_release(self) -> None:
         if self.release_url:
             webbrowser.open(self.release_url)
+
+    def _show_diagnostics(self) -> None:
+        DiagnosticsDialog(self.config, self).exec()
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() is QEvent.Type.Close:
+            self._cancel_update_check()
+        return super().event(event)
+
+    def accept(self) -> None:
+        self._cancel_update_check()
+        super().accept()
+
+    def reject(self) -> None:
+        self._cancel_update_check()
+        super().reject()
+
+    def _cancel_update_check(self) -> None:
+        if self.update_thread is not None:
+            self.update_thread.cancel()
+            self.update_thread = None

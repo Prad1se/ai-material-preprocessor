@@ -125,6 +125,7 @@ def test_document_and_video_workspaces_only_expose_their_operations(qtbot, tmp_p
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
+        Operation.VIDEO_AI_PACK,
     ]
     assert Operation.TO_MARKDOWN not in video_operations
 
@@ -195,11 +196,13 @@ def test_history_dialog_filters_by_derived_workspace(qtbot, tmp_path: Path) -> N
 
     dialog = HistoryDialog(HistoryRepository(history), workspace=WorkspaceId.DOCUMENTS)
     qtbot.addWidget(dialog)
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 1)
     assert dialog.table.rowCount() == 1
     assert dialog.table.item(0, 1).text() == "lesson.docx"
     dialog.workspace_filter.setCurrentIndex(
         dialog.workspace_filter.findData(WorkspaceId.VIDEO.value)
     )
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 1)
     assert dialog.table.rowCount() == 1
     assert dialog.table.item(0, 1).text() == "clip.mp4"
 
@@ -230,6 +233,7 @@ def test_document_history_surfaces_existing_quality_summary(qtbot, tmp_path: Pat
     qtbot.addWidget(dialog)
 
     assert dialog.table.horizontalHeaderItem(5).text() == "质量摘要"
+    qtbot.waitUntil(lambda: dialog.table.item(0, 5) is not None)
     assert dialog.table.item(0, 5).text() == "88/100 · 约 2,400 个估算令牌 · 3 段"
 
 

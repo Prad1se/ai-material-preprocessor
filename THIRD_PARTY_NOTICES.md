@@ -13,6 +13,11 @@ respective owners and creators. Commercial distributions must remove or replace 
 or obtain separate permission. Source records and the asset-specific usage notice are documented
 in `assets/doro/README.md`.
 
+The application icon in `assets/app-icon.png` and `assets/app-icon.ico` is an original generated
+composition that incorporates simplified Doro and mouse mascot cues. It is treated as mascot
+artwork rather than MIT-licensed source code and follows the same non-commercial distribution
+boundary described above. Replacing the application icon does not change the code license.
+
 ## Runtime components
 
 | Component | Version used by v2.0.0 | License | Purpose |

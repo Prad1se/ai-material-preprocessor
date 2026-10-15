@@ -230,8 +230,9 @@ _DARK_COLORS = {
     "#d70015": "#ff6b76",
     "#b60012": "#ff939b",
     "#fff0f1": "#402629",
-    "#a29a97": "#77787d",
-    "#e9e2de": "#303136",
+    # 禁用态：文字在禁用背景上仍需 ≥4.5:1 对比度，避免深色模式下一片模糊。
+    "#a29a97": "#9a9ca5",
+    "#e9e2de": "#26272b",
     "#bdb4b0": "#5b5c61",
     "#c7c7cc": "#68696f",
     "#3f3735": "#efedef",
@@ -256,8 +257,33 @@ DARK_STYLESHEET = _DARK_PATTERN.sub(
     lambda match: _DARK_COLORS[match.group(0).lower()], LIGHT_STYLESHEET
 )
 DARK_STYLESHEET += """
-QPushButton#documentChooseFiles, QPushButton#documentPrimary {
+/* 深色模式控件状态补丁：hover / disabled / focus / selected 的可读性。 */
+QPushButton#documentChooseFiles {
     color: #17211c;
+}
+QPushButton#documentChooseFiles:hover {
+    color: #17211c;
+}
+QPushButton#documentPrimary {
+    color: #f8f9fc;
+}
+QPushButton#documentPrimary:hover {
+    /* 悬停时背景切换为浅绿，需要同步换成深色前景保持对比度。 */
+    background: #9bc4ad;
+    color: #17211c;
+}
+QPushButton:focus {
+    border-color: #ff9aaa;
+}
+QPushButton#primary:focus, QPushButton#documentPrimary:focus, QPushButton#videoPrimary:focus {
+    border-color: #ffd2da;
+}
+QListWidget:focus, QTreeWidget:focus, QPlainTextEdit:focus {
+    border-color: #ff9aaa;
+}
+QTableWidget {
+    selection-background-color: #5a3039;
+    selection-color: #f5f5f7;
 }
 """
 

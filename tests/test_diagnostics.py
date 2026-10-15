@@ -38,5 +38,6 @@ def test_self_test_writes_machine_readable_report(tmp_path: Path) -> None:
     assert report["application_version"] == "2.0.0"
     assert report["overall"] == "passed"
     assert report["checks"]["markitdown"]["passed"] is True
-    assert Path(report["checks"]["markitdown"]["output"]).is_file()
+    assert report["checks"]["markitdown"]["artifact_created"] is True
     assert report["tools"]["ffmpeg"]["available"] is False
+    assert "path" not in report["tools"]["markitdown"]

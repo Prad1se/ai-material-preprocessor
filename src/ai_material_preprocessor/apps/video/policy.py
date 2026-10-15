@@ -11,7 +11,9 @@ VIDEO_OPERATIONS = frozenset(
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
+        Operation.VIDEO_AI_PACK,
     }
 )
+LEGACY_VIDEO_OPERATIONS = VIDEO_OPERATIONS - {Operation.VIDEO_AI_PACK}
 VIDEO_INPUT_EXTENSIONS = frozenset(VIDEO_EXTENSIONS)
 VIDEO_TOOL_NAMES = frozenset({"ffmpeg", "ffprobe", "exiftool"})

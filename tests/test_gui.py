@@ -1,7 +1,9 @@
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
 
+import pytest
 from PySide6.QtGui import QColor, QImage, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QTableWidget, QTabWidget
 
@@ -183,6 +185,7 @@ def test_video_exposes_all_creation_operations(qtbot, tmp_path: Path) -> None:
         Operation.KEYFRAMES_CONTACT_SHEET,
         Operation.RENAME_VIDEO,
         Operation.ORGANIZE_VIDEO,
+        Operation.VIDEO_AI_PACK,
     ]
 
 
@@ -391,13 +394,16 @@ def test_history_dialog_searches_and_filters_records(qtbot, tmp_path: Path) -> N
     dialog = HistoryDialog(HistoryRepository(history))
     qtbot.addWidget(dialog)
 
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 2)
     assert dialog.table.rowCount() == 2
     dialog.search_input.setText("课程")
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 1)
     assert dialog.table.rowCount() == 1
     assert dialog.table.item(0, 1).text() == "课程资料.docx"
     dialog.search_input.clear()
     failed_index = dialog.status_filter.findData(TaskStatus.FAILED.value)
     dialog.status_filter.setCurrentIndex(failed_index)
+    qtbot.waitUntil(lambda: dialog.table.rowCount() == 1 and dialog.table.item(0, 3) is not None)
     assert dialog.table.rowCount() == 1
     assert dialog.table.item(0, 3).text() == "失败"
     assert dialog.delete_records_button.text() == "删除所选记录"
@@ -405,6 +411,28 @@ def test_history_dialog_searches_and_filters_records(qtbot, tmp_path: Path) -> N
     assert dialog.close_button.text() == "关闭"
     assert not dialog.table.verticalHeader().isVisible()
     assert "QComboBox QAbstractItemView" in dialog.styleSheet()
+
+
+def test_history_dialog_cancel_discards_pending_search(qtbot, tmp_path: Path) -> None:
+    started = Event()
+    release = Event()
+
+    class BlockingRepository(HistoryRepository):
+        def search(self, **_kwargs):
+            started.set()
+            assert release.wait(1)
+            return []
+
+    dialog = HistoryDialog(BlockingRepository(tmp_path / "History"))
+    qtbot.addWidget(dialog)
+    qtbot.waitUntil(started.is_set)
+
+    dialog.reject()
+    release.set()
+    qtbot.wait(50)
+
+    assert dialog._search is None
+    assert dialog.table.rowCount() == 0
 
 
 def test_file_rows_and_combo_items_stay_readable_with_dark_system_palette(
@@ -509,7 +537,7 @@ def test_completed_onboarding_is_not_shown(qtbot) -> None:
     assert not hasattr(window, "onboarding_dialog")
 
 
-def test_open_output_opens_pack_directory_but_parent_for_files(
+def test_open_output_opens_pack_directory_and_file_with_default_application(
     qtbot, tmp_path: Path, monkeypatch
 ) -> None:
     window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
@@ -524,7 +552,7 @@ def test_open_output_opens_pack_directory_but_parent_for_files(
     window._open_output(str(pack))
     window._open_output(str(file_output))
 
-    assert opened == [str(pack), str(tmp_path)]
+    assert opened == [str(pack), str(file_output)]
 
 
 def test_context_pack_completion_opens_report_dialog_with_source_map(
@@ -574,3 +602,44 @@ def test_document_completion_opens_report_dialog_without_source_map_tab(
     assert tab_widget is not None
     labels = [tab_widget.tabText(index) for index in range(tab_widget.count())]
     assert "Source Map" not in labels
+
+
+def test_video_ai_pack_completion_warns_on_failed_integrity_and_shows_safe_details(
+    qtbot, monkeypatch
+) -> None:
+    shown: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.QMessageBox.warning",
+        lambda _parent, title, message: shown.append((title, message)),
+    )
+    monkeypatch.setattr(
+        "ai_material_preprocessor.gui.QMessageBox.information",
+        lambda *_args: pytest.fail("failed integrity must not show success"),
+    )
+    window = MainWindow(config=deepcopy(DEFAULT_CONFIG), tools=toolset())
+    qtbot.addWidget(window)
+
+    window._on_completed(
+        ["Video-AI-Pack"],
+        [],
+        [
+            {
+                "video_ai_pack_version": 1,
+                "source_count": 1,
+                "frame_count": 2,
+                "audio_count": 0,
+                "proxy_count": 0,
+                "integrity": {"ok": False},
+                "warnings": [
+                    {
+                        "source_id": "video-001",
+                        "message": "未检测到音轨；未生成空音频文件。",
+                    }
+                ],
+            }
+        ],
+    )
+
+    assert shown
+    assert "完整性：未通过" in shown[0][1]
+    assert "video-001：未检测到音轨" in shown[0][1]

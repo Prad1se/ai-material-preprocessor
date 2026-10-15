@@ -3,10 +3,11 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QBoxLayout,
     QFileDialog,
     QFrame,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -25,8 +27,7 @@ from PySide6.QtWidgets import (
 
 from ...application.preview_registry import PreviewProviderRegistry
 from ...application.workspaces import WorkspaceId
-from ...models import TaskStatus, ToolStatus
-from ..task_center_panel import STATUS_LABELS
+from ...models import STATUS_LABELS, TaskStatus, ToolStatus, operation_display
 
 
 class WorkspacePresentationState(StrEnum):
@@ -48,6 +49,9 @@ class WorkspaceDropList(QListWidget):
         self.setObjectName("dropZone")
         self.setAccessibleDescription(description)
         self.setMinimumHeight(190)
+        # 长路径省略显示；完整路径通过工具提示查看，不撑破窄窗口。
+        self.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.setWordWrap(False)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -69,12 +73,31 @@ class WorkspaceDropList(QListWidget):
             event.acceptProposedAction()
 
 
+def create_output_action_buttons(view: WorkspaceView) -> tuple[QPushButton, QPushButton]:
+    """创建统一的输出目录快捷操作按钮：在资源管理器中显示、复制输出路径。"""
+
+    reveal_button = QPushButton("在资源管理器中显示")
+    reveal_button.setObjectName("secondary")
+    reveal_button.setEnabled(False)
+    reveal_button.clicked.connect(
+        lambda: (
+            view.reveal_output_requested.emit(view.last_outputs[0]) if view.last_outputs else None
+        )
+    )
+    copy_button = QPushButton("复制输出路径")
+    copy_button.setObjectName("secondary")
+    copy_button.setEnabled(False)
+    copy_button.clicked.connect(view._copy_output_path)
+    return reveal_button, copy_button
+
+
 class WorkspaceView(QWidget):
     jobs_requested = Signal(str, object)
     preview_ready = Signal(object)
     handoff_requested = Signal(str, str, object)
     history_requested = Signal(str)
     open_output_requested = Signal(str)
+    reveal_output_requested = Signal(str)
     settings_requested = Signal(str)
 
     workspace_id: WorkspaceId
@@ -152,13 +175,15 @@ class WorkspaceView(QWidget):
         )
         self.open_button = QPushButton("打开结果")
         self.open_button.setObjectName("secondary")
-        self.open_button.setEnabled(False)
+        self.reveal_output_button, self.copy_output_button = create_output_action_buttons(self)
         self.history_button = QPushButton(
             "查看文档历史" if self.workspace_id is WorkspaceId.DOCUMENTS else "查看视频历史"
         )
         self.history_button.setObjectName("secondary")
         actions.addWidget(self.start_button, 2)
         actions.addWidget(self.open_button)
+        actions.addWidget(self.reveal_output_button)
+        actions.addWidget(self.copy_output_button)
         actions.addWidget(self.history_button)
         root.addLayout(actions)
 
@@ -174,6 +199,10 @@ class WorkspaceView(QWidget):
         self.recent_tasks.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.recent_tasks.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.recent_tasks.verticalHeader().setVisible(False)
+        # 长文件名在窄窗口下省略显示，完整名称放入工具提示。
+        self.recent_tasks.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.recent_tasks.setWordWrap(False)
+        self.recent_tasks.horizontalHeader().setMinimumSectionSize(56)
         self.recent_tasks.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.recent_tasks.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         recent_layout.addWidget(recent_title)
@@ -184,6 +213,7 @@ class WorkspaceView(QWidget):
         self.workspace_progress.setValue(0)
         self.state_label = QLabel()
         self.state_label.setObjectName("status")
+        self.state_label.setWordWrap(True)
         root.addWidget(self.workspace_progress)
         root.addWidget(self.state_label)
 
@@ -210,6 +240,7 @@ class WorkspaceView(QWidget):
         self.history_button.clicked.connect(
             lambda: self.history_requested.emit(self.workspace_id.value)
         )
+        self._sync_output_actions()
         self.set_presentation_state(WorkspacePresentationState.EMPTY)
 
     def resizeEvent(self, event) -> None:
@@ -287,7 +318,10 @@ class WorkspaceView(QWidget):
 
     def _render_input_paths(self) -> None:
         self.file_list.clear()
-        self.file_list.addItems([str(path) for path in self.paths])
+        for path in self.paths:
+            item = QListWidgetItem(str(path))
+            item.setToolTip(str(path))
+            self.file_list.addItem(item)
 
     def output_for(self, source: Path) -> Path:
         explicit = self.output_path.text().strip()
@@ -339,7 +373,7 @@ class WorkspaceView(QWidget):
     ) -> None:
         del quality_reports
         self.last_outputs = outputs
-        self.open_button.setEnabled(bool(outputs))
+        self._sync_output_actions()
         self.workspace_progress.setValue(
             100 if outputs and not errors else self.workspace_progress.value()
         )
@@ -351,6 +385,26 @@ class WorkspaceView(QWidget):
             else WorkspacePresentationState.ERROR,
             f"已生成 {len(outputs)} 项" if outputs else "没有生成输出",
         )
+
+    def _sync_output_actions(self) -> None:
+        """按最近输出统一启用/禁用 打开结果、在资源管理器中显示、复制输出路径。"""
+
+        available = bool(self.last_outputs)
+        tooltip = self.last_outputs[0] if available else ""
+        if len(self.last_outputs) > 1:
+            tooltip += f"\n等 {len(self.last_outputs)} 个输出"
+        for button in (self.open_button, self.reveal_output_button, self.copy_output_button):
+            button.setEnabled(available)
+            button.setToolTip(tooltip)
+
+    def _copy_output_path(self) -> None:
+        if not self.last_outputs:
+            return
+        output = self.last_outputs[0]
+        QApplication.clipboard().setText(output)
+        self.copy_output_button.setText("已复制")
+        self.copy_output_button.setToolTip(output)
+        QTimer.singleShot(1600, lambda: self.copy_output_button.setText("复制输出路径"))
 
     def upsert_task(
         self,
@@ -365,8 +419,15 @@ class WorkspaceView(QWidget):
             row = self.recent_tasks.rowCount()
             self.recent_tasks.insertRow(row)
             self._task_rows[task_id] = row
-        # 状态列与任务中心共用同一份中文标签，避免同一界面出现英文枚举原值。
-        for column, value in enumerate(
-            (filename, operation, STATUS_LABELS[status], f"{progress}%")
-        ):
-            self.recent_tasks.setItem(row, column, QTableWidgetItem(value))
+        # 状态与操作列与任务中心共用同一份中文标签，避免同一界面出现英文枚举原值。
+        # 兼容仍传入枚举原值的旧调用方：先归一化为统一显示标签。
+        values = (
+            filename,
+            operation_display(operation),
+            STATUS_LABELS[status],
+            f"{progress}%",
+        )
+        for column, value in enumerate(values):
+            item = QTableWidgetItem(value)
+            item.setToolTip(value)
+            self.recent_tasks.setItem(row, column, item)

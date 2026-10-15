@@ -11,6 +11,7 @@ from ..services.config import coerce_int
 from ..services.disk_space import DiskSpacePreflight
 from ..services.history_repository import HistoryRepository
 from ..services.job_executor import JobExecutor, TaskExecutionResult
+from ..services.observability import DiagnosticLogger
 from ..services.task_center import TaskCenter
 from ..services.task_manifest import TaskRecord, resolve_history_root, write_task_manifest
 from ..services.task_repository import PersistentTaskQueue, resolve_task_queue_path
@@ -63,6 +64,20 @@ def _quality_summary(reports: tuple[dict, ...]) -> dict[str, object]:
             )
             if key in report
         }
+    if "video_ai_pack_version" in report:
+        return {
+            key: report[key]
+            for key in (
+                "video_ai_pack_version",
+                "source_count",
+                "frame_count",
+                "audio_count",
+                "proxy_count",
+                "warnings",
+                "integrity",
+            )
+            if key in report
+        }
     summary: dict[str, object] = {
         key: report[key]
         for key in ("score", "estimated_tokens", "heading_count", "image_count")
@@ -104,10 +119,11 @@ class ApplicationTaskRunner:
         history_writer: HistoryWriter = write_task_manifest,
         on_task_changed: TaskCallback | None = None,
         on_progress: ProgressCallback | None = None,
+        logger: DiagnosticLogger | None = None,
     ) -> None:
         self.config = config
         self.tools = tools
-        self.executor = executor or JobExecutor(tools=tools, config=config)
+        self.executor = executor or JobExecutor(tools=tools, config=config, logger=logger)
         self.task_repository = task_repository or PersistentTaskQueue(
             resolve_task_queue_path(config)
         )
@@ -200,6 +216,14 @@ class ApplicationTaskRunner:
             ),
             "RENAME_VIDEO": ("rename_template", "project_name"),
             "ORGANIZE_VIDEO": ("rename_template", "project_name", "organize_mode"),
+            "VIDEO_AI_PACK": (
+                "scene_threshold",
+                "max_keyframes",
+                "contact_sheet_columns",
+                "ai_pack_include_audio",
+                "ai_pack_include_proxy",
+                "ai_pack_proxy_crf",
+            ),
         }
         parameters = {
             key: video.get(key) for key in keys_by_operation.get(task.job.operation.name, ())
@@ -208,6 +232,17 @@ class ApplicationTaskRunner:
             parameters["location_override"] = task.job.location
         if task.job.project:
             parameters["project_name"] = task.job.project
+        if task.job.operation.name == "VIDEO_AI_PACK":
+            parameters.update(
+                {
+                    "source_count": len(task.job.input_sources),
+                    "include_audio": task.job.video_ai_pack_include_audio,
+                    "include_proxy": task.job.video_ai_pack_include_proxy,
+                    "proxy_crf": task.job.video_ai_pack_proxy_crf,
+                    "scene_threshold": task.job.video_ai_pack_scene_threshold,
+                    "max_keyframes": task.job.video_ai_pack_max_keyframes,
+                }
+            )
         return parameters
 
     def _tool_versions_for(self, task: QueuedTask) -> dict[str, str]:

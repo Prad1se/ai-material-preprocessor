@@ -4,7 +4,7 @@ import copy
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,6 +30,7 @@ from ..models import ToolStatus
 from ..services.config import save_config
 from ..services.tool_capabilities import TOOL_DESCRIPTORS, build_tool_capabilities
 from ..services.tool_versions import detect_tools_with_versions
+from .background_tasks import BackgroundCall, start_background_call
 from .theme import ThemeMode, stylesheet_for_theme
 from .tool_installation import ToolInstallationCoordinator
 from .tool_status_table import ToolStatusTable
@@ -51,6 +52,7 @@ class SettingsDialog(QDialog):
         save_callback: ConfigSaver = save_config,
         detector: ToolDetector = detect_tools_with_versions,
         initial_tab: str | None = None,
+        detect_on_open: bool = False,
     ) -> None:
         super().__init__(parent)
         self.config = copy.deepcopy(config)
@@ -60,6 +62,9 @@ class SettingsDialog(QDialog):
         self.tool_path_inputs: dict[str, QLineEdit] = {}
         self.document_tool_paths: dict[str, QLineEdit] = {}
         self.video_tool_paths: dict[str, QLineEdit] = {}
+        self.redetect_buttons: list[QPushButton] = []
+        self._detection: BackgroundCall | None = None
+        self._accept_when_detected = False
         self.setWindowTitle("设置")
         fit_dialog_to_available_space(self, 900, 680, minimum_width=640, minimum_height=500)
         self._build_ui()
@@ -78,6 +83,8 @@ class SettingsDialog(QDialog):
         self.video_tool_table.install_requested.connect(self._request_tool_install)
         self._render_tools()
         self.setStyleSheet(stylesheet_for_theme(self.config["app"].get("theme", "system")))
+        if detect_on_open:
+            self._detect_tools(copy.deepcopy(self.config))
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -214,6 +221,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(scroll, 1)
         redetect = QPushButton("重新检测")
         redetect.clicked.connect(self._redetect)
+        self.redetect_buttons.append(redetect)
         layout.addWidget(redetect)
         return page, table, scroll
 
@@ -267,10 +275,26 @@ class SettingsDialog(QDialog):
         )
         self.video_rename_template = QLineEdit(str(self.config["video"]["rename_template"]))
         self.video_project_name = QLineEdit(str(self.config["video"].get("project_name", "")))
+        self.video_ai_pack_audio = QCheckBox("默认提取 WAV 音频")
+        self.video_ai_pack_audio.setChecked(
+            bool(self.config["video"].get("ai_pack_include_audio", True))
+        )
+        self.video_ai_pack_proxy = QCheckBox("默认生成压缩 proxy")
+        self.video_ai_pack_proxy.setChecked(
+            bool(self.config["video"].get("ai_pack_include_proxy", False))
+        )
+        self.video_ai_pack_proxy_crf = QSpinBox()
+        self.video_ai_pack_proxy_crf.setRange(0, 51)
+        self.video_ai_pack_proxy_crf.setValue(
+            int(self.config["video"].get("ai_pack_proxy_crf", 28))
+        )
         form.addRow("压缩 CRF", self.video_crf)
         form.addRow("音频格式", self.video_audio_format)
         form.addRow("命名模板", self.video_rename_template)
         form.addRow("默认项目", self.video_project_name)
+        form.addRow("Video AI Pack 音频", self.video_ai_pack_audio)
+        form.addRow("Video AI Pack proxy", self.video_ai_pack_proxy)
+        form.addRow("Proxy CRF", self.video_ai_pack_proxy_crf)
         return panel
 
     def _config_from_fields(self) -> dict:
@@ -296,6 +320,9 @@ class SettingsDialog(QDialog):
                 "rename_template": self.video_rename_template.text().strip()
                 or "{date}_{time}_{location}_{index}",
                 "project_name": self.video_project_name.text().strip(),
+                "ai_pack_include_audio": self.video_ai_pack_audio.isChecked(),
+                "ai_pack_include_proxy": self.video_ai_pack_proxy.isChecked(),
+                "ai_pack_proxy_crf": self.video_ai_pack_proxy_crf.value(),
             }
         )
         for key, field in self.tool_path_inputs.items():
@@ -333,8 +360,42 @@ class SettingsDialog(QDialog):
 
     def _redetect(self) -> None:
         candidate = self._config_from_fields()
-        self.tools = self.detector(candidate)
+        self._detect_tools(candidate)
+
+    def _detect_tools(self, candidate: dict, *, accept_when_done: bool = False) -> None:
+        if self._detection is not None:
+            self._detection.cancel()
+        for button in self.redetect_buttons:
+            button.setEnabled(False)
+        detector = self.detector
+        detector_config = copy.deepcopy(candidate)
+        worker = BackgroundCall(lambda: detector(detector_config))
+        self._detection = worker
+        self._accept_when_detected = accept_when_done
+        worker.succeeded.connect(self._detection_succeeded)
+        worker.failed.connect(self._detection_failed)
+        start_background_call(worker)
+
+    def _detection_succeeded(self, raw_tools: object) -> None:
+        worker = self.sender()
+        if worker is not self._detection or not isinstance(raw_tools, dict):
+            return
+        self._detection = None
+        self.tools = raw_tools
         self._render_tools()
+        for button in self.redetect_buttons:
+            button.setEnabled(True)
+        if self._accept_when_detected:
+            self.settings_saved.emit(copy.deepcopy(self.config), dict(self.tools))
+            self.accept()
+
+    def _detection_failed(self, message: str) -> None:
+        if self.sender() is not self._detection:
+            return
+        self._detection = None
+        for button in self.redetect_buttons:
+            button.setEnabled(True)
+        QMessageBox.warning(self, "无法检测工具", message or "工具检测未完成，请稍后重试。")
 
     def _tools_changed(self, config: dict, tools: dict[str, ToolStatus]) -> None:
         self.config = copy.deepcopy(config)
@@ -361,6 +422,20 @@ class SettingsDialog(QDialog):
             return
         self.config = candidate
         self.tool_installation.update_config(candidate)
-        self.tools = self.detector(candidate)
-        self.settings_saved.emit(copy.deepcopy(candidate), dict(self.tools))
-        self.accept()
+        self._detect_tools(candidate, accept_when_done=True)
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() is QEvent.Type.Close:
+            self._cancel_detection()
+        return super().event(event)
+
+    def reject(self) -> None:
+        self._cancel_detection()
+        super().reject()
+
+    def _cancel_detection(self) -> None:
+        self._accept_when_detected = False
+        self.tool_installation.cancel_detection()
+        if self._detection is not None:
+            self._detection.cancel()
+            self._detection = None

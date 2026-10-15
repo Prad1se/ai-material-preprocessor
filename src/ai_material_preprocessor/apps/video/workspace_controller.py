@@ -50,9 +50,30 @@ class VideoWorkspaceController:
         *,
         location: str = "",
         project: str = "",
+        include_audio: bool | None = None,
+        include_proxy: bool | None = None,
+        proxy_crf: int | None = None,
+        scene_threshold: float | None = None,
+        max_keyframes: int | None = None,
     ) -> list[Job]:
         if operation not in VIDEO_OPERATIONS:
             raise ValueError(f"{operation.name} is not a video operation.")
+        if operation is Operation.VIDEO_AI_PACK:
+            if not paths:
+                return []
+            return [
+                Job(
+                    paths[0],
+                    operation,
+                    output_for(paths[0]),
+                    sources=tuple(paths),
+                    video_ai_pack_include_audio=include_audio,
+                    video_ai_pack_include_proxy=include_proxy,
+                    video_ai_pack_proxy_crf=proxy_crf,
+                    video_ai_pack_scene_threshold=scene_threshold,
+                    video_ai_pack_max_keyframes=max_keyframes,
+                )
+            ]
         return [
             Job(path, operation, output_for(path), location=location, project=project)
             for path in paths

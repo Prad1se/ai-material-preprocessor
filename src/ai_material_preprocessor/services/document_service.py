@@ -9,6 +9,7 @@ from ..infrastructure.processes import CancellationToken
 from ..models import Job, Operation, ToolStatus
 from .context_pack import ContextBudget, create_context_pack
 from .document_enhancement import EnhancementOptions
+from .observability import DiagnosticLogger
 from .preview import (
     build_document_preview,
     document_preview_to_dict,
@@ -17,9 +18,12 @@ from .preview import (
 
 
 class DocumentConversionService:
-    def __init__(self, tools: dict[str, ToolStatus], config: dict) -> None:
+    def __init__(
+        self, tools: dict[str, ToolStatus], config: dict, *, logger: DiagnosticLogger | None = None
+    ) -> None:
         self.tools = tools
         self.config = config
+        self.logger = logger
 
     def _path(self, name: str) -> str | None:
         status = self.tools.get(name)
@@ -64,6 +68,7 @@ class DocumentConversionService:
                     enhancement_options=options,
                     cancellation=cancellation,
                     tool_versions=self._document_tool_versions(include_ocr=options.ocr_enabled),
+                    logger=self.logger,
                 )
                 package_dir = result.parent
                 target = source_root / source_id
@@ -106,6 +111,7 @@ class DocumentConversionService:
                 enhancement_options=options,
                 cancellation=cancellation,
                 tool_versions=self._document_tool_versions(include_ocr=options.ocr_enabled),
+                logger=self.logger,
             )
             markdown = result.read_text(encoding="utf-8")
             preview = build_document_preview(

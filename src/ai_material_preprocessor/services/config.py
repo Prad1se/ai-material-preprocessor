@@ -62,6 +62,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "scene_threshold": 0.30,
         "max_keyframes": 24,
         "contact_sheet_columns": 4,
+        "ai_pack_include_audio": True,
+        "ai_pack_include_proxy": False,
+        "ai_pack_proxy_crf": 28,
     },
     "document": {
         "mode": "enhanced",

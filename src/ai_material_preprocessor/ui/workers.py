@@ -12,6 +12,7 @@ from ..application.task_runner import (
 )
 from ..errors import explain_error
 from ..models import Job, QueuedTask, ToolStatus
+from ..services.observability import DiagnosticLogger
 from ..services.task_manifest import write_task_manifest
 from ..services.task_repository import PersistentTaskQueue
 
@@ -35,6 +36,7 @@ class Worker(QThread):
         disk_preflight: Preflight | None = None,
         history_root: Path | None = None,
         history_writer: HistoryWriter = write_task_manifest,
+        logger: DiagnosticLogger | None = None,
     ) -> None:
         super().__init__()
         self.runner = ApplicationTaskRunner(
@@ -48,6 +50,7 @@ class Worker(QThread):
             history_writer=history_writer,
             on_task_changed=self._on_task_changed,
             on_progress=self.progress.emit,
+            logger=logger,
         )
         # Compatibility aliases keep the v2.0 GUI and tests stable while orchestration lives outside Qt.
         self.config = self.runner.config
